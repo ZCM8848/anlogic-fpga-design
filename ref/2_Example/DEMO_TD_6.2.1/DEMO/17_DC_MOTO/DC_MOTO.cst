@@ -1,0 +1,34 @@
+//Copyright (C)2014-2022 Gowin Semiconductor Corporation.
+//All rights reserved. 
+//File Title: Physical Constraints file
+//GOWIN Version: 1.9.8.06
+//Part Number: GW2AR-LV18LQ144C8/I7
+//Device: GW2AR-18
+//Created Time: Tue 05 16 10:46:57 2023
+
+IO_LOC "data[6]" 52;
+IO_PORT "data[6]" PULL_MODE=UP DRIVE=8;
+IO_LOC "data[5]" 51;
+IO_PORT "data[5]" PULL_MODE=UP DRIVE=8;
+IO_LOC "data[4]" 50;
+IO_PORT "data[4]" PULL_MODE=UP DRIVE=8;
+IO_LOC "data[3]" 49;
+IO_PORT "data[3]" PULL_MODE=UP DRIVE=8;
+IO_LOC "data[2]" 48;
+IO_PORT "data[2]" PULL_MODE=UP DRIVE=8;
+IO_LOC "data[1]" 47;
+IO_PORT "data[1]" PULL_MODE=UP DRIVE=8;
+IO_LOC "data[0]" 46;
+IO_PORT "data[0]" PULL_MODE=UP DRIVE=8;
+IO_LOC "m1" 66;
+IO_PORT "m1" PULL_MODE=UP DRIVE=8;
+IO_LOC "m0" 64;
+IO_PORT "m0" PULL_MODE=UP DRIVE=8;
+IO_LOC "sl" 29;
+IO_PORT "sl" PULL_MODE=UP;
+IO_LOC "cntn" 60;
+IO_PORT "cntn" PULL_MODE=UP;
+IO_LOC "k8" 30;
+IO_PORT "k8" PULL_MODE=UP;
+IO_LOC "clk50mhz" 6;
+IO_PORT "clk50mhz" PULL_MODE=UP;

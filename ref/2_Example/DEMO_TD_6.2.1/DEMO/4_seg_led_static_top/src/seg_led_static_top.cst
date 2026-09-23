@@ -1,0 +1,44 @@
+//Copyright (C)2014-2022 Gowin Semiconductor Corporation.
+//All rights reserved. 
+//File Title: Physical Constraints file
+//GOWIN Version: 1.9.8.06
+//Part Number: GW2AR-LV18LQ144C8/I7
+//Device: GW2AR-18C
+//Created Time: Wed 05 17 14:43:21 2023
+
+IO_LOC "seg_led[7]" 54;
+IO_PORT "seg_led[7]" PULL_MODE=UP DRIVE=8;
+IO_LOC "seg_led[6]" 52;
+IO_PORT "seg_led[6]" PULL_MODE=UP DRIVE=8;
+IO_LOC "seg_led[5]" 51;
+IO_PORT "seg_led[5]" PULL_MODE=UP DRIVE=8;
+IO_LOC "seg_led[4]" 50;
+IO_PORT "seg_led[4]" PULL_MODE=UP DRIVE=8;
+IO_LOC "seg_led[3]" 49;
+IO_PORT "seg_led[3]" PULL_MODE=UP DRIVE=8;
+IO_LOC "seg_led[2]" 48;
+IO_PORT "seg_led[2]" PULL_MODE=UP DRIVE=8;
+IO_LOC "seg_led[1]" 47;
+IO_PORT "seg_led[1]" PULL_MODE=UP DRIVE=8;
+IO_LOC "seg_led[0]" 46;
+IO_PORT "seg_led[0]" PULL_MODE=UP DRIVE=8;
+IO_LOC "seg_sel[7]" 38;
+IO_PORT "seg_sel[7]" PULL_MODE=UP DRIVE=8;
+IO_LOC "seg_sel[6]" 39;
+IO_PORT "seg_sel[6]" PULL_MODE=UP DRIVE=8;
+IO_LOC "seg_sel[5]" 40;
+IO_PORT "seg_sel[5]" PULL_MODE=UP DRIVE=8;
+IO_LOC "seg_sel[4]" 41;
+IO_PORT "seg_sel[4]" PULL_MODE=UP DRIVE=8;
+IO_LOC "seg_sel[3]" 42;
+IO_PORT "seg_sel[3]" PULL_MODE=UP DRIVE=8;
+IO_LOC "seg_sel[2]" 43;
+IO_PORT "seg_sel[2]" PULL_MODE=UP DRIVE=8;
+IO_LOC "seg_sel[1]" 44;
+IO_PORT "seg_sel[1]" PULL_MODE=UP DRIVE=8;
+IO_LOC "seg_sel[0]" 45;
+IO_PORT "seg_sel[0]" PULL_MODE=UP DRIVE=8;
+IO_LOC "sys_rst_n" 29;
+IO_PORT "sys_rst_n" PULL_MODE=UP;
+IO_LOC "sys_clk" 6;
+IO_PORT "sys_clk" PULL_MODE=UP;

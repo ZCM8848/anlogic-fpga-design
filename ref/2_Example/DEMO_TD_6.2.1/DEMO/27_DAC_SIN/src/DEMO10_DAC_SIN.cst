@@ -1,0 +1,36 @@
+//Copyright (C)2014-2023 Gowin Semiconductor Corporation.
+//All rights reserved. 
+//File Title: Physical Constraints file
+//GOWIN Version: 1.9.9 Beta-2
+//Part Number: GW2A-LV18PG256C8/I7
+//Device: GW2A-18
+//Created Time: Fri 07 21 12:57:57 2023
+
+IO_LOC "da_data[11]" J13;
+IO_PORT "da_data[11]" PULL_MODE=UP DRIVE=8 BANK_VCCIO=1.8;
+IO_LOC "da_data[10]" K11;
+IO_PORT "da_data[10]" PULL_MODE=UP DRIVE=8 BANK_VCCIO=1.8;
+IO_LOC "da_data[9]" K13;
+IO_PORT "da_data[9]" PULL_MODE=UP DRIVE=8 BANK_VCCIO=1.8;
+IO_LOC "da_data[8]" K12;
+IO_PORT "da_data[8]" PULL_MODE=UP DRIVE=8 BANK_VCCIO=1.8;
+IO_LOC "da_data[7]" L13;
+IO_PORT "da_data[7]" PULL_MODE=UP DRIVE=8 BANK_VCCIO=1.8;
+IO_LOC "da_data[6]" L14;
+IO_PORT "da_data[6]" PULL_MODE=UP DRIVE=8 BANK_VCCIO=1.8;
+IO_LOC "da_data[5]" L12;
+IO_PORT "da_data[5]" PULL_MODE=UP DRIVE=8 BANK_VCCIO=1.8;
+IO_LOC "da_data[4]" M14;
+IO_PORT "da_data[4]" PULL_MODE=UP DRIVE=8 BANK_VCCIO=1.8;
+IO_LOC "da_data[3]" M11;
+IO_PORT "da_data[3]" PULL_MODE=UP DRIVE=8 BANK_VCCIO=1.8;
+IO_LOC "da_data[2]" N14;
+IO_PORT "da_data[2]" PULL_MODE=UP DRIVE=8 BANK_VCCIO=1.8;
+IO_LOC "da_data[1]" M10;
+IO_PORT "da_data[1]" PULL_MODE=UP DRIVE=8 BANK_VCCIO=1.8;
+IO_LOC "da_data[0]" P12;
+IO_PORT "da_data[0]" PULL_MODE=UP DRIVE=8 BANK_VCCIO=1.8;
+IO_LOC "da_clk" J14;
+IO_PORT "da_clk" PULL_MODE=UP DRIVE=8 BANK_VCCIO=1.8;
+IO_LOC "clk50mhz" K14;
+IO_PORT "clk50mhz" PULL_MODE=UP BANK_VCCIO=1.8;

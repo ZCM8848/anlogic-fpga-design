@@ -1,0 +1,56 @@
+set_pin_assignment	{ HDMI_CLK_P }	{ LOCATION = C3; IOSTANDARD = LVDS33; PULLTYPE = NONE; }
+set_pin_assignment	{ HDMI_CLK_P1 }	{ LOCATION = K1; IOSTANDARD = LVDS33; PULLTYPE = NONE; }
+set_pin_assignment	{ HDMI_D0_P }	{ LOCATION = G5; IOSTANDARD = LVDS33; PULLTYPE = NONE; }
+set_pin_assignment	{ HDMI_D0_P1 }	{ LOCATION = F5; IOSTANDARD = LVDS33; PULLTYPE = NONE; }
+set_pin_assignment	{ HDMI_D1_P }	{ LOCATION = F1; IOSTANDARD = LVDS33; PULLTYPE = NONE; }
+set_pin_assignment	{ HDMI_D1_P1 }	{ LOCATION = E3; IOSTANDARD = LVDS33; PULLTYPE = NONE; }
+set_pin_assignment	{ HDMI_D2_P }	{ LOCATION = E1; IOSTANDARD = LVDS33; PULLTYPE = NONE; }
+set_pin_assignment	{ HDMI_D2_P1 }	{ LOCATION = B3; IOSTANDARD = LVDS33; PULLTYPE = NONE; }
+set_pin_assignment	{ VGA_B[0] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ VGA_B[1] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ VGA_B[2] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ VGA_B[3] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ VGA_B[4] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ VGA_B[5] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ VGA_B[6] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ VGA_B[7] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ VGA_G[0] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ VGA_G[1] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ VGA_G[2] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ VGA_G[3] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ VGA_G[4] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ VGA_G[5] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ VGA_G[6] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ VGA_G[7] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ VGA_HS }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ VGA_R[0] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ VGA_R[1] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ VGA_R[2] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ VGA_R[3] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ VGA_R[4] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ VGA_R[5] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ VGA_R[6] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ VGA_R[7] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ VGA_VS }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ sys_clk }	{ LOCATION = R7; IOSTANDARD = LVCMOS33; PULLTYPE = NONE; }
+set_pin_assignment	{ sys_rst_n }	{ LOCATION = A2; IOSTANDARD = LVCMOS33; PULLTYPE = NONE; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

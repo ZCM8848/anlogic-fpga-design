@@ -1,0 +1,61 @@
+name: Verilog Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  guard:
+    name: 大文件守卫
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 检查是否有 >5MB 的文件被提交
+        run: |
+          big=$(find . -type f -not -path './.git/*' -size +5M)
+          if [ -n "$big" ]; then
+            echo "::error::以下文件超过 5MB，请勿提交大文件/安装包/视频："
+            echo "$big"
+            exit 1
+          fi
+          echo "OK: 无超大文件"
+
+  lint-work:
+    name: 检查 work/ 源码
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 安装 iverilog
+        run: sudo apt-get update && sudo apt-get install -y iverilog
+      - name: 语法检查 work/
+        run: |
+          shopt -s globstar nullglob
+          fail=0
+          for f in work/**/*.v work/**/*.sv work/**/*.vh; do
+            case "$f" in *.enc.v) continue;; esac
+            echo "== $f"
+            if ! iverilog -g2012 -tnull -o /dev/null "$f"; then
+              echo "::error file=$f::语法检查未通过"
+              fail=1
+            fi
+          done
+          exit $fail
+
+  lint-ref:
+    name: 检查 ref/ 源码（仅供参考，不阻塞）
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: 安装 iverilog
+        run: sudo apt-get update && sudo apt-get install -y iverilog
+      - name: 语法检查 ref/
+        run: |
+          shopt -s globstar nullglob
+          for f in ref/**/*.v ref/**/*.sv ref/**/*.vh; do
+            case "$f" in *.enc.v) continue;; esac
+            iverilog -g2012 -tnull -o /dev/null "$f" || echo "warn: $f"
+          done
+          echo "ref/ 检查完成（不阻塞）"

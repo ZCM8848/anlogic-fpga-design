@@ -1,0 +1,25 @@
+set_pin_assignment	{ clk50mhz }	{ LOCATION = R7; IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
+set_pin_assignment	{ cntn }	{ LOCATION = R14; IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
+set_pin_assignment	{ data[0] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ data[1] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ data[2] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ data[3] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ data[4] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ data[5] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ data[6] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ k8 }	{ LOCATION = A2; IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
+set_pin_assignment	{ m0 }	{ LOCATION = N14; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment	{ m1 }	{ LOCATION = P15; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment	{ sl }	{ LOCATION = C5; IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
+set_pin_assignment	{ spd[0] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ spd[1] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ spd[2] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ spd[3] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ spd[4] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ spd[5] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ spd[6] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ spd[7] }	{ LOCATION = virtualIO; }
+
+
+
+

@@ -1,0 +1,64 @@
+# ============================================================
+#  Anlogic FPGA Design - 忽略规则
+#  只纳入源码、工程文件与参考文档；排除安装包、视频、编译/烧录产物
+# ============================================================
+
+# ---- Anlogic TD 编译 / 综合 / 布局布线 / 烧录产物 ----
+*_Runs/
+**/log/
+**/impl/
+*.log
+*.logw
+*.db
+*.bit
+*.fs
+*.bin
+*.binx
+*.info
+*.qor
+*.ipc
+*.status
+*.area
+*.ts
+*.timingsummary
+*.timing
+*.timing_paths
+*.rpt
+*.prj
+*.bid
+*.cwc
+*.vg
+*.result
+*.settings.cfg
+
+# TD 用户本地状态
+.recent_user_depot.ini
+
+# ---- 安装包 / 大文件 / 视频 ----
+*.exe
+*.msi
+*.zip
+*.rar
+*.7z
+*.mp4
+*.avi
+*.wav
+*.deb
+
+# ---- 破解 / 商业软件与工具目录（仅本地保留，不入库）----
+ref/常用软件/
+ref/UsbDriverTool/
+
+# ---- 授权文件 ----
+*.lic
+
+# ---- 其他版本库残留 ----
+.svn/
+
+# ---- 操作系统 / 编辑器 ----
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.swp
+*~
+~$*

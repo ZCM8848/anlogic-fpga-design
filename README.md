@@ -1,0 +1,45 @@
+# Anlogic FPGA Design
+
+全国大学生嵌入式芯片与系统设计竞赛项目仓库（私有）。基于**安路（Anlogic）PH1P35 / HX1P35A** 平台，围绕 MIPI 摄像头采集 → ISP → HDMI/DSI 显示链路进行开发。
+
+## 仓库内容
+
+```
+.
+├─ work/                 # 团队自研代码（基于示例工程演进，主要开发区域）
+├─ ref/                  # 参考资料（原始目录名保留）
+│  ├─ 代码更新说明.txt
+│  ├─ 全国大学生嵌入式芯片与系统设计竞赛'2026选题指南_康芯.docx
+│  ├─ 设计参考文档/                      # lab_ex_1/2/3 说明文档
+│  ├─ anlogic_example/
+│  │  ├─ 安路HX1P35A比赛文档2026/         # lab_ex1/2/3 示例工程 + 寄存器表
+│  │  └─ HX1P35安装驱动文档/              # 安装、驱动、烧写说明（PDF/docx）
+│  └─ 2_Example/
+│     ├─ DEMO_TD_6.2.1/DEMO/             # 官方 DEMO 工程源码
+│     └─ DEMO实验介绍/                    # 0~36 号实验讲义（PDF）
+├─ tools/lint.ps1        # 本地 Verilog 语法检查脚本
+└─ .github/              # CI、PR / Issue 模板
+```
+
+## 开发环境
+
+| 项目 | 版本 / 说明 |
+| --- | --- |
+| 开发工具 | 安路 TD（示例工程基于 **TD 6.2.1**） |
+| 目标芯片 | PH1P35 / HX1P35A |
+| 下载器驱动 | 见 `ref/anlogic_example/HX1P35安装驱动文档/` |
+
+> 工具安装包、演示视频、常用软件体积较大且含商业/授权内容，**不入库**，请从团队共享盘获取（向组长索取链接）。
+
+## 快速开始
+
+1. 安装安路 TD 6.2.1 并导入 License，安装下载器驱动。
+2. 用 TD 打开示例工程，例如：
+   `ref/anlogic_example/安路HX1P35A比赛文档2026/lab_ex1_mipi_hdmi_SC500_720P/lab_ex1_mipi_hdmi/td_project/camera_to_dsi_display.al`
+3. 团队自己的功能在 `work/` 下开发，参考对应 lab 工程的约束与 IP 配置。
+
+> **注意**：示例工程中的 `*.enc.v` 为厂商加密 IP，可参与综合但不可编辑；`td_project/*_Runs/`、`log/` 等为编译产物，已被 `.gitignore` 排除，不要提交。
+
+## 贡献
+
+请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)：分支模型、提交规范、PR 流程。

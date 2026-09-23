@@ -1,0 +1,45 @@
+set_pin_assignment	{ DIG[0] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ DIG[1] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ DIG[2] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ DIG[3] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ DIG[4] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ DIG[5] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ DIG[6] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ DIG[7] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ SEL[0] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ SEL[1] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ SEL[2] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ SEL[3] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ SEL[4] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ SEL[5] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ SEL[6] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ SEL[7] }	{ LOCATION = virtualIO; }
+set_pin_assignment	{ clk }	{ LOCATION = R7; IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
+set_pin_assignment	{ reset_n }	{ LOCATION = A2; IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
+set_pin_assignment	{ tft_bl }	{ LOCATION = M10; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment	{ tft_csx }	{ LOCATION = R14; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment	{ tft_d_inout[0] }	{ LOCATION = P16; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
+set_pin_assignment	{ tft_d_inout[10] }	{ LOCATION = K15; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
+set_pin_assignment	{ tft_d_inout[11] }	{ LOCATION = G14; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
+set_pin_assignment	{ tft_d_inout[12] }	{ LOCATION = G16; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
+set_pin_assignment	{ tft_d_inout[13] }	{ LOCATION = F15; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
+set_pin_assignment	{ tft_d_inout[14] }	{ LOCATION = F14; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
+set_pin_assignment	{ tft_d_inout[15] }	{ LOCATION = E15; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
+set_pin_assignment	{ tft_d_inout[1] }	{ LOCATION = N14; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
+set_pin_assignment	{ tft_d_inout[2] }	{ LOCATION = N16; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
+set_pin_assignment	{ tft_d_inout[3] }	{ LOCATION = L16; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
+set_pin_assignment	{ tft_d_inout[4] }	{ LOCATION = M15; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
+set_pin_assignment	{ tft_d_inout[5] }	{ LOCATION = M16; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
+set_pin_assignment	{ tft_d_inout[6] }	{ LOCATION = K16; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
+set_pin_assignment	{ tft_d_inout[7] }	{ LOCATION = H16; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
+set_pin_assignment	{ tft_d_inout[8] }	{ LOCATION = H15; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
+set_pin_assignment	{ tft_d_inout[9] }	{ LOCATION = J16; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
+set_pin_assignment	{ tft_dcx }	{ LOCATION = T15; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment	{ tft_rdx }	{ LOCATION = R16; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment	{ tft_reset_n }	{ LOCATION = P15; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment	{ tft_wrx }	{ LOCATION = R15; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+
+
+
+
+

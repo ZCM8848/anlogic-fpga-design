@@ -1,0 +1,32 @@
+//Copyright (C)2014-2023 Gowin Semiconductor Corporation.
+//All rights reserved. 
+//File Title: Physical Constraints file
+//GOWIN Version: 1.9.9 Beta-2
+//Part Number: GW2A-LV18PG256C8/I7
+//Device: GW2A-18
+//Created Time: Mon 07 24 13:43:30 2023
+
+IO_LOC "keyon" J5;
+IO_PORT "keyon" PULL_MODE=UP DRIVE=8 BANK_VCCIO=1.8;
+IO_LOC "i2c_sclk" G12;
+IO_PORT "i2c_sclk" PULL_MODE=UP DRIVE=8 BANK_VCCIO=1.8;
+IO_LOC "aud_xck" F10;
+IO_PORT "aud_xck" PULL_MODE=UP DRIVE=8 BANK_VCCIO=1.8;
+IO_LOC "aud_dacdat" J12;
+IO_PORT "aud_dacdat" PULL_MODE=UP DRIVE=8 BANK_VCCIO=1.8;
+IO_LOC "i2c_dat" H13;
+IO_PORT "i2c_dat" PULL_MODE=UP DRIVE=8 BANK_VCCIO=1.8;
+IO_LOC "aud_adcdat" K13;
+IO_PORT "aud_adcdat" PULL_MODE=UP BANK_VCCIO=1.8;
+IO_LOC "key[1]" K5;
+IO_PORT "key[1]" PULL_MODE=UP BANK_VCCIO=1.8;
+IO_LOC "key[0]" K4;
+IO_PORT "key[0]" PULL_MODE=UP BANK_VCCIO=1.8;
+IO_LOC "clock_50" K14;
+IO_PORT "clock_50" PULL_MODE=UP BANK_VCCIO=1.8;
+IO_LOC "aud_daclrck" J13;
+IO_PORT "aud_daclrck" PULL_MODE=UP BANK_VCCIO=1.8;
+IO_LOC "aud_bclk" G11;
+IO_PORT "aud_bclk" PULL_MODE=UP BANK_VCCIO=1.8;
+IO_LOC "aud_adclrck" L13;
+IO_PORT "aud_adclrck" PULL_MODE=UP BANK_VCCIO=1.8;

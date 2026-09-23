@@ -1,0 +1,94 @@
+-- Copyright (C) 2017  Intel Corporation. All rights reserved.
+-- Your use of Intel Corporation's design tools, logic functions 
+-- and other software and tools, and its AMPP partner logic 
+-- functions, and any output files from any of the foregoing 
+-- (including device programming or simulation files), and any 
+-- associated documentation or information are expressly subject 
+-- to the terms and conditions of the Intel Program License 
+-- Subscription Agreement, the Intel Quartus Prime License Agreement,
+-- the Intel FPGA IP License Agreement, or other applicable license
+-- agreement, including, without limitation, that your use is for
+-- the sole purpose of programming logic devices manufactured by
+-- Intel and sold by Intel or its authorized distributors.  Please
+-- refer to the applicable agreement for further details.
+
+-- Quartus Prime generated Memory Initialization File (.mif)
+
+WIDTH=4;
+DEPTH=256;
+
+ADDRESS_RADIX=HEX;
+DATA_RADIX=OCT;
+
+CONTENT BEGIN
+	[000..003]  :   03;
+	[004..006]  :   05;
+	007  :   06;
+	[008..00A]  :   10;
+	00B  :   11;
+	00C  :   06;
+	00D  :   10;
+	[00E..00F]  :   05;
+	[010..012]  :   14;
+	013  :   17;
+	014  :   15;
+	015  :   14;
+	016  :   12;
+	017  :   14;
+	[018..01E]  :   11;
+	01F  :   00;
+	[020..022]  :   11;
+	023  :   12;
+	[024..025]  :   07;
+	[026..027]  :   06;
+	[028..02A]  :   05;
+	02B  :   06;
+	[02C..02D]  :   10;
+	[02E..02F]  :   11;
+	[030..031]  :   03;
+	[032..033]  :   10;
+	034  :   06;
+	035  :   05;
+	036  :   06;
+	037  :   10;
+	[038..03F]  :   05;
+	[040..042]  :   12;
+	043  :   14;
+	[044..045]  :   07;
+	[046..047]  :   11;
+	048  :   06;
+	049  :   10;
+	[04A..04F]  :   05;
+	050  :   03;
+	051  :   05;
+	[052..053]  :   03;
+	054  :   05;
+	055  :   06;
+	056  :   07;
+	057  :   11;
+	[058..05D]  :   06;
+	05E  :   05;
+	05F  :   06;
+	[060..062]  :   10;
+	063  :   11;
+	[064..066]  :   14;
+	067  :   12;
+	[068..069]  :   11;
+	06A  :   12;
+	06B  :   11;
+	[06C..06D]  :   10;
+	06E  :   06;
+	06F  :   05;
+	[070..073]  :   03;
+	[074..077]  :   10;
+	078  :   06;
+	079  :   10;
+	07A  :   06;
+	07B  :   05;
+	07C  :   03;
+	07D  :   05;
+	07E  :   06;
+	07F  :   10;
+	[080..087]  :   05;
+	[088..0FF]  :   00;
+END;

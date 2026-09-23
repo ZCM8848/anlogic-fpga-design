@@ -1,0 +1,757 @@
+# //  ModelSim SE-64 10.5 Feb 13 2016 
+# //
+# //  Copyright 1991-2016 Mentor Graphics Corporation
+# //  All Rights Reserved.
+# //
+# //  ModelSim SE-64 and its associated documentation contain trade
+# //  secrets and commercial or financial information that are the property of
+# //  Mentor Graphics Corporation and are privileged, confidential,
+# //  and exempt from disclosure under the Freedom of Information Act,
+# //  5 U.S.C. Section 552. Furthermore, this information
+# //  is prohibited from disclosure under the Trade Secrets Act,
+# //  18 U.S.C. Section 1905.
+# //
+# do sim.do
+# work
+# ** Warning: (vlib-34) Library already exists at "work".
+# Model Technology ModelSim SE-64 vmap 10.5 Lib Mapping Utility 2016.02 Feb 13 2016
+# vmap secureip D:/lib/ise14_7_lib/secureip 
+# Modifying C:/modeltech64_10.5/win64/../modelsim.ini
+# Model Technology ModelSim SE-64 vmap 10.5 Lib Mapping Utility 2016.02 Feb 13 2016
+# vmap unisim D:/lib/ise14_7_lib/unisim 
+# Modifying C:/modeltech64_10.5/win64/../modelsim.ini
+# Model Technology ModelSim SE-64 vmap 10.5 Lib Mapping Utility 2016.02 Feb 13 2016
+# vmap unimacro D:/lib/ise14_7_lib/unimacro 
+# Modifying C:/modeltech64_10.5/win64/../modelsim.ini
+# Model Technology ModelSim SE-64 vmap 10.5 Lib Mapping Utility 2016.02 Feb 13 2016
+# vmap unisims_ver D:/lib/ise14_7_lib/unisims_ver 
+# Modifying C:/modeltech64_10.5/win64/../modelsim.ini
+# Model Technology ModelSim SE-64 vmap 10.5 Lib Mapping Utility 2016.02 Feb 13 2016
+# vmap unimacro_ver D:/lib/ise14_7_lib/unimacro_ver 
+# Modifying C:/modeltech64_10.5/win64/../modelsim.ini
+# Model Technology ModelSim SE-64 vmap 10.5 Lib Mapping Utility 2016.02 Feb 13 2016
+# vmap simprim D:/lib/ise14_7_lib/simprim 
+# Modifying C:/modeltech64_10.5/win64/../modelsim.ini
+# Model Technology ModelSim SE-64 vmap 10.5 Lib Mapping Utility 2016.02 Feb 13 2016
+# vmap simprims_ver D:/lib/ise14_7_lib/simprims_ver 
+# Modifying C:/modeltech64_10.5/win64/../modelsim.ini
+# Model Technology ModelSim SE-64 vmap 10.5 Lib Mapping Utility 2016.02 Feb 13 2016
+# vmap xilinxcorelib D:/lib/ise14_7_lib/xilinxcorelib 
+# Modifying C:/modeltech64_10.5/win64/../modelsim.ini
+# Model Technology ModelSim SE-64 vmap 10.5 Lib Mapping Utility 2016.02 Feb 13 2016
+# vmap xilinxcorelib_ver D:/lib/ise14_7_lib/xilinxcorelib_ver 
+# Modifying C:/modeltech64_10.5/win64/../modelsim.ini
+# Model Technology ModelSim SE-64 vmap 10.5 Lib Mapping Utility 2016.02 Feb 13 2016
+# vmap uni9000_ver D:/lib/ise14_7_lib/uni9000_ver 
+# Modifying C:/modeltech64_10.5/win64/../modelsim.ini
+# Model Technology ModelSim SE-64 vmap 10.5 Lib Mapping Utility 2016.02 Feb 13 2016
+# vmap cpld D:/lib/ise14_7_lib/cpld 
+# Modifying C:/modeltech64_10.5/win64/../modelsim.ini
+# Model Technology ModelSim SE-64 vmap 10.5 Lib Mapping Utility 2016.02 Feb 13 2016
+# vmap cpld_ver D:/lib/ise14_7_lib/cpld_ver 
+# Modifying C:/modeltech64_10.5/win64/../modelsim.ini
+# Model Technology ModelSim SE-64 vmap 10.5 Lib Mapping Utility 2016.02 Feb 13 2016
+# vmap edk D:/lib/ise14_7_lib/edk 
+# Modifying C:/modeltech64_10.5/win64/../modelsim.ini
+# Model Technology ModelSim SE-64 vmap 10.5 Lib Mapping Utility 2016.02 Feb 13 2016
+# vmap al D:/lib/anlogic/al 
+# Modifying C:/modeltech64_10.5/win64/../modelsim.ini
+# Model Technology ModelSim SE-64 vmap 10.5 Lib Mapping Utility 2016.02 Feb 13 2016
+# vmap ef2 D:/lib/anlogic/ef2 
+# Modifying C:/modeltech64_10.5/win64/../modelsim.ini
+# Model Technology ModelSim SE-64 vmap 10.5 Lib Mapping Utility 2016.02 Feb 13 2016
+# vmap ef3 D:/lib/anlogic/ef3 
+# Modifying C:/modeltech64_10.5/win64/../modelsim.ini
+# Model Technology ModelSim SE-64 vmap 10.5 Lib Mapping Utility 2016.02 Feb 13 2016
+# vmap eg D:/lib/anlogic/eg 
+# Modifying C:/modeltech64_10.5/win64/../modelsim.ini
+# Model Technology ModelSim SE-64 vmap 10.5 Lib Mapping Utility 2016.02 Feb 13 2016
+# vmap elf D:/lib/anlogic/elf 
+# Modifying C:/modeltech64_10.5/win64/../modelsim.ini
+# Model Technology ModelSim SE-64 vmap 10.5 Lib Mapping Utility 2016.02 Feb 13 2016
+# vmap ph1 D:/lib/anlogic/ph1 
+# Modifying C:/modeltech64_10.5/win64/../modelsim.ini
+# Model Technology ModelSim SE-64 vlog 10.5 Compiler 2016.02 Feb 13 2016
+# Start time: 10:05:41 on Jul 23,2020
+# vlog -reportprogress 300 -work work "+define+SIMULATION" ../prj/al_ip/clk_pll.v ../prj/al_ip/clk_pll_sim.v 
+# -- Compiling module clk_pll
+# ** Warning: ../prj/al_ip/clk_pll_sim.v(5): (vlog-2275) 'clk_pll' already exists and will be overwritten.
+# -- Compiling module clk_pll
+# 
+# Top level modules:
+# 	clk_pll
+# End time: 10:05:41 on Jul 23,2020, Elapsed time: 0:00:00
+# Errors: 0, Warnings: 1
+# Model Technology ModelSim SE-64 vlog 10.5 Compiler 2016.02 Feb 13 2016
+# Start time: 10:05:42 on Jul 23,2020
+# vlog -reportprogress 300 -work work "+define+SIMULATION" ../source_code/tb/tb.v 
+# -- Compiling module tb
+# 
+# Top level modules:
+# 	tb
+# End time: 10:05:42 on Jul 23,2020, Elapsed time: 0:00:00
+# Errors: 0, Warnings: 0
+# Model Technology ModelSim SE-64 vcom 10.5 Compiler 2016.02 Feb 13 2016
+# Start time: 10:05:42 on Jul 23,2020
+# vcom -reportprogress 300 -2008 ../source_code/rtl/hdmi_tx.vhd 
+# -- Loading package STANDARD
+# -- Loading package TEXTIO
+# -- Loading package std_logic_1164
+# -- Loading package std_logic_arith
+# -- Compiling entity hdmi_tx
+# -- Compiling architecture Behavioral of hdmi_tx
+# End time: 10:05:42 on Jul 23,2020, Elapsed time: 0:00:00
+# Errors: 0, Warnings: 0
+# Model Technology ModelSim SE-64 vlog 10.5 Compiler 2016.02 Feb 13 2016
+# Start time: 10:05:42 on Jul 23,2020
+# vlog -reportprogress 300 -work work "+define+SIMULATION" ../source_code/rtl/hdmi_display.v ../source_code/rtl/hdmi_top.v 
+# -- Compiling module hdmi_display
+# -- Compiling module hdmi_top
+# 
+# Top level modules:
+# 	hdmi_display
+# End time: 10:05:42 on Jul 23,2020, Elapsed time: 0:00:00
+# Errors: 0, Warnings: 0
+# Model Technology ModelSim SE-64 vcom 10.5 Compiler 2016.02 Feb 13 2016
+# Start time: 10:05:42 on Jul 23,2020
+# vcom -reportprogress 300 -2008 ../source_code/rtl/enc_file/HDMI_Transmitter.enc.vhd ../source_code/rtl/enc_file/Serial_N_1_lvds.enc.vhd ../source_code/rtl/enc_file/Serial_N_1_lvds_dat.enc.vhd ../source_code/rtl/enc_file/TMDS_Encoder.enc.vhd 
+# -- Loading package STANDARD
+# -- Loading package TEXTIO
+# -- Loading package std_logic_1164
+# -- Loading package std_logic_arith
+# -- Loading package STD_LOGIC_UNSIGNED
+# -- Compiling entity HDMI_Transmiter
+# -- Compiling architecture Behavioral of HDMI_Transmiter
+# -- Loading package STD_LOGIC_SIGNED
+# -- Compiling entity TMDS_Encoder
+# End time: 10:05:43 on Jul 23,2020, Elapsed time: 0:00:01
+# Errors: 0, Warnings: 0
+# Model Technology ModelSim SE-64 vlog 10.5 Compiler 2016.02 Feb 13 2016
+# Start time: 10:05:43 on Jul 23,2020
+# vlog -reportprogress 300 -work work "+define+SIMULATION" ../source_code/rtl/enc_file/video_tpg_1024768.enc.v ../source_code/rtl/enc_file/video_tpg_1080p.enc.v ../source_code/rtl/enc_file/video_tpg_12801024p.enc.v ../source_code/rtl/enc_file/video_tpg_1280800.enc.v ../source_code/rtl/enc_file/video_tpg_16801050p.enc.v ../source_code/rtl/enc_file/video_tpg_800600.enc.v 
+# -- Compiling module video_tpg_1024768
+# -- Compiling module video_tpg_1080p
+# -- Compiling module video_tpg_12801024p
+# -- Compiling module video_tpg_1280800
+# -- Compiling module video_tpg_16801050p
+# -- Compiling module video_tpg_800600
+# 
+# Top level modules:
+# 	video_tpg_1024768
+# 	video_tpg_1080p
+# 	video_tpg_12801024p
+# 	video_tpg_1280800
+# 	video_tpg_16801050p
+# 	video_tpg_800600
+# End time: 10:05:44 on Jul 23,2020, Elapsed time: 0:00:01
+# Errors: 0, Warnings: 0
+# vsim -t ps -voptargs=""+acc"" "+transport_int_delays+transport_path_delay+notimingchecks" -L ph1 -L al -L eg work.tb 
+# Start time: 10:05:45 on Jul 23,2020
+# ** Note: (vsim-3812) Design is being optimized...
+# ** Warning: ../prj/al_ip/clk_pll_sim.v(29): (vopt-2675) [TFMPC] - Too few port connections for 'config_inst'.  Expected 32, found 0.
+# ** Warning: ../prj/al_ip/clk_pll_sim.v(161): (vopt-2685) [TFMPC] - Too few port connections for 'pll_inst'.  Expected 31, found 26.
+# ** Warning: ../prj/al_ip/clk_pll_sim.v(161): (vopt-2718) [TFMPC] - Missing connection for port 'psdone'.
+# ** Warning: ../prj/al_ip/clk_pll_sim.v(161): (vopt-2718) [TFMPC] - Missing connection for port 'drp_rdata'.
+# ** Warning: ../prj/al_ip/clk_pll_sim.v(161): (vopt-2718) [TFMPC] - Missing connection for port 'drp_rdy'.
+# ** Warning: ../prj/al_ip/clk_pll_sim.v(161): (vopt-2718) [TFMPC] - Missing connection for port 'drp_err'.
+# ** Warning: ../prj/al_ip/clk_pll_sim.v(161): (vopt-2718) [TFMPC] - Missing connection for port 'clkcb'.
+# Loading work.tb(fast)
+# Loading work.hdmi_display(fast)
+# Loading work.clk_pll(fast)
+# Loading ph1.PH1_PHY_PLL(fast)
+# Loading ph1.ph1_dphase_sel(fast)
+# Loading ph1.ph1_pll_div2(fast)
+# Loading ph1.prediv_mux(fast)
+# Loading ph1.ph1_clko_premux(fast)
+# Loading ph1.ph1_pll_div128(fast)
+# Loading ph1.ph1_pll_div128(fast__1)
+# Loading ph1.ph1_pll_div128(fast__2)
+# Loading ph1.ph1_clko_ctrl(fast)
+# Loading work.hdmi_top(fast)
+# Loading work.video_tpg_16801050p(fast)
+# Loading ph1.PH1_PHY_GSR(fast)
+# Loading std.standard
+# Loading std.textio(body)
+# Loading ieee.std_logic_1164(body)
+# Loading ieee.std_logic_arith(body)
+# Loading work.hdmi_tx(behavioral)#1
+# Loading ieee.std_logic_unsigned(body)
+# Loading work.hdmi_transmiter(behavioral)#1
+# Loading ieee.std_logic_signed(body)
+# Loading ph1.PH1_LOGIC_ODDR(fast)
+# Loading ph1.PH1_LOGIC_ODDR(fast__1)
+# ** Warning: (vsim-3015) C:/Anlogic/TD5.0.19082/sim_modelsim/ph1/ph1_phy_pll.v(1069): [PCDPC] - Port size (7) does not match connection size (32) for port 'dynamic_DIV'. The port definition is at: C:/Anlogic/TD5.0.19082/sim_modelsim/ph1/ph1_phy_pll.v(1398).
+#    Time: 0 ps  Iteration: 0  Instance: /tb/dut/inst/pll_inst/xdivc0 File: C:/Anlogic/TD5.0.19082/sim_modelsim/ph1/ph1_phy_pll.v
+# ** Warning: (vsim-3015) C:/Anlogic/TD5.0.19082/sim_modelsim/ph1/ph1_phy_pll.v(1077): [PCDPC] - Port size (7) does not match connection size (32) for port 'dynamic_DIV'. The port definition is at: C:/Anlogic/TD5.0.19082/sim_modelsim/ph1/ph1_phy_pll.v(1398).
+#    Time: 0 ps  Iteration: 0  Instance: /tb/dut/inst/pll_inst/xdivc1 File: C:/Anlogic/TD5.0.19082/sim_modelsim/ph1/ph1_phy_pll.v
+# ** Warning: (vsim-3015) C:/Anlogic/TD5.0.19082/sim_modelsim/ph1/ph1_phy_pll.v(1085): [PCDPC] - Port size (7) does not match connection size (32) for port 'dynamic_DIV'. The port definition is at: C:/Anlogic/TD5.0.19082/sim_modelsim/ph1/ph1_phy_pll.v(1398).
+#    Time: 0 ps  Iteration: 0  Instance: /tb/dut/inst/pll_inst/xdivc2 File: C:/Anlogic/TD5.0.19082/sim_modelsim/ph1/ph1_phy_pll.v
+# ** Warning: (vsim-3015) C:/Anlogic/TD5.0.19082/sim_modelsim/ph1/ph1_phy_pll.v(1093): [PCDPC] - Port size (7) does not match connection size (32) for port 'dynamic_DIV'. The port definition is at: C:/Anlogic/TD5.0.19082/sim_modelsim/ph1/ph1_phy_pll.v(1398).
+#    Time: 0 ps  Iteration: 0  Instance: /tb/dut/inst/pll_inst/xdivc3 File: C:/Anlogic/TD5.0.19082/sim_modelsim/ph1/ph1_phy_pll.v
+# ** Warning: (vsim-3015) C:/Anlogic/TD5.0.19082/sim_modelsim/ph1/ph1_phy_pll.v(1101): [PCDPC] - Port size (7) does not match connection size (32) for port 'dynamic_DIV'. The port definition is at: C:/Anlogic/TD5.0.19082/sim_modelsim/ph1/ph1_phy_pll.v(1398).
+#    Time: 0 ps  Iteration: 0  Instance: /tb/dut/inst/pll_inst/xdivc4 File: C:/Anlogic/TD5.0.19082/sim_modelsim/ph1/ph1_phy_pll.v
+# ** Warning: (vsim-3015) C:/Anlogic/TD5.0.19082/sim_modelsim/ph1/ph1_phy_pll.v(1109): [PCDPC] - Port size (7) does not match connection size (32) for port 'dynamic_DIV'. The port definition is at: C:/Anlogic/TD5.0.19082/sim_modelsim/ph1/ph1_phy_pll.v(1398).
+#    Time: 0 ps  Iteration: 0  Instance: /tb/dut/inst/pll_inst/xdivc5 File: C:/Anlogic/TD5.0.19082/sim_modelsim/ph1/ph1_phy_pll.v
+# ** Warning: (vsim-3015) C:/Anlogic/TD5.0.19082/sim_modelsim/ph1/ph1_phy_pll.v(1117): [PCDPC] - Port size (7) does not match connection size (32) for port 'dynamic_DIV'. The port definition is at: C:/Anlogic/TD5.0.19082/sim_modelsim/ph1/ph1_phy_pll.v(1398).
+#    Time: 0 ps  Iteration: 0  Instance: /tb/dut/inst/pll_inst/xdivc6 File: C:/Anlogic/TD5.0.19082/sim_modelsim/ph1/ph1_phy_pll.v
+# .main_pane.wave.interior.cs.body.pw.wf .main_pane.objects.interior.cs.body.tree
+# unsigned
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 0  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ******************** : The Attribute            REFCLK_DIV on pll instance tb.dut.inst.pll_inst.para_int_range_chk is set to           2.  Legal values for this attribute are           1 to         128.
+# ******************** : The Attribute             FBCLK_DIV on pll instance tb.dut.inst.pll_inst.para_int_range_chk is set to          95.  Legal values for this attribute are           1 to         128.
+# ******************** : The Attribute             CLKC0_DIV on pll instance tb.dut.inst.pll_inst.para_int_range_chk is set to          10.  Legal values for this attribute are           1 to         128.
+# ******************** : The Attribute             CLKC1_DIV on pll instance tb.dut.inst.pll_inst.para_int_range_chk is set to          10.  Legal values for this attribute are           1 to         128.
+# ******************** : The Attribute             CLKC2_DIV on pll instance tb.dut.inst.pll_inst.para_int_range_chk is set to           2.  Legal values for this attribute are           1 to         128.
+# ******************** : The Attribute             CLKC3_DIV on pll instance tb.dut.inst.pll_inst.para_int_range_chk is set to           1.  Legal values for this attribute are           1 to         128.
+# ******************** : The Attribute             CLKC4_DIV on pll instance tb.dut.inst.pll_inst.para_int_range_chk is set to           1.  Legal values for this attribute are           1 to         128.
+# ******************** : The Attribute             CLKC5_DIV on pll instance tb.dut.inst.pll_inst.para_int_range_chk is set to           1.  Legal values for this attribute are           1 to         128.
+# ******************** : The Attribute             CLKC6_DIV on pll instance tb.dut.inst.pll_inst.para_int_range_chk is set to           1.  Legal values for this attribute are           1 to         128.
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 1  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 1  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 1  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 1  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 1  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 1  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 1  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 1  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 1  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 1  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 1  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 1  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 1  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 1  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 1  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 1  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 1  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 1  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 2  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 2  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 0 ps  Iteration: 2  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 9  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 9  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 9  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 10  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 10  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 10  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 10  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 10  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 10  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 10  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 10  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 10  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 10  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 10  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 10  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 10  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 10  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 10  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 10  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 10  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 10  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 10  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 10  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 10  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 10  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 10  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 10  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 10  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 10  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 10  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 12  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 13  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 14  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 14  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 14  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 14  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 14  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 14  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 14  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 14  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 14  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 14  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 14  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 14  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 14  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 14  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 14  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 14  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 14  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 14  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 14  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 14  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 14  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 14  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 14  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 14  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 14  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 14  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 14  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 15  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 15  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 15  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 15  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 15  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 15  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 15  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 15  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 15  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 15  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 15  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 15  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 15  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 15  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 15  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 15  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 15  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 15  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 15  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 15  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 15  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 16  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 16  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 16  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 16  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 16  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 16  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 16  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 16  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 16  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 16  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 16  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 16  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 16  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 16  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 16  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 17  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 17  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 17  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 17  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 17  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 17  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 17  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 17  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 17  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 18  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 18  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6127786 ps  Iteration: 18  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6136206 ps  Iteration: 8  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6136206 ps  Iteration: 8  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6136206 ps  Iteration: 8  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6136206 ps  Iteration: 8  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6136206 ps  Iteration: 8  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6136206 ps  Iteration: 8  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6136206 ps  Iteration: 8  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6136206 ps  Iteration: 8  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# ** Warning: There is an 'U'|'X'|'W'|'Z'|'-' in an arithmetic operand, the result will be 'X'(es).
+#    Time: 6136206 ps  Iteration: 8  Protected: /tb/dut/ux_hdmi_1080/u3_hdmi_tx_top/Inst_HDMI_Transmiter/<protected>
+# Break key hit
+# Break in Module ph1_clko_premux at C:/Anlogic/TD5.0.19082/sim_modelsim/ph1/ph1_phy_pll.v line 1388
+# End time: 10:06:06 on Jul 23,2020, Elapsed time: 0:00:21
+# Errors: 0, Warnings: 287

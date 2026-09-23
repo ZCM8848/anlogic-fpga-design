@@ -1,0 +1,352 @@
+eagle_s20
+12 567 1200 832 11842 14 0
+-1.184 0.122 hdmi_tx_display eagle_s20 BG256 Detail 10 3
+clock: SYS_CLK
+12 76 26 2
+Setup check
+22 3
+Endpoint: reg3_b6|reg3_b5
+22 18.410000 6 3
+Timing path: reg3_b2|reg3_b1.clk->reg3_b6|reg3_b5
+reg3_b2|reg3_b1.clk
+reg3_b6|reg3_b5
+24 18.410000 23.585000 5.175000 2 3
+rst_cnt[1] reg3_b2|reg3_b1.a[0]
+add0/c3 reg3_b4|reg3_b3.fci
+add0/c5 reg3_b6|reg3_b5.fci
+
+Timing path: reg3_b0|add0/ucin.clk->reg3_b6|reg3_b5
+reg3_b0|add0/ucin.clk
+reg3_b6|reg3_b5
+65 18.416000 23.585000 5.169000 2 4
+rst_cnt[0] reg3_b0|add0/ucin.a[1]
+add0/c1 reg3_b2|reg3_b1.fci
+add0/c3 reg3_b4|reg3_b3.fci
+add0/c5 reg3_b6|reg3_b5.fci
+
+Timing path: reg3_b4|reg3_b3.clk->reg3_b6|reg3_b5
+reg3_b4|reg3_b3.clk
+reg3_b6|reg3_b5
+108 18.483000 23.585000 5.102000 2 2
+rst_cnt[3] reg3_b4|reg3_b3.a[0]
+add0/c5 reg3_b6|reg3_b5.fci
+
+
+Endpoint: reg3_b4|reg3_b3
+147 18.483000 4 3
+Timing path: reg3_b2|reg3_b1.clk->reg3_b4|reg3_b3
+reg3_b2|reg3_b1.clk
+reg3_b4|reg3_b3
+149 18.483000 23.585000 5.102000 2 2
+rst_cnt[1] reg3_b2|reg3_b1.a[0]
+add0/c3 reg3_b4|reg3_b3.fci
+
+Timing path: reg3_b0|add0/ucin.clk->reg3_b4|reg3_b3
+reg3_b0|add0/ucin.clk
+reg3_b4|reg3_b3
+188 18.489000 23.585000 5.096000 2 3
+rst_cnt[0] reg3_b0|add0/ucin.a[1]
+add0/c1 reg3_b2|reg3_b1.fci
+add0/c3 reg3_b4|reg3_b3.fci
+
+Timing path: reg3_b2|reg3_b1.clk->reg3_b4|reg3_b3
+reg3_b2|reg3_b1.clk
+reg3_b4|reg3_b3
+229 18.562000 23.585000 5.023000 2 2
+rst_cnt[2] reg3_b2|reg3_b1.a[1]
+add0/c3 reg3_b4|reg3_b3.fci
+
+
+Endpoint: reg3_b7_al_u40
+268 18.548000 8 3
+Timing path: reg3_b2|reg3_b1.clk->reg3_b7_al_u40
+reg3_b2|reg3_b1.clk
+reg3_b7_al_u40
+270 18.548000 23.585000 5.037000 2 4
+rst_cnt[1] reg3_b2|reg3_b1.a[0]
+add0/c3 reg3_b4|reg3_b3.fci
+add0/c5 reg3_b6|reg3_b5.fci
+add0/c7 reg3_b7_al_u40.fci
+
+Timing path: reg3_b0|add0/ucin.clk->reg3_b7_al_u40
+reg3_b0|add0/ucin.clk
+reg3_b7_al_u40
+313 18.554000 23.585000 5.031000 2 5
+rst_cnt[0] reg3_b0|add0/ucin.a[1]
+add0/c1 reg3_b2|reg3_b1.fci
+add0/c3 reg3_b4|reg3_b3.fci
+add0/c5 reg3_b6|reg3_b5.fci
+add0/c7 reg3_b7_al_u40.fci
+
+Timing path: reg3_b4|reg3_b3.clk->reg3_b7_al_u40
+reg3_b4|reg3_b3.clk
+reg3_b7_al_u40
+358 18.621000 23.585000 4.964000 2 3
+rst_cnt[3] reg3_b4|reg3_b3.a[0]
+add0/c5 reg3_b6|reg3_b5.fci
+add0/c7 reg3_b7_al_u40.fci
+
+
+
+Hold check
+399 3
+Endpoint: reg3_b7_al_u40
+401 0.598000 1 1
+Timing path: reg3_b7_al_u40.clk->reg3_b7_al_u40
+reg3_b7_al_u40.clk
+reg3_b7_al_u40
+403 0.598000 3.464000 4.062000 0 1
+rst_cnt[7] reg3_b7_al_u40.ce
+
+
+Endpoint: reg3_b0|add0/ucin
+440 0.660000 1 1
+Timing path: reg3_b0|add0/ucin.clk->reg3_b0|add0/ucin
+reg3_b0|add0/ucin.clk
+reg3_b0|add0/ucin
+442 0.660000 3.464000 4.124000 1 1
+rst_cnt[0] reg3_b0|add0/ucin.a[1]
+
+
+Endpoint: reg3_b2|reg3_b1
+479 0.660000 2 2
+Timing path: reg3_b2|reg3_b1.clk->reg3_b2|reg3_b1
+reg3_b2|reg3_b1.clk
+reg3_b2|reg3_b1
+481 0.660000 3.464000 4.124000 1 1
+rst_cnt[2] reg3_b2|reg3_b1.a[1]
+
+Timing path: reg3_b0|add0/ucin.clk->reg3_b2|reg3_b1
+reg3_b0|add0/ucin.clk
+reg3_b2|reg3_b1
+518 0.973000 3.464000 4.437000 2 2
+rst_cnt[0] reg3_b0|add0/ucin.a[1]
+add0/c1 reg3_b2|reg3_b1.fci
+
+
+
+
+clock: pclk
+557 11538 628 2
+Setup check
+567 3
+Endpoint: ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg5_b3|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg5_b4
+567 -1.184000 224 3
+Timing path: ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/_al_u31|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg2_b0.clk->ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg5_b3|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg5_b4
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/_al_u31|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg2_b0.clk
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg5_b3|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg5_b4
+569 -1.184000 6.367000 7.551000 6 6
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/n0_q_m[0] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/sub1/u0|sub1/ucin.a[1]
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/sub1/c1 ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/sub1/u2|sub1/u1.fci
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/dc_bias[2] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/add16/u2|add16/u1.b[1]
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/add16/c3 ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/add16/u4|add16/u3.fci
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/n60[4] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/de_d_reg|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/de_dd_reg.c[0]
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/_al_u49_o ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg5_b3|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg5_b4.c[0]
+
+Timing path: ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/_al_u31|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg2_b0.clk->ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg5_b3|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg5_b4
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/_al_u31|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg2_b0.clk
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg5_b3|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg5_b4
+610 -1.096000 6.367000 7.463000 6 6
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/n0_q_m[0] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/sub1/u0|sub1/ucin.b[1]
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/sub1/c1 ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/sub1/u2|sub1/u1.fci
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/dc_bias[2] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/add16/u2|add16/u1.b[1]
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/add16/c3 ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/add16/u4|add16/u3.fci
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/n60[4] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/de_d_reg|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/de_dd_reg.c[0]
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/_al_u49_o ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg5_b3|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg5_b4.c[0]
+
+Timing path: ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/_al_u31|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg2_b0.clk->ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg5_b3|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg5_b4
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/_al_u31|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg2_b0.clk
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg5_b3|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg5_b4
+651 -1.073000 6.367000 7.440000 6 6
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/n0_q_m[0] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/sub1/u0|sub1/ucin.a[1]
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/sub1/c1 ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/sub1/u2|sub1/u1.fci
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/dc_bias[1] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/add16/u2|add16/u1.b[0]
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/add16/c3 ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/add16/u4|add16/u3.fci
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/n60[4] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/de_d_reg|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/de_dd_reg.c[0]
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/_al_u49_o ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg5_b3|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg5_b4.c[0]
+
+
+Endpoint: ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg0_b3
+692 -0.883000 25 3
+Timing path: ux_hdmi/u2_tpg/_al_u85|ux_hdmi/u2_tpg/reg15_b9.clk->ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg0_b3
+ux_hdmi/u2_tpg/_al_u85|ux_hdmi/u2_tpg/reg15_b9.clk
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg0_b3
+694 -0.883000 6.367000 7.250000 4 4
+ux_hdmi/VGA_RGB[9] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg1_b1|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg1_b2.b[0]
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/_al_u17_o ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/_al_u21|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg0_b0.b[1]
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/_al_u21_o ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg0_b1|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg0_b2.d[0]
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/n10[2] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg0_b3.c[0]
+
+Timing path: ux_hdmi/u2_tpg/_al_u82|ux_hdmi/u2_tpg/reg15_b8.clk->ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg0_b3
+ux_hdmi/u2_tpg/_al_u82|ux_hdmi/u2_tpg/reg15_b8.clk
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg0_b3
+731 -0.800000 6.367000 7.167000 4 4
+ux_hdmi/VGA_RGB[8] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg1_b1|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg1_b2.c[0]
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/_al_u17_o ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/_al_u21|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg0_b0.b[1]
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/_al_u21_o ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg0_b1|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg0_b2.d[0]
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/n10[2] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg0_b3.c[0]
+
+Timing path: ux_hdmi/u2_tpg/reg15_b10|ux_hdmi/u2_tpg/reg15_b6.clk->ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg0_b3
+ux_hdmi/u2_tpg/reg15_b10|ux_hdmi/u2_tpg/reg15_b6.clk
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg0_b3
+768 -0.309000 6.367000 6.676000 4 4
+VGA_G_pad[0] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg1_b1|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg1_b2.d[0]
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/_al_u17_o ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/_al_u21|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg0_b0.b[1]
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/_al_u21_o ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg0_b1|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg0_b2.d[0]
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/n10[2] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg0_b3.c[0]
+
+
+Endpoint: ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg5_b3|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg5_b4
+805 -0.844000 223 3
+Timing path: ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/_al_u30|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg2_b0.clk->ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg5_b3|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg5_b4
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/_al_u30|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg2_b0.clk
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg5_b3|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg5_b4
+807 -0.844000 6.367000 7.211000 6 6
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/n0_q_m[0] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/sub1/u0|sub1/ucin.a[1]
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/sub1/c1 ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/sub1/u2|sub1/u1.fci
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/dc_bias[2] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/sub4/u2|sub4/u1.b[1]
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/sub4/c3 ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/sub4/u4|sub4/u3.fci
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/n58[4] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/_al_u55|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg4_b8.b[0]
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/_al_u44_o ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg5_b3|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg5_b4.c[0]
+
+Timing path: ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/_al_u30|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg2_b0.clk->ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg5_b3|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg5_b4
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/_al_u30|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg2_b0.clk
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg5_b3|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg5_b4
+848 -0.809000 6.367000 7.176000 6 6
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/n0_q_m[0] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/sub1/u0|sub1/ucin.a[1]
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/sub1/c1 ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/sub1/u2|sub1/u1.fci
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/dc_bias[2] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/add16/u2|add16/u1.b[1]
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/add16/c3 ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/add16/u4|add16/u3.fci
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/n60[4] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/_al_u55|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg4_b8.d[0]
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/_al_u44_o ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg5_b3|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg5_b4.c[0]
+
+Timing path: ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg0_b1|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg0_b2.clk->ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg5_b3|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg5_b4
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg0_b1|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg0_b2.clk
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg5_b3|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg5_b4
+889 -0.798000 6.367000 7.165000 4 4
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/n1_d[1] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/_al_u41|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/_al_u29.b[1]
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/_al_u41_o ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/_al_u62|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/_al_u61.a[0]
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/n7[2] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/u32/u4|u32/u3.a[0]
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/n54[4] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg5_b3|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg5_b4.d[0]
+
+
+
+Hold check
+926 3
+Endpoint: ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg4_b0|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/_al_u39
+928 0.266000 1 1
+Timing path: ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg1_b4|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg1_b0.clk->ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg4_b0|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/_al_u39
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg1_b4|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg1_b0.clk
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg4_b0|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/_al_u39
+930 0.266000 2.350000 2.616000 0 1
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/d_d[0] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg4_b0|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/_al_u39.mi[1]
+
+
+Endpoint: ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg1_b1|ux_hdmi/u2_tpg/_al_u116
+961 0.325000 1 1
+Timing path: ux_hdmi/u2_tpg/_al_u102|ux_hdmi/u2_tpg/reg15_b1.clk->ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg1_b1|ux_hdmi/u2_tpg/_al_u116
+ux_hdmi/u2_tpg/_al_u102|ux_hdmi/u2_tpg/reg15_b1.clk
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg1_b1|ux_hdmi/u2_tpg/_al_u116
+963 0.325000 2.269000 2.594000 0 1
+ux_hdmi/VGA_RGB[1] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg1_b1|ux_hdmi/u2_tpg/_al_u116.mi[1]
+
+
+Endpoint: ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/_al_u91|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/c1_dd_reg
+994 0.458000 1 1
+Timing path: ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg4_b5|ux_hdmi/u2_tpg/vsync_reg_two_reg.clk->ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/_al_u91|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/c1_dd_reg
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/reg4_b5|ux_hdmi/u2_tpg/vsync_reg_two_reg.clk
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/_al_u91|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/c1_dd_reg
+996 0.458000 2.269000 2.727000 0 1
+ux_hdmi/u2_tpg/vsync_reg_two ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/_al_u91|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_blue/c1_dd_reg.mi[0]
+
+
+
+
+clock: sclk5
+1027 228 178 2
+Setup check
+1037 3
+Endpoint: ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_green_serializer_10_1/reg0_b7|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_red_serializer_10_1/reg0_b7
+1037 -1.068000 2 2
+Timing path: ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_blue_serializer_10_1/sclk_dat_lat_1d_reg|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_blue_serializer_10_1/sclk_dat_lat_2d_reg.clk->ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_green_serializer_10_1/reg0_b7|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_red_serializer_10_1/reg0_b7
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_blue_serializer_10_1/sclk_dat_lat_1d_reg|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_blue_serializer_10_1/sclk_dat_lat_2d_reg.clk
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_green_serializer_10_1/reg0_b7|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_red_serializer_10_1/reg0_b7
+1039 -1.068000 3.006000 4.074000 1 1
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_blue_serializer_10_1/sclk_dat_lat_2d ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_green_serializer_10_1/reg0_b7|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_red_serializer_10_1/reg0_b7.b[0]
+
+Timing path: ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_red_serializer_10_1/reg0_b4|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_red_serializer_10_1/reg0_b5.clk->ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_green_serializer_10_1/reg0_b7|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_red_serializer_10_1/reg0_b7
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_red_serializer_10_1/reg0_b4|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_red_serializer_10_1/reg0_b5.clk
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_green_serializer_10_1/reg0_b7|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_red_serializer_10_1/reg0_b7
+1070 -0.235000 3.006000 3.241000 1 1
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_red_serializer_10_1/tx_pdat[5] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_green_serializer_10_1/reg0_b7|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_red_serializer_10_1/reg0_b7.c[0]
+
+
+Endpoint: ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_blue_serializer_10_1/reg0_b9|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/_al_u39
+1101 -1.033000 2 2
+Timing path: ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_blue_serializer_10_1/sclk_dat_lat_1d_reg|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_blue_serializer_10_1/sclk_dat_lat_2d_reg.clk->ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_blue_serializer_10_1/reg0_b9|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/_al_u39
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_blue_serializer_10_1/sclk_dat_lat_1d_reg|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_blue_serializer_10_1/sclk_dat_lat_2d_reg.clk
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_blue_serializer_10_1/reg0_b9|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/_al_u39
+1103 -1.033000 3.006000 4.039000 1 1
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_blue_serializer_10_1/sclk_dat_lat_2d ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_blue_serializer_10_1/reg0_b9|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/_al_u39.c[1]
+
+Timing path: ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_blue_serializer_10_1/reg0_b6|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_blue_serializer_10_1/reg0_b7.clk->ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_blue_serializer_10_1/reg0_b9|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/_al_u39
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_blue_serializer_10_1/reg0_b6|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_blue_serializer_10_1/reg0_b7.clk
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_blue_serializer_10_1/reg0_b9|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/_al_u39
+1134 -0.251000 3.006000 3.257000 1 1
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_blue_serializer_10_1/tx_pdat[7] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_blue_serializer_10_1/reg0_b9|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/_al_u39.d[1]
+
+
+Endpoint: ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_red_serializer_10_1/reg0_b2|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_red_serializer_10_1/reg0_b6
+1165 -0.916000 1 1
+Timing path: ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg6_b5|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg6_b7.clk->ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_red_serializer_10_1/reg0_b2|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_red_serializer_10_1/reg0_b6
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg6_b5|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg6_b7.clk
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_red_serializer_10_1/reg0_b2|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_red_serializer_10_1/reg0_b6
+1167 -0.916000 2.791000 3.707000 1 1
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/intTmdsRed[7] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_red_serializer_10_1/reg0_b2|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_red_serializer_10_1/reg0_b6.b[1]
+
+
+
+Hold check
+1198 3
+Endpoint: ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_green_serializer_10_1/reg0_b0
+1200 0.122000 1 1
+Timing path: ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/_al_u48|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg6_b9.clk->ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_green_serializer_10_1/reg0_b0
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/_al_u48|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_green/reg6_b9.clk
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_green_serializer_10_1/reg0_b0
+1202 0.122000 2.484000 2.606000 0 1
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/intTmdsGreen[9] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_green_serializer_10_1/reg0_b0.mi[0]
+
+
+Endpoint: ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/lt2_0|lt2_cin
+1233 0.243000 1 1
+Timing path: ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg6_b6|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg6_b9.clk->ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/lt2_0|lt2_cin
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg6_b6|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg6_b9.clk
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/lt2_0|lt2_cin
+1235 0.243000 2.484000 2.727000 0 1
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/intTmdsRed[9] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/lt2_0|lt2_cin.mi[1]
+
+
+Endpoint: ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_red_serializer_10_1/reg0_b2|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_red_serializer_10_1/reg0_b6
+1266 0.261000 1 1
+Timing path: ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg6_b2|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg6_b3.clk->ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_red_serializer_10_1/reg0_b2|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_red_serializer_10_1/reg0_b6
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg6_b2|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_TMDSEncoder_red/reg6_b3.clk
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_red_serializer_10_1/reg0_b2|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_red_serializer_10_1/reg0_b6
+1268 0.261000 2.484000 2.745000 1 1
+ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/intTmdsRed[3] ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_red_serializer_10_1/reg0_b2|ux_hdmi/u3_hdmi_tx/Inst_DVITransmitter/Inst_red_serializer_10_1/reg0_b6.c[0]
+
+
+
+
+
+Timing group statistics: 
+	Clock constraints: 
+	  Clock Name                                  Min Period     Max Freq           Skew      Fanout            TNS
+	  pclk (238.000MHz)                              5.385ns     185.701MHz        0.211ns       164      -31.981ns
+	  sclk5 (1.190GHz)                               1.908ns     524.000MHz        0.487ns        42      -47.794ns
+	  SYS_CLK (50.000MHz)                            1.590ns     628.931MHz        0.021ns         5        0.000ns
+	Minimum input arrival time before clock: no constraint path
+	Maximum output required time after clock: no constraint path
+	Maximum combinational path delay: no constraint path
+Warning: No clock constraint on 1 clock net(s): 
+	clk25m
+
