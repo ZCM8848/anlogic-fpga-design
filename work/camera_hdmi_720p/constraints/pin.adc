@@ -12,8 +12,19 @@ set_pin_assignment { O_tmds_ch1_p }  { LOCATION = F17; IOSTANDARD = TMDS33; PULL
 set_pin_assignment { O_tmds_ch2_p }  { LOCATION = H14; IOSTANDARD = TMDS33; PULLTYPE = NONE; }
 set_pin_assignment { O_tmds_clk_p }  { LOCATION = C17; IOSTANDARD = TMDS33; PULLTYPE = NONE; }
 
-# ---- 4 组独立 LED（LED1..LED4；假定低电平点亮）----
+# ---- 4 组独立 LED（LED1..LED4；高电平点亮，手册 p20 + 原理图 RN17 到 LED 阳极）----
 set_pin_assignment { O_led[0] }      { LOCATION = D10; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; }
 set_pin_assignment { O_led[1] }      { LOCATION = E10; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; }
 set_pin_assignment { O_led[2] }      { LOCATION = C6;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; }
 set_pin_assignment { O_led[3] }      { LOCATION = D6;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; }
+
+# ---- M2：MIPI 摄像头控制信号（BANK21，VCCIO=VCC_3V3；经 TXS0104E 电平转换到 42P FPC 座）----
+# 引脚事实来源：开发板原理图 sheet3 BANK21（IO_BE4P_21=L3、IO_BE3N_21=L2、IO_BE5N_21=K3、IO_BE5P_21=J3）
+set_pin_assignment { O_cam_clk }     { LOCATION = L3; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
+set_pin_assignment { O_cam_pwdnb }   { LOCATION = L2; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
+set_pin_assignment { IO_cam_scl }    { LOCATION = K3; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
+set_pin_assignment { IO_cam_sda }    { LOCATION = J3; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
+
+# ---- M2：板载 USB-UART 桥（CH340 → Type-C）。原理图 sheet3 BANK21：IO_BE2P_21=J1=FPGA_TXD ----
+#      J1 为 FPGA 输出（本阶段只用 TX；FPGA_RXD=K1 暂未使用，故不约束）
+set_pin_assignment { O_uart_tx }     { LOCATION = J1; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }

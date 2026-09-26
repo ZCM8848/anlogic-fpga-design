@@ -20,7 +20,15 @@ module design_top_wrapper (
     output wire       O_tmds_ch1_p,  // F17
     output wire       O_tmds_ch2_p,  // H14
     output wire       O_tmds_clk_p,  // C17
-    output wire [3:0] O_led          // D10/E10/C6/D6（LED1..LED4，高电平点亮）
+    output wire [3:0] O_led,         // D10/E10/C6/D6（LED1..LED4，高电平点亮）
+
+    // ---- M2：MIPI 摄像头控制（BANK21，3V3；模组侧经 TXS0104E 电平转换）----
+    inout  wire       IO_cam_scl,    // K3
+    inout  wire       IO_cam_sda,    // J3
+    output wire       O_cam_pwdnb,   // L2（=原厂 PWDNB，高=工作）
+    output wire       O_cam_clk,     // L3（XCLK 23.81MHz ≈ 24MHz）
+    // ---- M2：板载 USB-UART（CH340 → Type-C）----
+    output wire       O_uart_tx      // J1（FPGA_TXD）
 );
 
     // ---------------------------------------------------------------- 时钟
@@ -133,22 +141,102 @@ module design_top_wrapper (
         .O_tmds_clk_p       ( O_tmds_clk_p  )
     );
 
+    // ------------------------------------------------- M2：摄像头链路（上电 + I2C 初始化）
+    // 本阶段只做控制通路：FCLK 输出 + PWDNB 时序 + I2C 读 ID + 写 165 条寄存器表。
+    // MIPI 数据通路（D-PHY 硬核 + CSI-2 解析 + ISP）留待 M3。
+    wire        S_i2c_scl_low, S_i2c_sda_low, S_i2c_sda_in;
+    wire [7:0]  S_i2c_rdata;
+    wire        S_i2c_busy, S_i2c_done, S_i2c_ack_err;
+
+    // 开漏：只拉低或释放（总线外部 4.7K 上拉 + 模组侧 TXS0104E）
+    assign IO_cam_scl = S_i2c_scl_low ? 1'b0 : 1'bz;
+    assign IO_cam_sda = S_i2c_sda_low ? 1'b0 : 1'bz;
+    assign S_i2c_sda_in = IO_cam_sda;
+
+    assign O_cam_clk = S_clk_cam;      // 23.81MHz，手册 EXTCLK 6~40MHz 范围内
+
+    wire        S_cam_go, S_cam_rd;
+    wire [6:0]  S_cam_dev;
+    wire [15:0] S_cam_sub;
+    wire [7:0]  S_cam_wdata;
+    wire [8:0]  S_rom_idx;
+    wire [23:0] S_rom_data;
+    wire [15:0] S_id_pre, S_id_post;
+    wire [6:0]  S_dev_used;
+    wire [8:0]  S_wr_cnt;
+    wire [3:0]  S_cam_err;
+    wire        S_cam_busy, S_cam_i2c_ok, S_cam_id_ok;
+
+    i2c_master u_i2c (
+        .clk       ( S_clk_100m    ),
+        .rst_n     ( S_rst_n_100m  ),
+        .I_go      ( S_cam_go      ),
+        .I_rd      ( S_cam_rd      ),
+        .I_dev     ( S_cam_dev     ),
+        .I_sub     ( S_cam_sub     ),
+        .I_wdata   ( S_cam_wdata   ),
+        .O_rdata   ( S_i2c_rdata   ),
+        .O_busy    ( S_i2c_busy    ),
+        .O_done    ( S_i2c_done    ),
+        .O_ack_err ( S_i2c_ack_err ),
+        .O_scl_low ( S_i2c_scl_low ),
+        .O_sda_low ( S_i2c_sda_low ),
+        .I_sda_in  ( S_i2c_sda_in  )
+    );
+
+    cam_ctrl u_cam_ctrl (
+        .clk           ( S_clk_100m    ),
+        .rst_n         ( S_rst_n_100m  ),
+        .O_cam_xshutdn ( O_cam_pwdnb   ),
+        .I2C_go        ( S_cam_go      ),
+        .I2C_rd        ( S_cam_rd      ),
+        .I2C_dev       ( S_cam_dev     ),
+        .I2C_sub       ( S_cam_sub     ),
+        .I2C_wdata     ( S_cam_wdata   ),
+        .I2C_rdata     ( S_i2c_rdata   ),
+        .I2C_busy      ( S_i2c_busy    ),
+        .I2C_done      ( S_i2c_done    ),
+        .I2C_ack_err   ( S_i2c_ack_err ),
+        .ROM_idx       ( S_rom_idx     ),
+        .ROM_data      ( S_rom_data    ),
+        .D_id_pre      ( S_id_pre      ),
+        .D_id_post     ( S_id_post     ),
+        .D_dev         ( S_dev_used    ),
+        .D_wr_cnt      ( S_wr_cnt      ),
+        .D_err         ( S_cam_err     ),
+        .O_i2c_ok      ( S_cam_i2c_ok  ),
+        .O_id_ok       ( S_cam_id_ok   ),
+        .D_busy        ( S_cam_busy    )
+    );
+
+    // 原厂 720p60 寄存器表（数据件，见 ip/README.md）
+    uics520reg_720p60 u_cam_reg (
+        .REG_INDEX ( S_rom_idx  ),
+        .REG_DATA  ( S_rom_data ),
+        .REG_SIZE  (            )
+    );
+
+    cam_report u_cam_report (
+        .clk       ( S_clk_100m   ),
+        .rst_n     ( S_rst_n_100m ),
+        .D_id_pre  ( S_id_pre     ),
+        .D_id_post ( S_id_post    ),
+        .D_dev     ( S_dev_used   ),
+        .D_wr_cnt  ( S_wr_cnt     ),
+        .D_err     ( S_cam_err    ),
+        .O_uart_tx ( O_uart_tx    )
+    );
+
     // ---------------------------------------------------------------- 状态指示
-    reg [23:0] S_hb_cnt;    // 像素域心跳计数器（约 0.22s 翻转一次）
-    always @(posedge S_pixel_clk) begin
-        if (!S_rst_n_pix) S_hb_cnt <= 24'd0;
-        else              S_hb_cnt <= S_hb_cnt + 1'b1;
+    reg [23:0] S_hb_cnt;    // 100MHz 域心跳（约 0.17s 翻转一次）
+    always @(posedge S_clk_100m) begin
+        if (!S_rst_n_100m) S_hb_cnt <= 24'd0;
+        else               S_hb_cnt <= S_hb_cnt + 1'b1;
     end
 
-    reg S_de_seen;          // 是否已产生过有效数据
-    always @(posedge S_pixel_clk) begin
-        if (!S_rst_n_pix)      S_de_seen <= 1'b0;
-        else if (S_de)         S_de_seen <= 1'b1;
-    end
-
-    // LED1=PLL 锁定  LED2=像素域心跳  LED3=像素域复位已释放  LED4=已输出过有效数据
-    // 板载 4 个独立 LED 为【高电平点亮】（手册 p20：FPGA 引脚经 1K 排阻 RN17 接 LED 阳极、阴极接 GND）
-    wire [3:0] S_led_status = { S_de_seen, S_rst_n_pix, S_hb_cnt[23], S_pll_lock };
+    // M2：LED1=PLL 锁定  LED2=100M 域心跳  LED3=摄像头初始化流程结束  LED4=Sensor ID 校验通过(9E4B)
+    // （M1 的像素域指示灯由 LED2 改为 LED3/4 的摄像头状态；HDMI 图案仍在输出，可继续肉眼确认屏幕）
+    wire [3:0] S_led_status = { S_cam_id_ok, ~S_cam_busy, S_hb_cnt[23], S_pll_lock };
     assign O_led = S_led_status;
 
 endmodule

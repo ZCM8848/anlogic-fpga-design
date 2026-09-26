@@ -28,6 +28,16 @@
 
 来源：厂商工程 `user_source/hdl_source/`（与官方 IP 文档 APUG092《HDMI1.4b Transmitter》配套设计一致）。
 
+## sc520reg/ — SC520CS 原厂寄存器表（**数据件**）
+
+| 文件 | 说明 |
+|---|---|
+| `uics520reg_720p60.v` | 165 条 `{16 位子地址, 8 位数据}` ROM（`REG_INDEX`→`REG_DATA`，`REG_SIZE=165`），表头注明 24MHz MCLK / 2-Lane RAW10 / Lane 828Mbps |
+
+来源：厂商 SC520 版 lab 工程（`ref/HX1P35A_Contest_202606/3_原理图/摄像头SC520CS.zip` 内 `lab_ex1_mipi_hdmi_SC520/.../uics520_cfg/uics520reg_720p60.v`）。
+本工程只把它当**数据表**使用（初始化寄存器序列属于传感器厂商给定的配置数据，非应用逻辑）；
+按**半净室**约定整份拷贝、不改内容，加载时序由自研 `rtl/camera/cam_ctrl.v` 控制。
+
 ## 约定
 
 - 本目录文件**不提交任何修改**；如需改行为，在 `rtl/` 中包一层或改顶层连接。
