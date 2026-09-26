@@ -10,7 +10,7 @@ PH1P35MDG324（HX1P35A 开发板 / TD 6.2.1）上，从零搭建的 **SC500CS / 
 | 里程碑 | 内容 | 状态 |
 |---|---|---|
 | M1 | 工程骨架 + HDMI 测试图案（不接摄像头） | ✅ **上板验收通过**（时序 0 违例，图案/LED 全部正确） |
-| M2 | 摄像头上电时序 + I²C 配置（读 Sensor ID 验证） | 代码完成 + 仿真验证通过，**待上板** |
+| M2 | 摄像头上电时序 + I²C 配置（读 Sensor ID 验证） | ✅ **上板验收通过**（2026-09-26 23:10；串口 `ID=EE4B ADR=36 W=A5 P=9E4B OK=1 E=0`） |
 | M3 | MIPI 接收 + CSI-2/RAW10 解包 + 帧统计 | 未开始 |
 | M4 | 灰度直通出图（行缓存版，暂不接 DDR） | 未开始 |
 | M5 | DDR2 帧缓存（自研读写控制器） | 未开始 |
@@ -102,7 +102,7 @@ camera_hdmi_720p/
       注：原代码误按低电平点亮（手册 p20 实为高电平点亮），已修正为 `assign O_led = S_led_status`。红色 LED14 为板上电源指示灯，常亮与设计无关。
 
 
-## M2 实现（摄像头上电 + I²C 初始化，代码完成待上板）
+## M2 实现（摄像头上电 + I²C 初始化，已上板验收 2026-09-26）
 
 **验收判据**：上板后 LED4 常亮（复读 ID = `9E4B`）；串口（115200 8N1）循环输出
 `CAM ID=EE4B ADR=36 W=A5 P=9E4B OK=1 E=0`。
@@ -124,7 +124,7 @@ camera_hdmi_720p/
 | O_cam_clk (FCLK/XCLK) | L3 | 23.81MHz，手册 EXTCLK 范围 6~40MHz |
 | O_cam_pwdnb（原厂 PWDNB） | L2 | 低=关断，高=工作 |
 | IO_cam_scl / IO_cam_sda | K3 / J3 | 模组板载 4.7K 上拉；经 TXS0104E 电平转换到 42P FPC 座 |
-| O_uart_tx (FPGA_TXD) | J1 | 板载 CH340 → Type-C；`FPGA_RXD`=K1 本阶段未用 |
+| O_uart_tx | H1 | 经 USB-JTAG Cable（Type-C）的通道B 到 PC；FPGA 侧 `uart_rx`=J1 本阶段未用 |
 | MIPI 数据（M3 用） | CK_P=V16 / CK_N=U16，D0=V14 / U14，D1=V15 / U15 | 2-lane RAW10 |
 
 **上电与初始化流程（`cam_ctrl.v`）**
@@ -163,7 +163,9 @@ HDMI 测试图案在 M2 仍然输出（屏幕可继续作为参考画面）。
 7. `.al` 的 `Path` 属性是绝对路径（厂商同样如此），换机器/换路径后建议同步更新；TD 对不匹配的路径一般能自行重定位。
 8. **`.al` 不是严格 XML**：`<Attr Name="UsedInP&R" .../>` 里的 `&` 未转义，用标准 XML 解析器会报错；
    工具脚本（如 `tools/check_rtl.py`）按文本正则解析（TD 自身宽松解析，不受影响）。
-9. **UART 方向**：原理图（sheet3 BANK21）`IO_BE2P_21(J1)=FPGA_TXD`、`IO_BE2N_21(K1)=FPGA_RXD`，
-   本设计把 J1 作为 FPGA 输出（TX）。若串口助手收不到内容，可先怀疑这一处方向，把两脚对调试一次。
+9. **UART 引脚与方向（已定案，踩过坑）**：官方例程 `ref/HX1P35A_Contest_202606/2_Example/16_uart_rs232/uart_test.adc`
+   （同板：clk=C4、rst=D5）给出 `uart_rx=J1`（PULLUP）/ `uart_tx=H1`（DRIVESTRENGTH=8），与手册表格一致。
+   原理图 sheet3 BANK21 里的 net 名 `FPGA_TXD/FPGA_RXD` 是**桥侧视角**命名，按名字判方向会把 FPGA 的 TX 接到
+   实际作输入的 J1（既发不出数据，又与桥的 TXD 输出顶牛）。本设计取 **O_uart_tx → H1**。
 10. 摄像头控制信号在 FPGA（BANK21，3.3V）与 42P FPC 座之间有 **TXS0104E 电平转换**；I²C 为开漏，
     RTL 只在"拉低/释放"之间切换，上拉由模组板载 4.7K 与 TXS 内部上拉提供。

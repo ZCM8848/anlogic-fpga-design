@@ -25,6 +25,8 @@ set_pin_assignment { O_cam_pwdnb }   { LOCATION = L2; IOSTANDARD = LVCMOS33; DRI
 set_pin_assignment { IO_cam_scl }    { LOCATION = K3; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
 set_pin_assignment { IO_cam_sda }    { LOCATION = J3; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
 
-# ---- M2：板载 USB-UART 桥（CH340 → Type-C）。原理图 sheet3 BANK21：IO_BE2P_21=J1=FPGA_TXD ----
-#      J1 为 FPGA 输出（本阶段只用 TX；FPGA_RXD=K1 暂未使用，故不约束）
-set_pin_assignment { O_uart_tx }     { LOCATION = J1; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
+# ---- M2：板载 USB-UART（USB-JTAG Cable 的 Type-C 双通道：A=JTAG，B=UART）----
+# 权威依据：官方例程 ref/HX1P35A_Contest_202606/2_Example/16_uart_rs232/uart_test.adc
+#   uart_rx（FPGA 输入）= J1        uart_tx（FPGA 输出）= H1
+# 注意：原理图 sheet3 BANK21 上的 net 名 FPGA_TXD/FPGA_RXD 是"桥侧视角"，不能按名字判方向。
+set_pin_assignment { O_uart_tx }     { LOCATION = H1; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
