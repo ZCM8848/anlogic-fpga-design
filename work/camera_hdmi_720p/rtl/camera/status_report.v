@@ -61,6 +61,10 @@ module status_report #(
 );
 
     localparam [7:0]  LAST        = 8'd169;  // 0..40 = CAM；41..144 = MIPI；145..169 = DDR（必须 ≥8 位，7 位会溢出）
+    // 行边界常量（教训：写成 7'd144 / 7'd145 会因超出 7 位上限被静默截断成 16/17，
+    // 比较条件与数组索引全错 → M5 首版把 MIPI+DDR 两行整段输出成 0x00；一律用 8 位常量）
+    localparam [7:0]  MIPI_END    = 8'd144;
+    localparam [7:0]  DDR_BEG     = 8'd145;
     localparam integer REPEAT_CYC = (CLK_FREQ / 1000) * REPEAT_MS;
 
     function [7:0] hx(input [3:0] v);
@@ -263,12 +267,12 @@ module status_report #(
                 7'd40: txt = 8'h0A;
                 default: txt = 8'h20;
             endcase
-        end else if (pc <= 7'd144) begin
+        end else if (pc <= MIPI_END) begin
             // ---------- MIPI 行 ----------
             txt = ml[pc - 7'd41];
         end else begin
             // ---------- DDR 行（M5）----------
-            txt = dl[pc - 7'd145];
+            txt = dl[pc - DDR_BEG];
         end
     end
 

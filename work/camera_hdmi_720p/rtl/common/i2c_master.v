@@ -203,7 +203,7 @@ module i2c_master #(
                                 bit <= bit + 1'b1;
                         end
                         ST_NACK: begin
-                            seq <= 3'd8;
+                            seq <= 3'd0;   // 等效原 3'd8（3 位放不下、被静默截断成 0）；显式写 0 消除 HDL-5007
                             st  <= ST_STOP;
                         end
                         ST_STOP: begin                            // 完成：释放总线

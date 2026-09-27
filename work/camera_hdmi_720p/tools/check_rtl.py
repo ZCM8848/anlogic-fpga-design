@@ -9,6 +9,8 @@ check_rtl.py — 工程静态自检（自研，无 iverilog 时的替代手段�
   3) 例化连接：顶层每个例化的端口名是否存在于被例化模块、是否有漏连/多连
   4) 位宽一致性：连接的网络位宽 vs 模块端口位宽（都能解析出时）
   5) 网络声明：连接用到的网络名是否在顶层有声明
+  6) 常量位宽溢出：声明型（localparam/parameter）＋ rtl/ 内任意语境的裸字面量
+     （`7'd144` 这类值超宽的写法会被工具静默截断，见 check_literal_widths 注释）
 
 用法：python check_rtl.py <工程根目录 work/camera_hdmi_720p>
 """
@@ -21,7 +23,8 @@ COMMENT_RE = re.compile(r"//[^\n]*|/\*.*?\*/", re.S)
 
 
 def strip_comments(s):
-    return COMMENT_RE.sub(" ", s)
+    """注释置换成等长空白（保留换行与字符偏移）——替换后行号/偏移仍然可用。"""
+    return COMMENT_RE.sub(lambda m: re.sub(r"[^\n]", " ", m.group(0)), s)
 
 
 def width_of(rng):
@@ -180,21 +183,32 @@ def find_instances(text, modnames):
 
 
 def check_literal_widths(files, errs):
-    """常量位宽溢出：`[N:0] X = M'dV` 中 V 若 ≥ 2^min(N+1,M) 会被静默截断。
+    """常量位宽溢出，两类都查：
 
-    典型事故：status_report 的 LAST 从 7'd127 扩到 144 时忘了加宽位宽，
-    7'd144 截断成 16 → 串口每行只发 17 字符就重头再来。
+    A) 声明型：`localparam [N:0] X = M'dV`，V ≥ 2^min(N+1,M) 会被静默截断。
+       历史事故：status_report 的 LAST 从 7'd127 扩到 144 时忘了加宽位宽，
+       7'd144 截断成 16 → 串口每行只发 17 字符就重头再来。
+
+    B) 任意语境的裸字面量（只扫 rtl/ 自研源码）：`M'dV` 中 V 自身 ≥ 2^M。
+       历史事故（M5 重写 status_report 时又犯一次）：`pc <= 7'd144`（截断成 16）
+       与 `dl[pc - 7'd145]`（截断成 17）→ 比较条件永不成立、索引越界 →
+       串口中间两行整段输出 0x00。TD 综合日志对应 HDL-5007 WARNING
+       （literal value 'd144 truncated to fit in 7 bits），
+       每次构建后应 grep 构建日志：**自己 rtl/ 的文件必须是 0 条**。
     """
-    pat = re.compile(r"\b(localparam|parameter)\s*\[\s*(\d+)\s*:\s*0\s*\]\s*(\w+)\s*=\s*"
-                     r"(\d+)\s*'([dDhHbBoO])\s*([0-9a-fA-F_]+)")
+    decl_pat = re.compile(r"\b(localparam|parameter)\s*\[\s*(\d+)\s*:\s*0\s*\]\s*(\w+)\s*=\s*"
+                          r"(\d+)\s*'([dDhHbBoO])\s*([0-9a-fA-F_]+)")
+    lit_pat = re.compile(r"(?<![\w'])(\d+)'(s?)([dDhHbBoO])([0-9a-fA-F_xXzZ]+)")
+    bases = {"d": 10, "h": 16, "b": 2, "o": 8}
     for fp in sorted(files):
         try:
             txt = strip_comments(open(fp, encoding="utf-8", errors="replace").read())
         except Exception:
             continue
-        for m in pat.finditer(txt):
+        # A) 声明型
+        for m in decl_pat.finditer(txt):
             msb, name, size = int(m.group(2)), m.group(3), int(m.group(4))
-            base = {"d": 10, "h": 16, "b": 2, "o": 8}[m.group(5).lower()]
+            base = bases[m.group(5).lower()]
             try:
                 val = int(m.group(6).replace("_", ""), base)
             except ValueError:
@@ -203,6 +217,22 @@ def check_literal_widths(files, errs):
             if val >= lim:
                 errs.append("常量位宽溢出: %s 的 %s = %d 超过 %d 位上限 %d（实际截断为 %d）"
                             % (os.path.basename(fp), name, val, min(msb + 1, size), lim - 1, val % lim))
+        # B) 裸字面量（只看自研 rtl/，IP/厂商件逐字节保真不动）
+        if not re.search(r"[\\/]rtl[\\/]", fp):
+            continue
+        for m in lit_pat.finditer(txt):
+            size, sflag, bc, ds = int(m.group(1)), m.group(2), m.group(3).lower(), m.group(4)
+            if sflag or re.search(r"[xXzZ]", ds):
+                continue                      # 有符号/含 x-z 的字面量无法按值域判定
+            try:
+                val = int(ds.replace("_", ""), bases[bc])
+            except ValueError:
+                continue
+            if val >= 2 ** size:
+                line = txt.count("\n", 0, m.start()) + 1
+                errs.append("常量位宽溢出: %s L%d 的 %d'%s = %d 超过 %d 位上限 %d"
+                            "（TD 会静默截断并报 HDL-5007）"
+                            % (os.path.basename(fp), line, size, bc, val, size, 2 ** size - 1))
 
 
 def check_decl_order(files, errs):
