@@ -280,6 +280,7 @@ module design_top_wrapper (
     wire [1:0]  S_lane_err;
     wire        S_di_valid;      // lane_deint 重排后的 CSI-2 字节流
     wire [15:0] S_di_data;
+    wire        S_lp0_p, S_lp0_n;   // M4 诊断：D-PHY LP 接收状态（lane0）
 
     mipi_dphy_rx_ph1p_mipiio_wrapper #(
         .DPHY_RX_LOCATION ( "DPHY0"  ),
@@ -302,8 +303,8 @@ module design_top_wrapper (
         .O_hs_rx_valid         ( S_hs_valid                  ),
         .O_hs_rx_data          ( S_hs_data                   ),
 
-        .O_lp_rx_lane0_p       (                             ),
-        .O_lp_rx_lane0_n       (                             ),
+        .O_lp_rx_lane0_p       ( S_lp0_p                     ),
+        .O_lp_rx_lane0_n       ( S_lp0_n                     ),
 
         .I_lp_tx_en            ( 1'b0                        ),   // RX-only：不开 LP 反向
         .I_lp_tx_lane0_p       ( 1'b1                        ),
@@ -325,6 +326,20 @@ module design_top_wrapper (
         else               S_rx_rst_sync <= {S_rx_rst_sync[0], 1'b1};
     end
     wire S_rst_n_rx = S_rx_rst_sync[1];
+
+    // ---- M4 诊断（100MHz 域，字节域停摆时仍可观测）----
+    // lpa：lane0 出现过非 LP-11 → 传感器确实在驱动总线（有 LP 活动）
+    // rxa：字节域复位链是否已释放 → 字节时钟（D-PHY 恢复时钟）到底跑没跑过
+    reg S_lp_act, S_rx_alive;
+    always @(posedge S_clk_100m) begin
+        if (!S_rst_n_100m) begin
+            S_lp_act   <= 1'b0;
+            S_rx_alive <= 1'b0;
+        end else begin
+            if (!(S_lp0_p & S_lp0_n)) S_lp_act   <= 1'b1;
+            if (S_rst_n_rx)           S_rx_alive <= 1'b1;
+        end
+    end
 
     // ---- CSI-2 包解析 ----
     wire        S_fs, S_fe, S_ls, S_le;
@@ -472,6 +487,10 @@ module design_top_wrapper (
         .D_dbg_pleft( S_rdbg_pleft ),
         .D_dbg_hcause(S_rdbg_hcause),
         .D_sw4      ( S_sw4_100m   ),
+        .D_lp0_p    ( S_lp0_p      ),
+        .D_lp0_n    ( S_lp0_n      ),
+        .D_lp_act   ( S_lp_act     ),
+        .D_rx_alive ( S_rx_alive   ),
         .O_uart_tx  ( O_uart_tx    )
     );
 

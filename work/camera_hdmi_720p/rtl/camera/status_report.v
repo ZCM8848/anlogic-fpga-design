@@ -43,11 +43,15 @@ module status_report #(
     input  wire [3:0]  D_dbg_hcause,   // err_hdr 成因位
 
     input  wire        D_sw4,          // M4：SW4 状态（100MHz 域同步后）
+    input  wire        D_lp0_p,        // M4 诊断：D-PHY LP 状态（lane0 p）
+    input  wire        D_lp0_n,
+    input  wire        D_lp_act,       // 曾出现过非 LP-11（传感器在驱动）
+    input  wire        D_rx_alive,     // 字节域复位已释放（恢复时钟跑过）
 
     output wire        O_uart_tx
 );
 
-    localparam [6:0]  LAST        = 7'd127;  // 0..40 = CAM 行；41..127 = MIPI 行
+    localparam [6:0]  LAST        = 7'd144;  // 0..40 = CAM 行；41..144 = MIPI 行
     localparam integer REPEAT_CYC = (CLK_FREQ / 1000) * REPEAT_MS;
 
     function [7:0] hx(input [3:0] v);
@@ -59,7 +63,7 @@ module status_report #(
     endfunction
 
     // ---- MIPI 行字符表（81 字节，组合生成）----
-    wire [7:0] ml [0:86];
+    wire [7:0] ml [0:103];
 
     assign ml[0]  = "M";
     assign ml[1]  = "I";
@@ -146,8 +150,25 @@ module status_report #(
     assign ml[82] = "4";
     assign ml[83] = "=";
     assign ml[84] = D_sw4 ? "1" : "0";     // 画面切换开关状态（1=摄像头画面）
-    assign ml[85] = 8'h0D;
-    assign ml[86] = 8'h0A;
+    assign ml[85] = " ";
+    assign ml[86] = "L";
+    assign ml[87] = "P";
+    assign ml[88] = "=";
+    assign ml[89] = D_lp0_p   ? "1" : "0";  // D-PHY LP 接收状态（lane0）
+    assign ml[90] = D_lp0_n   ? "1" : "0";
+    assign ml[91] = " ";
+    assign ml[92] = "L";
+    assign ml[93] = "P";
+    assign ml[94] = "A";
+    assign ml[95] = "=";
+    assign ml[96] = D_lp_act  ? "1" : "0";  // 曾出现过非 LP-11 → 传感器在驱动总线
+    assign ml[97] = " ";
+    assign ml[98] = "R";
+    assign ml[99] = "X";
+    assign ml[100] = "=";
+    assign ml[101] = D_rx_alive ? "1" : "0"; // 字节域复位已释放 → 恢复时钟跑过
+    assign ml[102] = 8'h0D;
+    assign ml[103] = 8'h0A;
 
     // ---- 字符发生器 ----
     reg [6:0]   pc;
