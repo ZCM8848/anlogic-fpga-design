@@ -28,6 +28,29 @@
 
 来源：厂商工程 `user_source/hdl_source/`（与官方 IP 文档 APUG092《HDMI1.4b Transmitter》配套设计一致）。
 
+## mipi_dphy_rx/ — MIPI D-PHY 接收 IP 及配套件（M3 起）
+
+| 文件 | 说明 |
+|---|---|
+| `mipi_dphy_rx_ph1p_mipiio_wrapper.sv` | 顶层包装（SystemVerilog）：参数 `DPHY_RX_LOCATION` / `HS_EQUALIZER` / `HS_VGA_GAIN` / `LANE_NUM` / `BYTE_NUM`；对外接硬核 pad 与 fabric |
+| `ph1p_mipiio_rx_wrapper.v` | PH1P MIPI IO 接收包装（1:8 模式；输出 `o_fabric_div4_8_clk` 字节时钟与 `hs_rx_valid/hs_rx_data`） |
+| `byte_aligner.enc.v` / `byte_aligner_wrapper.enc.sv` | 字节对齐（加密交付） |
+| `channel_aligner.enc.v` / `channel_aligner_wrapper.enc.sv` | 通道对齐（加密交付） |
+| `hs_detect.enc.v` | HS 检测（加密交付） |
+
+来源：厂商 SC520 720P lab（`ref/HX1P35A_Contest_202606/3_原理图/摄像头SC520CS.zip` 内
+`lab_ex1_mipi_hdmi_SC520/lab_ex1_mipi_hdmi/user_source/hdl_source/mipi_dphy_rx/`），7 个文件与原件**逐字节一致**（md5 已核对）。
+
+使用约定：
+
+- 硬原语 `PH1P_LOGIC_DPHY_MIPI_RX` 由 TD 器件库提供，**不需要 `IP_FILE` 条目**；
+  这些文件按普通源码列进 `.al`——`.v` 进 `<Verilog>` 段，`.sv` 进 `<System_Verilog>` 段。
+- **实例名硬约束**：顶层必须例化为 `u_mipi_dphy_rx_ph1p_mipiio_wrapper`，
+  `constraints/timing.sdc` 的 `rename_clock MIPI_RX_BYTE_CLK` 依赖完整层级
+  `u_mipi_dphy_rx_ph1p_mipiio_wrapper/u_ph1p_mipiio_rx_wrapper/u_PH1P_LOGIC_DPHY_MIPI_RX.o_fabric_div4_8_clk`。
+- 例化参数取 **SC520 720P lab 原值**：`DPHY_RX_LOCATION="DPHY0"`、`HS_EQUALIZER="3dB"`（该 lab 注明对应 828Mbps/lane）、
+  `HS_VGA_GAIN="8dB"`、`LANE_NUM=2`、`BYTE_NUM=1`。SC500 lab 用的是 `HS_EQUALIZER="0dB"`（其链路速率更低），勿混用。
+
 ## sc520reg/ — SC520CS 原厂寄存器表（**数据件**）
 
 | 文件 | 说明 |

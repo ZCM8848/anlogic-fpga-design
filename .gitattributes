@@ -22,3 +22,7 @@
 *.bin    binary
 *.fs     binary
 *.mif    -text
+
+# 厂商 IP 复用件（work/**/ip/，含 .enc.* 加密件）：逐字节保真，禁止换行/编码转换
+# 加密件的字节被改写会导致 TD 解密失败，故整棵 ip/ 目录按二进制处理
+**/ip/**        -text -eol
