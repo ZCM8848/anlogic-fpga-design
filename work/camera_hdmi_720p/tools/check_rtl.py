@@ -270,6 +270,48 @@ def check_decl_order(files, errs):
                     break
 
 
+def check_multi_driver(files, errs):
+    """同一信号被多个 always 块驱动（Verilog 多驱动）。
+
+    TD 在 elaboration 阶段直接报 `HDL-8007 ERROR: net 'xxx' is constantly driven from
+    multiple places`（M5-② 真踩过：S_dtgl0 在主块复位段和排空引擎块各驱动一次）。
+    只在 reset 分支里驱动也算 —— 只要出现在两个 always 块里就是错。
+    """
+    for fp in sorted(files):
+        try:
+            txt = strip_comments(open(fp, encoding="utf-8", errors="replace").read())
+        except Exception:
+            continue
+        # 切出每个 always 块：从 always 关键字起，跟踪 begin/end 配平
+        blocks = []
+        for m in re.finditer(r"\balways\b", txt):
+            i = m.start()
+            depth = 0
+            started = False
+            j = i
+            for tm in re.finditer(r"\b(begin|end)\b", txt[i:]):
+                if tm.group(1) == "begin":
+                    depth += 1
+                    started = True
+                else:
+                    depth -= 1
+                if started and depth == 0:
+                    j = i + tm.end()
+                    break
+            blocks.append((i, j, txt[i:j]))
+        drivers = {}
+        for (i, j, blk) in blocks:
+            ln = txt.count("\n", 0, i) + 1
+            for sm in re.finditer(r"(?:^|;|\bbegin\b|\belse\b|\))\s*([A-Za-z_]\w*)\s*(?:\[[^\]]*\])?\s*[<]=",
+                                  blk, re.M):
+                drivers.setdefault(sm.group(1), set()).add(ln)
+        for nm, lns in sorted(drivers.items()):
+            if len(lns) > 1:
+                errs.append("多驱动: %s 的 %s 在多个 always 块（L%s）被赋值 → TD 报 "
+                            "HDL-8007 constantly driven from multiple places"
+                            % (os.path.basename(fp), nm, "、L".join(str(x) for x in sorted(lns))))
+
+
 def main():
     root = sys.argv[1] if len(sys.argv) > 1 else "."
     root = os.path.abspath(root)
@@ -305,6 +347,7 @@ def main():
                  if os.sep + "ip" + os.sep + "pll" + os.sep in p or any(k in p for k in ip_managed)}
     check_literal_widths({p for p in (ondisk | svdisk) if not any(k in p for k in ip_managed)}, errs)
     check_decl_order({p for p in (ondisk | svdisk) if not any(k in p for k in ip_managed)}, errs)
+    check_multi_driver({p for p in (ondisk | svdisk) if not any(k in p for k in ip_managed)}, errs)
     for p in sorted(ondisk - listed - generated):
         errs.append("磁盘有但 .al 未收录: %s" % os.path.relpath(p, root))
     for p in sorted(listed - ondisk):

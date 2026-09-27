@@ -196,8 +196,6 @@ module fb_wr #(
             S_line_addr1<= 25'd0;
             S_ptgl0     <= 1'b0;
             S_ptgl1     <= 1'b0;
-            S_dtgl0     <= 1'b0;
-            S_dtgl1     <= 1'b0;
         end else begin
             wr_gray_s1 <= wr_gray;
             wr_gray_s2 <= wr_gray_s1;
