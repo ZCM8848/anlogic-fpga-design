@@ -179,6 +179,32 @@ def find_instances(text, modnames):
     return res
 
 
+def check_literal_widths(files, errs):
+    """常量位宽溢出：`[N:0] X = M'dV` 中 V 若 ≥ 2^min(N+1,M) 会被静默截断。
+
+    典型事故：status_report 的 LAST 从 7'd127 扩到 144 时忘了加宽位宽，
+    7'd144 截断成 16 → 串口每行只发 17 字符就重头再来。
+    """
+    pat = re.compile(r"\b(localparam|parameter)\s*\[\s*(\d+)\s*:\s*0\s*\]\s*(\w+)\s*=\s*"
+                     r"(\d+)\s*'([dDhHbBoO])\s*([0-9a-fA-F_]+)")
+    for fp in sorted(files):
+        try:
+            txt = strip_comments(open(fp, encoding="utf-8", errors="replace").read())
+        except Exception:
+            continue
+        for m in pat.finditer(txt):
+            msb, name, size = int(m.group(2)), m.group(3), int(m.group(4))
+            base = {"d": 10, "h": 16, "b": 2, "o": 8}[m.group(5).lower()]
+            try:
+                val = int(m.group(6).replace("_", ""), base)
+            except ValueError:
+                continue
+            lim = 2 ** min(msb + 1, size)
+            if val >= lim:
+                errs.append("常量位宽溢出: %s 的 %s = %d 超过 %d 位上限 %d（实际截断为 %d）"
+                            % (os.path.basename(fp), name, val, min(msb + 1, size), lim - 1, val % lim))
+
+
 def main():
     root = sys.argv[1] if len(sys.argv) > 1 else "."
     root = os.path.abspath(root)
@@ -207,6 +233,7 @@ def main():
 
     # ip/pll/PLL.v 由 TD 从 PLL.xml 生成（不必也不应写进 .al 的 Verilog 列表）
     generated = {p for p in ondisk if os.sep + "ip" + os.sep + "pll" + os.sep in p}
+    check_literal_widths(ondisk | svdisk, errs)
     for p in sorted(ondisk - listed - generated):
         errs.append("磁盘有但 .al 未收录: %s" % os.path.relpath(p, root))
     for p in sorted(listed - ondisk):

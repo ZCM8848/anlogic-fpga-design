@@ -51,7 +51,7 @@ module status_report #(
     output wire        O_uart_tx
 );
 
-    localparam [6:0]  LAST        = 7'd144;  // 0..40 = CAM 行；41..144 = MIPI 行
+    localparam [7:0]  LAST        = 8'd144;  // 0..40 = CAM 行；41..144 = MIPI 行（注意：必须 ≥8 位，7 位会溢出）
     localparam integer REPEAT_CYC = (CLK_FREQ / 1000) * REPEAT_MS;
 
     function [7:0] hx(input [3:0] v);
@@ -171,7 +171,7 @@ module status_report #(
     assign ml[103] = 8'h0A;
 
     // ---- 字符发生器 ----
-    reg [6:0]   pc;
+    reg [7:0]   pc;
     reg         sending;
     reg  [26:0] rt;
     reg  [7:0]  txt;
