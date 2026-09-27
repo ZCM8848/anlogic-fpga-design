@@ -28,7 +28,8 @@
 
 module fb_wr #(
     parameter FDEPTH = 8,          // 跨域 FIFO 深度（2 的幂）
-    parameter FA     = 3           // FIFO 地址位数
+    parameter FA     = 3,          // FIFO 地址位数
+    parameter PROBE_OVL = 1'b0     // 【M5-② 诊断 v1】打包坐标白框探针（定位后置 0）
 ) (
     // ---------------- 字节域（MIPI 恢复时钟）----------------
     input  wire         I_clk_b,
@@ -166,10 +167,25 @@ module fb_wr #(
     wire [24:0]   S_line_base = I_wr_base + S_line_off;
 
     // 字组装（右移 32bit/组；行首组从零起）
-    wire [7:0]    S_g0 = gray8(S_ev_grp[9:0]);
-    wire [7:0]    S_g1 = gray8(S_ev_grp[19:10]);
-    wire [7:0]    S_g2 = gray8(S_ev_grp[29:20]);
-    wire [7:0]    S_g3 = gray8(S_ev_grp[39:30]);
+    // 【M5-② 诊断 v1】打包坐标系 8 像素白框（PROBE_OVL=1 时）：
+    //   位置全部用打包引擎自己的计数生成——x = grp_cnt*4 + j，y = line_cnt - 1。
+    //   照片里白框若贴屏幕边缘 → 横向错位在「打包之前」（字节域/传感器侧）；
+    //   白框自己偏移 → 错位在「打包之后」（行缓冲/DDR/回读/显示侧）。
+    //   定位完成后把顶层例化的 PROBE_OVL 置回 1'b0。
+    wire [11:0]   S_px_x = {S_grp_cnt, 2'b00};
+    wire [11:0]   S_px_x1 = S_px_x + 12'd1;
+    wire [11:0]   S_px_x2 = S_px_x + 12'd2;
+    wire [11:0]   S_px_x3 = S_px_x + 12'd3;
+    wire [9:0]    S_px_y = S_line_cnt - 10'd1;
+    wire          S_ovl_y = (S_px_y < 10'd8) || (S_px_y >= 10'd712);
+    wire          S_ovl0 = PROBE_OVL && (S_ovl_y || (S_px_x  < 12'd8) || (S_px_x  >= 12'd1272));
+    wire          S_ovl1 = PROBE_OVL && (S_ovl_y || (S_px_x1 < 12'd8) || (S_px_x1 >= 12'd1272));
+    wire          S_ovl2 = PROBE_OVL && (S_ovl_y || (S_px_x2 < 12'd8) || (S_px_x2 >= 12'd1272));
+    wire          S_ovl3 = PROBE_OVL && (S_ovl_y || (S_px_x3 < 12'd8) || (S_px_x3 >= 12'd1272));
+    wire [7:0]    S_g0 = S_ovl0 ? 8'hFF : gray8(S_ev_grp[9:0]);
+    wire [7:0]    S_g1 = S_ovl1 ? 8'hFF : gray8(S_ev_grp[19:10]);
+    wire [7:0]    S_g2 = S_ovl2 ? 8'hFF : gray8(S_ev_grp[29:20]);
+    wire [7:0]    S_g3 = S_ovl3 ? 8'hFF : gray8(S_ev_grp[39:30]);
     wire [127:0]  S_w_next = S_ev_st ? {S_g3, S_g2, S_g1, S_g0, 96'd0}
                                      : {S_g3, S_g2, S_g1, S_g0, S_word_reg[127:32]};
     wire          S_wdone  = S_ev_dv && !S_ev_st && (S_wcnt == 2'd3);
