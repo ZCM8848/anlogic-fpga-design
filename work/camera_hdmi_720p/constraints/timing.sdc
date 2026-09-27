@@ -18,8 +18,17 @@ rename_clock -name {HDMI_SERIAL_CLK} [get_clocks {u_pll/ph1p_phy_pll_wrapper_25a
 rename_clock -name {MIPI_RX_BYTE_CLK} [get_clocks {u_mipi_dphy_rx_ph1p_mipiio_wrapper/u_ph1p_mipiio_rx_wrapper/u_PH1P_LOGIC_DPHY_MIPI_RX.o_fabric_div4_8_clk}]
 
 # MIPI 域与本地时钟域异步；跨域数据由 mipi_stats 的 req/ack 双相握手保护（多周期稳定）
+#
+# M4 追加：100MHz 域与 HDMI 像素域之间同样是异步关系 ——
+#   u_cam_linebuf 是双口行缓存：写口在 pll_clk_100m，读口在 HDMI_PIXEL_CLK；
+#   跨域只走 2 级同步器（done_tgl / wr_bank_c）＋「只读已完成 bank」的乒乓约定，
+#   没有任何同步逻辑路径。
+#   若不声明，工具会把「BRAM 写 → 读寄存器」按同步路径计时（预算仅 3.333ns，
+#   因为 100MHz 与 75MHz 同属下面第二组），报出 32 个假违例、SWNS -2.317ns。
+#   （M4 首版写口挂在字节时钟上，而字节时钟本来就与像素域异步，所以当时不违例。）
 set_clock_groups -asynchronous \
     -group [get_clocks {mipi_rx_ck_pad MIPI_RX_BYTE_CLK}] \
-    -group [get_clocks {sys_clk_50m pll_clk_100m pll_clk_24m HDMI_PIXEL_CLK HDMI_SERIAL_CLK}]
+    -group [get_clocks {sys_clk_50m pll_clk_100m pll_clk_24m}] \
+    -group [get_clocks {HDMI_PIXEL_CLK HDMI_SERIAL_CLK}]
 
 # M5 起追加：DDR 时钟组
