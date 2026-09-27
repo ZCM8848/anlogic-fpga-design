@@ -92,6 +92,11 @@ module fb_rd #(
     assign O_rd_req  = S_issue;
     assign O_rd_addr = S_fill_la + {15'b0, S_fill_cnt[6:0], 3'b0};
 
+    // 【M5-② 诊断 v2】W3 回填侧标记：偶数行（fill_line[0]==0）的 got==0 数据替换为 0x88 灰条
+    //   用途：若 W3 灰条出现在屏幕最左（x=0..16）⇒ 回填写入的「字 0」一路诚实到屏幕；
+    //   若出现在 ≈208px ⇒ 偏移在回填写入或其下游。与 W1 白框、W4（排空侧 0x55，奇数行）配合二分。
+    wire           S_fill_w3 = (!S_fill_line[0]) && (S_fill_got == 8'd0);
+
     always @(posedge clk_d) begin
         if (!rst_n_d) begin
             S_vs_tg_s    <= 3'd0;
@@ -150,8 +155,8 @@ module fb_rd #(
 
             // 响应回收 → 写显示行缓冲
             if (I_rd_dvalid && S_fill_act && !I_rd_flush) begin
-                if (S_fill_slot) S_rb1[S_fill_got[6:0]] <= I_rd_data;
-                else             S_rb0[S_fill_got[6:0]] <= I_rd_data;
+                if (S_fill_slot) S_rb1[S_fill_got[6:0]] <= S_fill_w3 ? 128'h8888_8888_8888_8888_8888_8888_8888_8888 : I_rd_data;
+                else             S_rb0[S_fill_got[6:0]] <= S_fill_w3 ? 128'h8888_8888_8888_8888_8888_8888_8888_8888 : I_rd_data;
                 if (S_fill_got == 8'd79) begin
                     S_fill_act  <= 1'b0;
                     S_done_line <= S_fill_line;
@@ -173,6 +178,7 @@ module fb_rd #(
     reg  [11:0]    S_x_d1;
     reg            S_de_d1, S_vs_d1;
     reg  [1:0]     S_vd_s;                 // 「有帧」标志同步链
+    reg            S_mk1;                  // 【M5-② 诊断 v2】W2 显示读出侧标记（比输出早 1 拍，与 O_data 同拍对齐）
 
     reg  [7:0]     S_byte;
     integer        i;
@@ -195,6 +201,7 @@ module fb_rd #(
             S_de_d1        <= 1'b0;
             S_vs_d1        <= 1'b0;
             S_vd_s         <= 2'b00;
+            S_mk1          <= 1'b0;
             O_data         <= 24'd0;
             O_de           <= 1'b0;
             O_vs           <= 1'b0;
@@ -214,8 +221,12 @@ module fb_rd #(
             S_de_d1 <= I_de;
             S_vs_d1 <= I_vs;
 
+            // 【M5-② 诊断 v2】W2 显示读出侧标记：用显示侧自己的 (I_x,I_y) 在 (x<64, 200<=y<208)
+            //   画 64x8 白条。出现在屏幕最左 ⇒ 显示读出坐标诚实；出现在 ≈208px ⇒ I_x 本身错位。
+            S_mk1 <= I_de && (I_x < 12'd64) && (I_y >= 10'd200) && (I_y < 10'd208);
+
             // 输出（2 拍流水与 de/vs 对齐；无帧时输出黑）
-            O_data <= S_vd_s[1] ? {S_byte, S_byte, S_byte} : 24'd0;
+            O_data <= S_mk1 ? 24'hFFFFFF : (S_vd_s[1] ? {S_byte, S_byte, S_byte} : 24'd0);
             O_de   <= S_de_d1;
             O_vs   <= S_vs_d1;
         end

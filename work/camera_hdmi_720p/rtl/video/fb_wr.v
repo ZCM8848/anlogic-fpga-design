@@ -313,7 +313,11 @@ module fb_wr #(
                     end
                 end
                 2'd1: begin                         // RD：读行缓冲（1 拍）
-                    S_dr_data <= S_dr_slot ? S_rb1[S_dr_ptr] : S_rb0[S_dr_ptr];
+                    // 【M5-② 诊断 v2】W4 排空侧标记：奇数行（slot 1）的 ptr==0 数据替换为 0x55 灰条
+                    //   与 W3（偶数行、回填侧 0x88）错行互不遮掩；两者落点差即排空→回填段的偏移。
+                    S_dr_data <= (S_dr_slot && (S_dr_ptr == 7'd0))
+                                 ? 128'h5555_5555_5555_5555_5555_5555_5555_5555
+                                 : (S_dr_slot ? S_rb1[S_dr_ptr] : S_rb0[S_dr_ptr]);
                     S_dr_st   <= 2'd2;
                 end
                 2'd2: begin                         // REQ：保持请求直到获准
