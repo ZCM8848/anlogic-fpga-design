@@ -170,6 +170,8 @@ raw10_unpack → 灰度化((px-64)>>2) → 异步FIFO（8bit 像素 + 行标志�
    若失败，问题域收窄在 IP 接线，不必排查整条视频链。
 2. **②完整帧缓存版**：接上写/读/仲裁与 SW4 切换，按上面验收标准判定。
 
+*进度：①空载校准版 2026-09-27 已实现（`ip/ddr2/` 已入库、`.al` 增补 wrapper+IP、顶层例化、串口第三行 `DDR RDY/ARDY/WRDY`、`timing.sdc` 增 DDR 时钟组、run `settings.cfg` 预置 IpADCList/IpSDCList），待上板验证；②未开始。*
+
 **风险与对策**
 
 1. DDR IP 首用、校准失败（`RDY` 不置位）：先跑①步隔离；备选 100MHz 差分钟振作 ref_clk。

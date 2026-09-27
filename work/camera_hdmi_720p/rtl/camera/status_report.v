@@ -2,7 +2,7 @@
 //=============================================================================
 // status_report.v — 状态串口上报（自研，M3；取代 M2 的 cam_report.v）
 //
-// 每 REPEAT_MS 连发两行（115200 8N1）：
+// 每 REPEAT_MS 连发三行（115200 8N1）：
 //   CAM  ID=<pre4> ADR=<dev2> W=<cnt2> P=<post4> OK=<0/1> E=<code1>      （41 字符，与 M2 完全一致）
 //   MIPI HS=<0/1> F=<6位> L=<4位> W=<5位> G=<4位> ER=<2位16进制>
 //        HW=<8位16进制> PW=<4位16进制> PL=<4位16进制> HC=<1位16进制>   （81 字符）
@@ -12,6 +12,10 @@
 //     HW = 最近一个 RAW10 包收到的 4 个包头字节（应为 2B 06 40 xx）
 //     PW = 该包负载首拍的 2 字节（RAW10 头 4 像素的高 8 位）
 //     PL = 包体提前结束那一拍还剩多少拍（0 表示未发生）  HC = err_hdr 成因位图
+//   DDR  RDY=<0/1> ARDY=<0/1> WRDY=<0/1>                                （26 字符，M5 起）
+//     RDY  = DDR 校准完成（ddrphy_rdy）    ARDY = 应用口就绪（O_mc_app_rdy）
+//     WRDY = 写数据口就绪（O_mc_app_wdf_rdy）；
+//     M5-① 空载校准版仅报这三个状态；② 接上读写引擎后本行扩为帧计数/溢出计数。
 //=============================================================================
 module status_report #(
     parameter CLK_FREQ  = 100_000_000,
@@ -48,10 +52,15 @@ module status_report #(
     input  wire        D_lp_act,       // 曾出现过非 LP-11（传感器在驱动）
     input  wire        D_rx_alive,     // 字节域复位已释放（恢复时钟跑过）
 
+    // ---- M5：DDR2 状态（100MHz 域同步后）----
+    input  wire        D_ddr_rdy,      // ddrphy_rdy：校准完成
+    input  wire        D_ddr_ardy,     // O_mc_app_rdy：应用口就绪
+    input  wire        D_ddr_wrdy,     // O_mc_app_wdf_rdy：写数据口就绪
+
     output wire        O_uart_tx
 );
 
-    localparam [7:0]  LAST        = 8'd144;  // 0..40 = CAM 行；41..144 = MIPI 行（注意：必须 ≥8 位，7 位会溢出）
+    localparam [7:0]  LAST        = 8'd169;  // 0..40 = CAM；41..144 = MIPI；145..169 = DDR（必须 ≥8 位，7 位会溢出）
     localparam integer REPEAT_CYC = (CLK_FREQ / 1000) * REPEAT_MS;
 
     function [7:0] hx(input [3:0] v);
@@ -170,6 +179,35 @@ module status_report #(
     assign ml[102] = 8'h0D;
     assign ml[103] = 8'h0A;
 
+    // ---- M5：DDR 行字符表（25 字节：23 字符 + CRLF）----
+    wire [7:0] dl [0:24];
+
+    assign dl[0]  = "D";
+    assign dl[1]  = "D";
+    assign dl[2]  = "R";
+    assign dl[3]  = " ";
+    assign dl[4]  = "R";
+    assign dl[5]  = "D";
+    assign dl[6]  = "Y";
+    assign dl[7]  = "=";
+    assign dl[8]  = D_ddr_rdy  ? "1" : "0";
+    assign dl[9]  = " ";
+    assign dl[10] = "A";
+    assign dl[11] = "R";
+    assign dl[12] = "D";
+    assign dl[13] = "Y";
+    assign dl[14] = "=";
+    assign dl[15] = D_ddr_ardy ? "1" : "0";
+    assign dl[16] = " ";
+    assign dl[17] = "W";
+    assign dl[18] = "R";
+    assign dl[19] = "D";
+    assign dl[20] = "Y";
+    assign dl[21] = "=";
+    assign dl[22] = D_ddr_wrdy ? "1" : "0";
+    assign dl[23] = 8'h0D;
+    assign dl[24] = 8'h0A;
+
     // ---- 字符发生器 ----
     reg [7:0]   pc;
     reg         sending;
@@ -225,9 +263,12 @@ module status_report #(
                 7'd40: txt = 8'h0A;
                 default: txt = 8'h20;
             endcase
-        end else begin
+        end else if (pc <= 7'd144) begin
             // ---------- MIPI 行 ----------
             txt = ml[pc - 7'd41];
+        end else begin
+            // ---------- DDR 行（M5）----------
+            txt = dl[pc - 7'd145];
         end
     end
 

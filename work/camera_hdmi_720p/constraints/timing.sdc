@@ -29,6 +29,10 @@ rename_clock -name {MIPI_RX_BYTE_CLK} [get_clocks {u_mipi_dphy_rx_ph1p_mipiio_wr
 set_clock_groups -asynchronous \
     -group [get_clocks {mipi_rx_ck_pad MIPI_RX_BYTE_CLK}] \
     -group [get_clocks {sys_clk_50m pll_clk_100m pll_clk_24m}] \
-    -group [get_clocks {HDMI_PIXEL_CLK HDMI_SERIAL_CLK}]
+    -group [get_clocks {HDMI_PIXEL_CLK HDMI_SERIAL_CLK}] \
+    -group [get_clocks {u_ph1p35_324_ddr_wrapper/u_ddr2/ddr_clk u_ph1p35_324_ddr_wrapper/u_ddr2/usr_clk}]
 
-# M5 起追加：DDR 时钟组
+# M5：DDR2 用户时钟域（ddr_clk / usr_clk 由 IP 自带 ddr2.sdc 在 IP 内 rename 得到；
+#   引用写法照厂商 lab：从顶层实例路径取 —— 实例名 u_ph1p35_324_ddr_wrapper / u_ddr2 不可随意改）。
+#   用户侧逻辑跑 IP 输出的 dhi_clk（usr_clk 域），与本地各域之间只跨「2 级同步器」的电平信号
+#   （校准完成/应用口就绪），无同步逻辑路径。IP 内部 mcu_clk 已由 ddr2.sdc 自己另列异步组。

@@ -36,7 +36,25 @@ module design_top_wrapper (
     output wire        O_uart_tx,    // H1 = FPGA uart_tx（依据官方例程 uart_test.adc；J1 是 uart_rx，本阶段未用）
 
     // ---- M4：画面切换开关（板手册 2-22 乒乓开关：SW4 = D11，拨上=1、拨下=0）----
-    input  wire        I_sw4         // 1=摄像头画面，0=彩条测试图案
+    input  wire        I_sw4,        // 1=摄像头画面，0=彩条测试图案
+
+    // ---- M5：DDR2 帧缓存（器件 DDR PHY 专用脚）----
+    // 引脚/位置约束由 ip/ddr2 自带的 ddr2.adc/.sdc 提供（经 ddr2.xml 的 fileSet 自动引入），
+    // 端口名必须与 IP 自带约束里的命名完全一致，勿改名；也不写进我们的 pin.adc。
+    output wire [12:0] ddr_addr,     // 地址 A0~A12
+    output wire [1:0]  ddr_ba,       // bank 地址
+    output wire [0:0]  ddr_cke,      // 时钟使能（IP 约束写作 ddr_cke[0]，故声明为 [0:0]）
+    output wire [0:0]  ddr_odt,      // ODT（同上）
+    output wire [0:0]  ddr_cs_n,     // 片选（同上）
+    output wire        ddr_ras_n,
+    output wire        ddr_cas_n,
+    output wire        ddr_we_n,
+    output wire [0:0]  ddr_ck_p,     // DDR 差分时钟
+    output wire [0:0]  ddr_ck_n,
+    inout  wire [1:0]  ddr_dm,       // 数据掩码
+    inout  wire [15:0] ddr_dq,       // 数据（16bit）
+    inout  wire [1:0]  ddr_dqs_p,    // 数据选通
+    inout  wire [1:0]  ddr_dqs_n
 );
 
     // ---------------------------------------------------------------- 时钟
@@ -62,6 +80,68 @@ module design_top_wrapper (
 
     reset_ctrl u_rst_100m (.clk(S_clk_100m),  .pll_lock(S_pll_lock), .rst_n(S_rst_n_100m));
     reset_ctrl u_rst_pix  (.clk(S_pixel_clk), .pll_lock(S_pll_lock), .rst_n(S_rst_n_pix));
+
+    // ------------------------------------------------- M5：DDR2 控制器（复用 IP，空载校准版①）
+    // 接法照厂商三个 lab：ref_clk / apb_pclk = 板上 50MHz 晶振（I_sys_clk，未经我们的 PLL）；
+    // 用户侧逻辑时钟 = IP 输出的 dhi_clk（S_ddr_clk），M5-② 的读写引擎将跑在该域。
+    // 本阶段只例化 IP 并观察校准完成状态，不发起任何 DDR 访问。
+    // 顶层实例名固定为 u_ph1p35_324_ddr_wrapper：timing.sdc 的 DDR 时钟组按该路径引用
+    // （写法与厂商 lab 完全一致），改名必须同步改 sdc。
+    wire       S_ddr_clk;        // IP 输出用户时钟（dhi_clk）
+    wire       S_ddr_rdy;        // ddrphy_rdy：校准完成
+    wire       S_ddr_ardy;       // O_mc_app_rdy：应用口就绪（空闲应为 1）
+    wire       S_ddr_wrdy;       // O_mc_app_wdf_rdy：写数据口就绪（空闲应为 1）
+    reg  [1:0] S_ddr_rdy_s;      // 下面三个 2 级同步进 100MHz 域（仅串口上报用）
+    reg  [1:0] S_ddr_ardy_s;
+    reg  [1:0] S_ddr_wrdy_s;
+
+    always @(posedge S_clk_100m) begin
+        if (!S_rst_n_100m) begin
+            S_ddr_rdy_s  <= 2'b00;
+            S_ddr_ardy_s <= 2'b00;
+            S_ddr_wrdy_s <= 2'b00;
+        end else begin
+            S_ddr_rdy_s  <= { S_ddr_rdy_s[0],  S_ddr_rdy  };
+            S_ddr_ardy_s <= { S_ddr_ardy_s[0], S_ddr_ardy };
+            S_ddr_wrdy_s <= { S_ddr_wrdy_s[0], S_ddr_wrdy };
+        end
+    end
+
+    ph1p35_324_ddr_wrapper u_ph1p35_324_ddr_wrapper (
+        .I_sys_clk             ( I_sys_clk    ),   // 板上 50MHz（与厂商接法一致）
+        .I_sys_rst_n           ( S_rst_n_100m ),   // 自研同步复位（PLL 锁定后释放）
+        .O_ddr_clk             ( S_ddr_clk    ),
+        .O_init_calib_complete ( S_ddr_rdy    ),
+
+        // 应用口：① 阶段恒空（不发起访问）；② 阶段接自研写/读引擎
+        .I_mc_app_addr         ( 25'd0  ),
+        .I_mc_app_cmd          ( 3'd0   ),
+        .I_mc_app_en           ( 1'b0   ),
+        .I_mc_app_wdf_data     ( 128'd0 ),
+        .I_mc_app_wdf_end      ( 1'b0   ),
+        .I_mc_app_wdf_mask     ( 16'd0  ),
+        .I_mc_app_wdf_wren     ( 1'b0   ),
+        .O_mc_app_rd_data      (        ),
+        .O_mc_app_rd_data_end  (        ),
+        .O_mc_app_rd_data_valid(        ),
+        .O_mc_app_rdy          ( S_ddr_ardy   ),
+        .O_mc_app_wdf_rdy      ( S_ddr_wrdy   ),
+
+        .ddr_addr              ( ddr_addr     ),
+        .ddr_ba                ( ddr_ba       ),
+        .ddr_cke               ( ddr_cke      ),
+        .ddr_odt               ( ddr_odt      ),
+        .ddr_cs_n              ( ddr_cs_n     ),
+        .ddr_ras_n             ( ddr_ras_n    ),
+        .ddr_cas_n             ( ddr_cas_n    ),
+        .ddr_we_n              ( ddr_we_n     ),
+        .ddr_ck_p              ( ddr_ck_p     ),
+        .ddr_ck_n              ( ddr_ck_n     ),
+        .ddr_dm                ( ddr_dm       ),
+        .ddr_dq                ( ddr_dq       ),
+        .ddr_dqs_p             ( ddr_dqs_p    ),
+        .ddr_dqs_n             ( ddr_dqs_n    )
+    );
 
     // ------------------------------------------------- 视频时序与测试图案
     wire        S_vs, S_hs, S_de;
@@ -508,6 +588,9 @@ module design_top_wrapper (
         .D_lp0_n    ( S_lp0_n      ),
         .D_lp_act   ( S_lp_act     ),
         .D_rx_alive ( S_rx_alive   ),
+        .D_ddr_rdy  ( S_ddr_rdy_s[1]  ),
+        .D_ddr_ardy ( S_ddr_ardy_s[1] ),
+        .D_ddr_wrdy ( S_ddr_wrdy_s[1] ),
         .O_uart_tx  ( O_uart_tx    )
     );
 

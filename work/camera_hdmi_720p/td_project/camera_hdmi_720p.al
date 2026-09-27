@@ -219,6 +219,14 @@
                     <Attr Name="CompileOrder" Val="20"/>
                 </FileInfo>
             </File>
+            <File Path="../ip/ddr2/ph1p35_324_ddr_wrapper.v">
+                <FileInfo>
+                    <Attr Name="UsedInSyn" Val="true"/>
+                    <Attr Name="UsedInP&R" Val="true"/>
+                    <Attr Name="BelongTo" Val="design_1"/>
+                    <Attr Name="CompileOrder" Val="31"/>
+                </FileInfo>
+            </File>
         </Verilog>
         <System_Verilog>
             <File Path="../ip/mipi_dphy_rx/mipi_dphy_rx_ph1p_mipiio_wrapper.sv">
@@ -273,6 +281,14 @@
                     <Attr Name="UsedInP&R" Val="true"/>
                     <Attr Name="BelongTo" Val="design_1"/>
                     <Attr Name="CompileOrder" Val="1"/>
+                </FileInfo>
+            </File>
+            <File Path="../ip/ddr2/ddr2/ddr2.xml">
+                <FileInfo>
+                    <Attr Name="UsedInSyn" Val="true"/>
+                    <Attr Name="UsedInP&R" Val="true"/>
+                    <Attr Name="BelongTo" Val="design_1"/>
+                    <Attr Name="CompileOrder" Val="2"/>
                 </FileInfo>
             </File>
         </IP_FILE>

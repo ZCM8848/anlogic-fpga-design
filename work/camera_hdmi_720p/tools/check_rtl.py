@@ -266,9 +266,14 @@ def main():
                     svdisk.add(fp)
 
     # ip/pll/PLL.v 由 TD 从 PLL.xml 生成（不必也不应写进 .al 的 Verilog 列表）
-    generated = {p for p in ondisk if os.sep + "ip" + os.sep + "pll" + os.sep in p}
-    check_literal_widths(ondisk | svdisk, errs)
-    check_decl_order(ondisk | svdisk, errs)
+    # ip/ddr2/ddr2/** 同理：由 ddr2.xml 的 fileSet 引入（厂商 IP 生成件，逐字节保真），
+    #   不逐文件登 .al，也不参与解析/自检（其风格不受本项目规则约束）。
+    #   注意 ip/ddr2/ph1p35_324_ddr_wrapper.v（IP 外层适配件）仍登 .al 并参与解析。
+    ip_managed = {os.sep + "ip" + os.sep + "ddr2" + os.sep + "ddr2" + os.sep}
+    generated = {p for p in ondisk
+                 if os.sep + "ip" + os.sep + "pll" + os.sep in p or any(k in p for k in ip_managed)}
+    check_literal_widths({p for p in (ondisk | svdisk) if not any(k in p for k in ip_managed)}, errs)
+    check_decl_order({p for p in (ondisk | svdisk) if not any(k in p for k in ip_managed)}, errs)
     for p in sorted(ondisk - listed - generated):
         errs.append("磁盘有但 .al 未收录: %s" % os.path.relpath(p, root))
     for p in sorted(listed - ondisk):
@@ -279,8 +284,9 @@ def main():
         # 非 .v 条目（如 SystemVerilog 的 .sv）按磁盘实际存在性判定
         if p not in svdisk:
             errs.append(".al 收录的文件不存在: %s" % os.path.relpath(p, root))
-    # 参与解析的源码 = 全部 .v + 未加密的 .sv（.enc.sv 是加密件，跳过）
-    parse_srcs = sorted(ondisk | {q for q in svdisk if ".enc." not in q})
+    # 参与解析的源码 = 全部 .v + 未加密的 .sv（.enc.sv 是加密件，跳过；IP 生成件子树同样跳过）
+    parse_srcs = sorted({p for p in (ondisk | {q for q in svdisk if ".enc." not in q})
+                         if not any(k in p for k in ip_managed)})
 
     # 解析所有模块
     srcs = {}
