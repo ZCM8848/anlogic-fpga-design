@@ -236,6 +236,18 @@ WR/RD/OV/UN/ER 全部符合预期**。
 另修 3 处**仿真侧**（非 RTL）缺陷：拍首快照语义、空闲跳跃漏掉挂起事件/预取 want、写保护误用
 自增后指针导致每行末字丢失。
 
+**② 构建结果（2026-09-27 13:35–13:44，命令行 syn→phy 一次通过）**
+
+- syn：opt_rtl 20s + opt_gate 21s，**Setup WNS +860ps / Hold +114ps，0 违例**；
+- phy：place 45s + route 26s + fix_hold 2s + bitgen，**final Setup WNS +1376ps / Hold +20ps，TNS/HTNS 0，0 违例**；
+- bit：`phy_1/camera_hdmi_720p.bit`（1,789,539 B）md5 `05dbd1a71a1b190c4bcce470971b5782`；
+- 面积：LUT 7601（slice 26.7%）、EBR 21/108（19.4%，**fb_wr 8 + fb_rd 8 = 行缓存 BRAM 推断成功**）、DSP 0；
+- IP 约束 45 ippin + 16 ipinst（`u_ddrphy_byte LOCATION=X0Y70Z0`）全进场；`SYN-8534` 0；自身 rtl/ 的
+  `HDL-5007`/`HDL-7225` 均 0。
+- 构建期另拦下 2 个问题：① TD 命令行流程读的是 run 目录 `.prj`（不是 `.al`）→ 新增
+  `tools/td_run/sync_prj.py`；② `fb_wr.v` 的 `S_dtgl0/1` 多驱动（HDL-8007）→ 修 + `check_rtl.py`
+  新增多驱动检查。详见 `work/test/M5_01/NOTES.md`。
+
 **风险与对策**
 
 1. DDR IP 首用、校准失败（`RDY` 不置位）：先跑①步隔离；备选 100MHz 差分钟振作 ref_clk。

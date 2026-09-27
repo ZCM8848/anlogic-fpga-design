@@ -1,4 +1,4 @@
-# M5-01 仿真证据（2026-09-27）：M5-② 帧缓存链路行为级仿真 4 用例全通过
+# M5-01 证据（仿真 + 构建）：M5-② 帧缓存链路 4 用例全通过 + syn/phy 零违例出 bit
 
 ## 怎么跑
 
@@ -53,3 +53,29 @@ python tools/sim/fb_sim.py            # ~23s，stdout 即日志
 
 读挂起（DDR 长时间不返回）时仲裁器被占住 → 排空饿死 → FIFO(8) 溢出丢组 → **在写的该帧判坏牺牲**
 （用例③）；看门狗 4096 拍超时冲刷后自行恢复。真实 DDR 读延迟 ~40 拍，此路径仅为兜底。
+
+## 构建（2026-09-27 13:35–13:44，命令行 syn→phy）
+
+| 步骤 | 时间 | 结果 |
+|---|---|---|
+| syn_1 | 13:35:08 起 ~1 分钟 | opt_rtl 20s + opt_gate 21s 全过；**Setup WNS +860ps / Hold WNS +114ps，0 违例**；gate.db 生成 |
+| phy_1 | 13:41:50–13:43:xx | place 45s + route 26s + fix_hold 2s + bitgen；**final（Timing Mode: final）Setup WNS +1376ps / Hold WNS +20ps，TNS/HTNS = 0，0 违例** |
+
+- 比特流：`phy_1/camera_hdmi_720p.bit`（1,789,539 B，13:43），**md5 `05dbd1a71a1b190c4bcce470971b5782`**
+- 关键证据（`syn_build_stdout.log` / `phy_build_stdout.log`，本目录）：
+  - `read_ip_adc -ip ddr2` ✓；45×`set_ippin_assignment` + 16×`set_ipinst_assignment`，含
+    `.../u_ddrphy_byte LOCATION = X0Y70Z0`（X0Y60Z0）→ IP 硬核位置约束全部进场
+  - `SYN-8534` 0 次；自身 `rtl/` 的 `HDL-5007` **0 条**（27 条全在 `ip/ddr2` 与 HDMI 加密核内，正常噪声）；`HDL-7225` 0 条
+  - `final_timing.rpt` 时钟扇出：usr_clk **2788** / HDMI_PIXEL 943 / MIPI_RX_BYTE 532 / ddr_clk 6 / HDMI_SERIAL 38 / pll_24m 1（各域线网都真接上）
+- 面积（`camera_hdmi_720p_gate.area`）：LUT 7601（slice 26.7%）、**EBR 21/108（19.4%）**、DSP 0；
+  **行缓存 BRAM 推断成功**（`u_fb_wr` 8 EBR + `u_fb_rd` 8 EBR）→ 计划里的风险④解除
+
+### 构建期拦下的两个问题（均已修，提交 `ea5810b`）
+
+1. **`HDL-8007 ERROR: <module> is a black box`×4**：TD 命令行流程 `open_project <run>/<prj>.prj` 打开的是
+   **run 目录的 .prj**（不是 .al）；只改 `.al` 加文件，.prj 里没有这几个模块。修：新建
+   `tools/td_run/sync_prj.py`（把 .al 清单里 .prj 缺失的条目定向补入，保留 CRLF），两个 run 目录同步后 38/38。
+2. **`HDL-8007 ERROR: net 'S_dtgl0' is constantly driven from multiple places`**：`fb_wr.v` 里
+   `S_dtgl0/S_dtgl1` 在主块复位段与排空引擎块各驱动一次（Verilog 多驱动）。修：删除主块里的重复复位行；
+   `check_rtl.py` 新增 `check_multi_driver`（修复前样本 2/2 命中，修复后 0 误报）。
+
