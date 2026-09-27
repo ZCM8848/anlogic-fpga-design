@@ -77,6 +77,8 @@ module design_top_wrapper (
     // ---------------------------------------------------------------- 复位
     wire S_rst_n_100m;
     wire S_rst_n_pix;
+    wire S_rst_n_ddr;    // M5-②：DDR 用户域复位（reset_ctrl 实例在 DDR 段：
+                         // 锁定条件 = PLL lock & DDR 校准完成，见下方）
 
     reset_ctrl u_rst_100m (.clk(S_clk_100m),  .pll_lock(S_pll_lock), .rst_n(S_rst_n_100m));
     reset_ctrl u_rst_pix  (.clk(S_pixel_clk), .pll_lock(S_pll_lock), .rst_n(S_rst_n_pix));
@@ -107,25 +109,36 @@ module design_top_wrapper (
         end
     end
 
+    // M5-②：应用口信号（由自研 ddr_arb 驱动/接收）
+    wire [24:0]  S_mc_addr;
+    wire [2:0]   S_mc_cmd;
+    wire         S_mc_en;
+    wire [127:0] S_mc_wdf_data;
+    wire         S_mc_wdf_end;
+    wire [15:0]  S_mc_wdf_mask;
+    wire         S_mc_wdf_wren;
+    wire [127:0] S_mc_rd_data;
+    wire         S_mc_rd_valid;
+
     ph1p35_324_ddr_wrapper u_ph1p35_324_ddr_wrapper (
         .I_sys_clk             ( I_sys_clk    ),   // 板上 50MHz（与厂商接法一致）
         .I_sys_rst_n           ( S_rst_n_100m ),   // 自研同步复位（PLL 锁定后释放）
         .O_ddr_clk             ( S_ddr_clk    ),
         .O_init_calib_complete ( S_ddr_rdy    ),
 
-        // 应用口：① 阶段恒空（不发起访问）；② 阶段接自研写/读引擎
-        .I_mc_app_addr         ( 25'd0  ),
-        .I_mc_app_cmd          ( 3'd0   ),
-        .I_mc_app_en           ( 1'b0   ),
-        .I_mc_app_wdf_data     ( 128'd0 ),
-        .I_mc_app_wdf_end      ( 1'b0   ),
-        .I_mc_app_wdf_mask     ( 16'd0  ),
-        .I_mc_app_wdf_wren     ( 1'b0   ),
-        .O_mc_app_rd_data      (        ),
-        .O_mc_app_rd_data_end  (        ),
-        .O_mc_app_rd_data_valid(        ),
-        .O_mc_app_rdy          ( S_ddr_ardy   ),
-        .O_mc_app_wdf_rdy      ( S_ddr_wrdy   ),
+        // 应用口：M5-② 起接自研仲裁器（ddr_arb；读=显示预取优先，写=帧排空）
+        .I_mc_app_addr         ( S_mc_addr     ),
+        .I_mc_app_cmd          ( S_mc_cmd      ),
+        .I_mc_app_en           ( S_mc_en       ),
+        .I_mc_app_wdf_data     ( S_mc_wdf_data ),
+        .I_mc_app_wdf_end      ( S_mc_wdf_end  ),
+        .I_mc_app_wdf_mask     ( S_mc_wdf_mask ),
+        .I_mc_app_wdf_wren     ( S_mc_wdf_wren ),
+        .O_mc_app_rd_data      ( S_mc_rd_data  ),
+        .O_mc_app_rd_data_end  (               ),
+        .O_mc_app_rd_data_valid( S_mc_rd_valid ),
+        .O_mc_app_rdy          ( S_ddr_ardy    ),
+        .O_mc_app_wdf_rdy      ( S_ddr_wrdy    ),
 
         .ddr_addr              ( ddr_addr     ),
         .ddr_ba                ( ddr_ba       ),
@@ -142,6 +155,9 @@ module design_top_wrapper (
         .ddr_dqs_p             ( ddr_dqs_p    ),
         .ddr_dqs_n             ( ddr_dqs_n    )
     );
+
+    // M5-②：DDR 用户域复位 —— PLL 锁定且 DDR 校准完成后释放
+    reset_ctrl u_rst_ddr (.clk(S_ddr_clk), .pll_lock(S_pll_lock & S_ddr_rdy), .rst_n(S_rst_n_ddr));
 
     // ------------------------------------------------- 视频时序与测试图案
     wire        S_vs, S_hs, S_de;
@@ -181,12 +197,30 @@ module design_top_wrapper (
         .vs_o  ( S_pat_vs    )
     );
 
-    // ------------------------------------------------- M4：摄像头灰度直通（行缓存）
-    // 写侧在 MIPI 字节时钟域把 raw10_unpack 的像素组按行写入 BRAM；
-    // 读侧在 HDMI 像素域按 x 取数；读侧显示"已完成的那一行"，跨域用 2 级同步 + 翻转标志。
+    // ------------------------------------------------- M5-②：DDR2 帧缓存（自研读写引擎 + 仲裁）
+    // 数据通路：MIPI 字节域 → fb_wr（打包 128bit 字/16 像素 → 行缓冲乒乓）→ ddr_arb
+    //           → 复用 IP u_ph1p35_324_ddr_wrapper → DDR2；
+    //           显示侧 fb_rd 逐行预取（显示第 y 行期间取第 y+1 行）→ 双 bank 行缓存
+    //           → video_mux → hdmi_tx。
+    // 三帧缓冲由 fb_ctrl 管理：fs/fe 核对通过的帧才标记 READY；显示 vsync 只取
+    // 最新 READY（无撕裂、无滚动；无新帧时重复旧帧）。
     wire [23:0] S_cam_gray;
     wire        S_cam_de, S_cam_vs;
-    wire [15:0] S_cam_lines, S_cam_switches;
+
+    wire [24:0] S_fb_wr_base, S_fb_rd_base;
+    wire        S_fb_wr_start, S_fb_wr_done, S_fb_wr_bad;
+    wire        S_fb_wr_req, S_fb_wr_gnt;
+    wire [24:0] S_fb_wr_addr;
+    wire [127:0]S_fb_wr_data;
+    wire        S_fb_rd_valid;
+    wire        S_fb_rd_req, S_fb_rd_gnt;
+    wire [24:0] S_fb_rd_addr;
+    wire [127:0]S_fb_rd_data;
+    wire        S_fb_rd_dvalid;
+    wire        S_fb_vsync_p, S_fb_undf, S_fb_arb_err, S_fb_flush;
+    wire [15:0] S_ddr_wr_bcd, S_ddr_rd_bcd;
+    wire [7:0]  S_ddr_ov, S_ddr_un, S_ddr_er;
+    wire        S_fb_req_t, S_fb_ack_t;
     wire [23:0] S_vid_data;
     wire        S_vid_de, S_vid_vs, S_vid_sel;
 
@@ -196,36 +230,110 @@ module design_top_wrapper (
     //    S_rx_byte_clk）的线网被拆坏 —— 这就是 M4 首轮上板 MIPI 全停（RX=0）的根因。
     wire        S_rx_byte_clk;     // o_fabric_div4_8_clk（1:8 模式 = 串行时钟/4 ≈ 103.5MHz）
     wire        S_rst_n_rx;        // 字节域复位（源：S_rx_rst_sync[1]，见文件后部）
+    wire        S_fs;              // FS 短包（M5-②：fb_wr 帧开始）
+    wire        S_fe;              // FE 短包（M5-②：fb_wr 帧结束）
     wire        S_pay_start;       // CSI-2 负载首拍
     wire        S_pay_end;         // CSI-2 负载末拍
     wire        S_px_valid;        // RAW10 像素组有效
     wire [39:0] S_px;              // RAW10 像素组（4×10bit）
 
-    cam_linebuf u_cam_linebuf (
-        .I_clk_wr        ( S_rx_byte_clk  ),
-        .I_rst_n_wr      ( S_rst_n_rx     ),
-        .I_wr_line_start ( S_pay_start    ),   // CSI-2 负载首拍 = 行首
-        .I_wr_line_end   ( S_pay_end      ),   // CSI-2 负载末拍 = 行尾
-        .I_wr_grp_valid  ( S_px_valid     ),
-        .I_wr_grp        ( S_px           ),
+    // ---- M5-②：写引擎（字节域入队 FIFO + 用户域打包/行缓冲/排空）----
+    fb_wr u_fb_wr (
+        .I_clk_b        ( S_rx_byte_clk ),
+        .I_rst_n_b      ( S_rst_n_rx    ),
+        .I_fs           ( S_fs          ),
+        .I_fe           ( S_fe          ),
+        .I_line_start   ( S_pay_start   ),
+        .I_grp_valid    ( S_px_valid    ),
+        .I_grp          ( S_px          ),
+        .I_clk_d        ( S_ddr_clk     ),
+        .I_rst_n_d      ( S_rst_n_ddr   ),
+        .I_wr_base      ( S_fb_wr_base  ),
+        .O_frame_start  ( S_fb_wr_start ),
+        .O_frame_done   ( S_fb_wr_done  ),
+        .O_frame_bad    ( S_fb_wr_bad   ),
+        .O_wr_req       ( S_fb_wr_req   ),
+        .O_wr_addr      ( S_fb_wr_addr  ),
+        .O_wr_data      ( S_fb_wr_data  ),
+        .I_wr_gnt       ( S_fb_wr_gnt   )
+    );
 
-        // 缓冲域：行缓存 BRAM 写口与出队逻辑必须落在全局时钟上（上板事故修复点：
-        // 恢复时钟域内不得出现大容量存储，否则工具会把恢复时钟提升为全局资源，
-        // 破坏 D-PHY 内部 CDR）
-        .I_clk_buf       ( S_clk_100m     ),
-        .I_rst_n_buf     ( S_rst_n_100m   ),
+    // ---- M5-②：显示读引擎（行预取 + 双 bank 行缓存 + 像素域读出）----
+    fb_rd u_fb_rd (
+        .clk_d          ( S_ddr_clk     ),
+        .rst_n_d        ( S_rst_n_ddr   ),
+        .I_rd_base      ( S_fb_rd_base  ),
+        .I_rd_valid_f   ( S_fb_rd_valid ),
+        .O_vsync_pulse  ( S_fb_vsync_p  ),
+        .O_line_underflow( S_fb_undf    ),
+        .O_rd_req       ( S_fb_rd_req   ),
+        .O_rd_addr      ( S_fb_rd_addr  ),
+        .I_rd_gnt       ( S_fb_rd_gnt   ),
+        .I_rd_data      ( S_fb_rd_data  ),
+        .I_rd_dvalid    ( S_fb_rd_dvalid),
+        .I_rd_flush     ( S_fb_flush    ),
+        .clk_p          ( S_pixel_clk   ),
+        .rst_n_p        ( S_rst_n_pix   ),
+        .I_vs           ( S_vs          ),
+        .I_de           ( S_de          ),
+        .I_x            ( S_x           ),
+        .I_y            ( S_y           ),
+        .O_data         ( S_cam_gray    ),
+        .O_de           ( S_cam_de      ),
+        .O_vs           ( S_cam_vs      )
+    );
 
-        .I_clk_rd        ( S_pixel_clk    ),
-        .I_rst_n_rd      ( S_rst_n_pix    ),
-        .I_rd_de         ( S_de           ),
-        .I_rd_x          ( S_x            ),
-        .I_rd_vs         ( S_vs           ),
+    // ---- M5-②：应用口仲裁（读优先；写=排空）----
+    ddr_arb u_ddr_arb (
+        .clk            ( S_ddr_clk     ),
+        .rst_n          ( S_rst_n_ddr   ),
+        .I_wr_req       ( S_fb_wr_req   ),
+        .I_wr_addr      ( S_fb_wr_addr  ),
+        .I_wr_data      ( S_fb_wr_data  ),
+        .O_wr_gnt       ( S_fb_wr_gnt   ),
+        .I_rd_req       ( S_fb_rd_req   ),
+        .I_rd_addr      ( S_fb_rd_addr  ),
+        .O_rd_gnt       ( S_fb_rd_gnt   ),
+        .O_mc_addr      ( S_mc_addr     ),
+        .O_mc_cmd       ( S_mc_cmd      ),
+        .O_mc_en        ( S_mc_en       ),
+        .O_mc_wdf_data  ( S_mc_wdf_data ),
+        .O_mc_wdf_end   ( S_mc_wdf_end  ),
+        .O_mc_wdf_mask  ( S_mc_wdf_mask ),
+        .O_mc_wdf_wren  ( S_mc_wdf_wren ),
+        .I_mc_rdy       ( S_ddr_ardy    ),
+        .I_mc_wdf_rdy   ( S_ddr_wrdy    ),
+        .I_mc_rd_data   ( S_mc_rd_data  ),
+        .I_mc_rd_valid  ( S_mc_rd_valid ),
+        .O_rd_data      ( S_fb_rd_data  ),
+        .O_rd_dvalid    ( S_fb_rd_dvalid),
+        .O_rd_flush     ( S_fb_flush    ),
+        .O_err          ( S_fb_arb_err  )
+    );
 
-        .O_rd_data       ( S_cam_gray     ),
-        .O_rd_de         ( S_cam_de       ),
-        .O_rd_vs         ( S_cam_vs       ),
-        .O_line_cnt      ( S_cam_lines    ),
-        .O_rd_switch_cnt ( S_cam_switches )
+    // ---- M5-②：三缓冲管理 + 计数（WR/RD/OV/UN/ER → 串口）----
+    fb_ctrl u_fb_ctrl (
+        .clk            ( S_ddr_clk     ),
+        .rst_n          ( S_rst_n_ddr   ),
+        .I_frame_start  ( S_fb_wr_start ),
+        .I_frame_done   ( S_fb_wr_done  ),
+        .I_frame_bad    ( S_fb_wr_bad   ),
+        .I_vsync_pulse  ( S_fb_vsync_p  ),
+        .I_line_underflow( S_fb_undf    ),
+        .I_arb_err      ( S_fb_arb_err  ),
+        .O_wr_base      ( S_fb_wr_base  ),
+        .O_rd_base      ( S_fb_rd_base  ),
+        .O_rd_valid     ( S_fb_rd_valid ),
+        .O_req_t        ( S_fb_req_t    ),
+        .I_ack_t        ( S_fb_ack_t    ),
+        .O_ack_t        ( S_fb_ack_t    ),
+        .clk_s          ( S_clk_100m    ),
+        .rst_n_s        ( S_rst_n_100m  ),
+        .O_wr_cnt       ( S_ddr_wr_bcd  ),
+        .O_rd_cnt       ( S_ddr_rd_bcd  ),
+        .O_ov_cnt       ( S_ddr_ov      ),
+        .O_un_cnt       ( S_ddr_un      ),
+        .O_er_cnt       ( S_ddr_er      )
     );
 
     video_mux u_video_mux (
@@ -440,7 +548,7 @@ module design_top_wrapper (
     end
 
     // ---- CSI-2 包解析 ----
-    wire        S_fs, S_fe, S_ls, S_le;
+    wire        S_ls, S_le;
     wire        S_pay_valid;
     wire [15:0] S_pay_data, S_last_wc;
     wire [5:0]  S_last_dt;
@@ -591,6 +699,11 @@ module design_top_wrapper (
         .D_ddr_rdy  ( S_ddr_rdy_s[1]  ),
         .D_ddr_ardy ( S_ddr_ardy_s[1] ),
         .D_ddr_wrdy ( S_ddr_wrdy_s[1] ),
+        .D_ddr_wr   ( S_ddr_wr_bcd    ),   // M5-②：写完成帧数（BCD）
+        .D_ddr_rd   ( S_ddr_rd_bcd    ),   // M5-②：上屏帧数（BCD）
+        .D_ddr_ov   ( S_ddr_ov        ),   // M5-②：写冲突丢帧
+        .D_ddr_un   ( S_ddr_un        ),   // M5-②：行预取欠载
+        .D_ddr_er   ( S_ddr_er        ),   // M5-②：帧异常计数
         .O_uart_tx  ( O_uart_tx    )
     );
 

@@ -12,10 +12,12 @@
 //     HW = 最近一个 RAW10 包收到的 4 个包头字节（应为 2B 06 40 xx）
 //     PW = 该包负载首拍的 2 字节（RAW10 头 4 像素的高 8 位）
 //     PL = 包体提前结束那一拍还剩多少拍（0 表示未发生）  HC = err_hdr 成因位图
-//   DDR  RDY=<0/1> ARDY=<0/1> WRDY=<0/1>                                （26 字符，M5 起）
+//   DDR  RDY=<0/1> ARDY=<0/1> WRDY=<0/1> WR=<4位BCD> RD=<4位BCD> OV=<1位> UN=<1位> ER=<1位>（54 字符，M5-②）
 //     RDY  = DDR 校准完成（ddrphy_rdy）    ARDY = 应用口就绪（O_mc_app_rdy）
-//     WRDY = 写数据口就绪（O_mc_app_wdf_rdy）；
-//     M5-① 空载校准版仅报这三个状态；② 接上读写引擎后本行扩为帧计数/溢出计数。
+//     WRDY = 写数据口就绪（O_mc_app_wdf_rdy）
+//     WR = 已写完帧数、RD = 已上屏帧数（均 BCD，10000 回绕）
+//     OV = 写冲突丢帧、UN = 行预取欠载、ER = 帧异常（含 DDR 读看门狗），
+//       三者 1 位 16 进制，≥15 显示 F。
 //=============================================================================
 module status_report #(
     parameter CLK_FREQ  = 100_000_000,
@@ -56,11 +58,16 @@ module status_report #(
     input  wire        D_ddr_rdy,      // ddrphy_rdy：校准完成
     input  wire        D_ddr_ardy,     // O_mc_app_rdy：应用口就绪
     input  wire        D_ddr_wrdy,     // O_mc_app_wdf_rdy：写数据口就绪
+    input  wire [15:0] D_ddr_wr,       // M5-②：写完成帧数（BCD）
+    input  wire [15:0] D_ddr_rd,       // M5-②：上屏帧数（BCD）
+    input  wire [7:0]  D_ddr_ov,       // M5-②：写冲突丢帧计数
+    input  wire [7:0]  D_ddr_un,       // M5-②：行预取欠载计数
+    input  wire [7:0]  D_ddr_er,       // M5-②：帧异常计数
 
     output wire        O_uart_tx
 );
 
-    localparam [7:0]  LAST        = 8'd169;  // 0..40 = CAM；41..144 = MIPI；145..169 = DDR（必须 ≥8 位，7 位会溢出）
+    localparam [7:0]  LAST        = 8'd200;  // 0..40 = CAM；41..144 = MIPI；145..200 = DDR（必须 ≥8 位，7 位会溢出）
     // 行边界常量（教训：写成 7'd144 / 7'd145 会因超出 7 位上限被静默截断成 16/17，
     // 比较条件与数组索引全错 → M5 首版把 MIPI+DDR 两行整段输出成 0x00；一律用 8 位常量）
     localparam [7:0]  MIPI_END    = 8'd144;
@@ -183,8 +190,13 @@ module status_report #(
     assign ml[102] = 8'h0D;
     assign ml[103] = 8'h0A;
 
-    // ---- M5：DDR 行字符表（25 字节：23 字符 + CRLF）----
-    wire [7:0] dl [0:24];
+    // ---- M5-②：DDR 行字符表（56 字节：54 字符 + CRLF）----
+    // OV/UN/ER 按 1 位 16 进制显示；≥15 一律显示 F（饱和，便于一眼看出「很多」）
+    wire [3:0] S_ov_h = (D_ddr_ov[7:4] != 4'd0) ? 4'hF : D_ddr_ov[3:0];
+    wire [3:0] S_un_h = (D_ddr_un[7:4] != 4'd0) ? 4'hF : D_ddr_un[3:0];
+    wire [3:0] S_er_h = (D_ddr_er[7:4] != 4'd0) ? 4'hF : D_ddr_er[3:0];
+
+    wire [7:0] dl [0:55];
 
     assign dl[0]  = "D";
     assign dl[1]  = "D";
@@ -209,8 +221,39 @@ module status_report #(
     assign dl[20] = "Y";
     assign dl[21] = "=";
     assign dl[22] = D_ddr_wrdy ? "1" : "0";
-    assign dl[23] = 8'h0D;
-    assign dl[24] = 8'h0A;
+    assign dl[23] = " ";
+    assign dl[24] = "W";
+    assign dl[25] = "R";
+    assign dl[26] = "=";
+    assign dl[27] = dc(D_ddr_wr[15:12]);
+    assign dl[28] = dc(D_ddr_wr[11:8]);
+    assign dl[29] = dc(D_ddr_wr[7:4]);
+    assign dl[30] = dc(D_ddr_wr[3:0]);
+    assign dl[31] = " ";
+    assign dl[32] = "R";
+    assign dl[33] = "D";
+    assign dl[34] = "=";
+    assign dl[35] = dc(D_ddr_rd[15:12]);
+    assign dl[36] = dc(D_ddr_rd[11:8]);
+    assign dl[37] = dc(D_ddr_rd[7:4]);
+    assign dl[38] = dc(D_ddr_rd[3:0]);
+    assign dl[39] = " ";
+    assign dl[40] = "O";
+    assign dl[41] = "V";
+    assign dl[42] = "=";
+    assign dl[43] = hx(S_ov_h);
+    assign dl[44] = " ";
+    assign dl[45] = "U";
+    assign dl[46] = "N";
+    assign dl[47] = "=";
+    assign dl[48] = hx(S_un_h);
+    assign dl[49] = " ";
+    assign dl[50] = "E";
+    assign dl[51] = "R";
+    assign dl[52] = "=";
+    assign dl[53] = hx(S_er_h);
+    assign dl[54] = 8'h0D;
+    assign dl[55] = 8'h0A;
 
     // ---- 字符发生器 ----
     reg [7:0]   pc;

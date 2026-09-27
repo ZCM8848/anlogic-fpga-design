@@ -245,8 +245,9 @@ def check_decl_order(files, errs):
     """
     for fp in sorted(files):
         try:
-            lines = [strip_comments(L) for L in
-                     open(fp, encoding="utf-8", errors="replace").read().splitlines()]
+            # 注意：整篇剥离注释后再分行 —— 逐行剥离无法处理跨行块注释
+            # （模块头部 /* */ 说明里出现的信号名会被当成代码，误报「先用后声明」）
+            lines = strip_comments(open(fp, encoding="utf-8", errors="replace").read()).splitlines()
         except Exception:
             continue
         decl = {}
