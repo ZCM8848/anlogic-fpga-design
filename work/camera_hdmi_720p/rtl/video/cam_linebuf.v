@@ -78,6 +78,7 @@ module cam_linebuf #(
     reg  [W-1:0]  fifo [0:FDEPTH-1];
     reg  [FA:0]   wr_bin, wr_gray;                   // 多一位做回绕
     reg  [FA:0]   rd_gray_s1, rd_gray_s2;            // 读指针同步（缓冲域 → 字节域）
+    reg  [FA:0]   rd_bin, rd_gray;                   // 缓冲域出队指针（在此先声明：字节域要同步它）
 
     function [FA:0] bin2gray (input [FA:0] b);
         bin2gray = b ^ (b >> 1);
@@ -122,7 +123,6 @@ module cam_linebuf #(
     // ================================================== 缓冲域：出队 + 写
     reg  [W-1:0]        item;
     reg                 item_v;
-    reg  [FA:0]         rd_bin, rd_gray;
     reg  [FA:0]         wr_gray_s1, wr_gray_s2;      // 写指针同步（字节域 → 缓冲域）
     reg  [GRP*PX_W-1:0] mem0 [0:ENTRIES-1];          // 双 bank 行缓存（写口=缓冲域）
     reg  [GRP*PX_W-1:0] mem1 [0:ENTRIES-1];          // （读口=像素域）

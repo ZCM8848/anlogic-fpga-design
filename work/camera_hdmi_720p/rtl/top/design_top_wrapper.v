@@ -110,6 +110,17 @@ module design_top_wrapper (
     wire [23:0] S_vid_data;
     wire        S_vid_de, S_vid_vs, S_vid_sel;
 
+    // ⚠ 以下字节域信号必须**先声明**再使用：本实例在文件中出现得早，而它们的声明
+    //    原本在文件后半段。Verilog 的「先用后声明」会让工具按**隐式 1 位线网**处理
+    //    （TD 报 HDL-7225 CRITICAL-WARNING），字节域信号（尤其 D-PHY 恢复时钟
+    //    S_rx_byte_clk）的线网被拆坏 —— 这就是 M4 首轮上板 MIPI 全停（RX=0）的根因。
+    wire        S_rx_byte_clk;     // o_fabric_div4_8_clk（1:8 模式 = 串行时钟/4 ≈ 103.5MHz）
+    wire        S_rst_n_rx;        // 字节域复位（源：S_rx_rst_sync[1]，见文件后部）
+    wire        S_pay_start;       // CSI-2 负载首拍
+    wire        S_pay_end;         // CSI-2 负载末拍
+    wire        S_px_valid;        // RAW10 像素组有效
+    wire [39:0] S_px;              // RAW10 像素组（4×10bit）
+
     cam_linebuf u_cam_linebuf (
         .I_clk_wr        ( S_rx_byte_clk  ),
         .I_rst_n_wr      ( S_rst_n_rx     ),
@@ -280,7 +291,8 @@ module design_top_wrapper (
     // 复用件：ip/mipi_dphy_rx/（D-PHY 硬核 IP 及其官方配套件，见 ip/README.md）
     // 自研件：rtl/mipi/{csi2_pkt_rx,raw10_unpack,mipi_stats}.v
     // 数据通路：D-PHY 字节流 → CSI-2 包解析 → RAW10 解包（4 像素/组）→ 统计/上报
-    wire        S_rx_byte_clk;    // o_fabric_div4_8_clk（1:8 模式 = 串行时钟/4 ≈ 103.5MHz）
+    // 注：S_rx_byte_clk / S_rst_n_rx / S_pay_start / S_pay_end / S_px_valid / S_px
+    //     的声明已提前到文件前部「M4：摄像头灰度直通」段（必须在首次使用之前）。
     wire        S_hs_valid;
     wire [15:0] S_hs_data;
     wire [1:0]  S_lane_err;
@@ -331,7 +343,7 @@ module design_top_wrapper (
         if (!S_rst_n_100m) S_rx_rst_sync <= 2'b00;
         else               S_rx_rst_sync <= {S_rx_rst_sync[0], 1'b1};
     end
-    wire S_rst_n_rx = S_rx_rst_sync[1];
+    assign S_rst_n_rx = S_rx_rst_sync[1];   // 声明已提前，见文件前部注释
 
     // ---- M4 诊断（100MHz 域，字节域停摆时仍可观测）----
     // lpa：lane0 出现过非 LP-11 → 传感器确实在驱动总线（有 LP 活动）
@@ -349,7 +361,7 @@ module design_top_wrapper (
 
     // ---- CSI-2 包解析 ----
     wire        S_fs, S_fe, S_ls, S_le;
-    wire        S_pay_valid, S_pay_start, S_pay_end;
+    wire        S_pay_valid;
     wire [15:0] S_pay_data, S_last_wc;
     wire [5:0]  S_last_dt;
     wire        S_err_dt, S_err_wc, S_err_hdr;
@@ -393,8 +405,7 @@ module design_top_wrapper (
     );
 
     // ---- RAW10 解包（5 字节 → 4 个 10bit 像素）----
-    wire        S_px_valid, S_pkt_done;
-    wire [39:0] S_px;
+    wire        S_pkt_done;
     wire [10:0] S_pkt_grp;
 
     raw10_unpack u_raw10_unpack (

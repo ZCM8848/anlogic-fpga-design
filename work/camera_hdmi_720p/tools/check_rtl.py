@@ -205,6 +205,40 @@ def check_literal_widths(files, errs):
                             % (os.path.basename(fp), name, val, min(msb + 1, size), lim - 1, val % lim))
 
 
+def check_decl_order(files, errs):
+    """先用后声明：内部信号被引用之后才声明时，工具按隐式 1 位线网处理。
+
+    TD 报 HDL-7225 CRITICAL-WARNING 后仍继续编译，但后果是致命的：宽信号被截断、
+    时钟线网可能被拆坏。M4 首轮上板事故就是这样 —— cam_linebuf 实例插在顶层前部，
+    S_rx_byte_clk 等 6 个信号先用后声明，D-PHY 恢复时钟没接到字节域逻辑，
+    整条 MIPI 停摆（串口 RX=0、HS=0），且可稳定复现。
+    """
+    for fp in sorted(files):
+        try:
+            lines = [strip_comments(L) for L in
+                     open(fp, encoding="utf-8", errors="replace").read().splitlines()]
+        except Exception:
+            continue
+        decl = {}
+        for i, L in enumerate(lines, 1):
+            if re.match(r"\s*(input|output|inout)\b", L):
+                continue                       # 端口在端口列表里已声明
+            if re.search(r"^\s*(wire|reg)\b", L):
+                body = re.sub(r"^\s*(wire|reg)\b", "", L).split("=")[0]
+                body = re.sub(r"\[[^\]]*\]", " ", body)   # 去掉位宽 [..]，它不是信号名
+                for nm in re.findall(r"\b([A-Za-z_]\w*)\b", body):
+                    if nm in ("wire", "reg", "signed", "unsigned"):
+                        continue
+                    decl.setdefault(nm, i)
+        for nm, dl in decl.items():
+            for i in range(1, dl):
+                if i - 1 < len(lines) and re.search(r"\b" + re.escape(nm) + r"\b", lines[i - 1]):
+                    errs.append("先用后声明: %s 的 %s 在 L%d 被引用、L%d 才声明"
+                                "（工具会按隐式 1 位线网处理，宽位信号会被截断）"
+                                % (os.path.basename(fp), nm, i, dl))
+                    break
+
+
 def main():
     root = sys.argv[1] if len(sys.argv) > 1 else "."
     root = os.path.abspath(root)
@@ -234,6 +268,7 @@ def main():
     # ip/pll/PLL.v 由 TD 从 PLL.xml 生成（不必也不应写进 .al 的 Verilog 列表）
     generated = {p for p in ondisk if os.sep + "ip" + os.sep + "pll" + os.sep in p}
     check_literal_widths(ondisk | svdisk, errs)
+    check_decl_order(ondisk | svdisk, errs)
     for p in sorted(ondisk - listed - generated):
         errs.append("磁盘有但 .al 未收录: %s" % os.path.relpath(p, root))
     for p in sorted(listed - ondisk):
