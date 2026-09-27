@@ -118,6 +118,12 @@ module design_top_wrapper (
         .I_wr_grp_valid  ( S_px_valid     ),
         .I_wr_grp        ( S_px           ),
 
+        // 缓冲域：行缓存 BRAM 写口与出队逻辑必须落在全局时钟上（上板事故修复点：
+        // 恢复时钟域内不得出现大容量存储，否则工具会把恢复时钟提升为全局资源，
+        // 破坏 D-PHY 内部 CDR）
+        .I_clk_buf       ( S_clk_100m     ),
+        .I_rst_n_buf     ( S_rst_n_100m   ),
+
         .I_clk_rd        ( S_pixel_clk    ),
         .I_rst_n_rd      ( S_rst_n_pix    ),
         .I_rd_de         ( S_de           ),

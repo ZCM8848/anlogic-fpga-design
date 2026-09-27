@@ -10,6 +10,10 @@ linebuf_sim.py — M4 行缓存行为级仿真（cam_linebuf.v 的逐拍模型�
   用例4  速率漂移：写侧快于读侧时，读侧始终读最近完成的行，不混行
   用例5  灰度映射：黑电平扣除 + 10bit→8bit（与 RTL 的 px_raw/BLACK_LEVEL 一致）
 
+v2 结构（跨域加固）：模型已同步为三段域 ——
+  字节域 wr_tick() 只入队（FIFO，条目 {start,end,dvalid,data} 一拍一条，天然保序）；
+  缓冲域 buf_tick() 出队并按「行首→数据→行尾」写行；读侧 rd_tick() 不变。
+
 运行：python tools/sim/linebuf_sim.py
 """
 
@@ -21,7 +25,9 @@ class CamLinebuf:
     def __init__(self, black=64):
         self.black = black
         self.mem = [[0] * ENTRIES, [0] * ENTRIES]
-        # 写侧
+        # 字节域（恢复时钟）：只有入队 —— FIFO（8 深度，条目自带标志位）
+        self.fifo = []
+        # 缓冲域（100MHz）：出队并写 BRAM
         self.wr_bank = 0
         self.wr_addr = 0
         self.done_tgl = 0
@@ -41,17 +47,33 @@ class CamLinebuf:
         self.o_de = 0
         self.o_vs = 0
 
-    # ---------------- 写侧一拍 ----------------
+    # ---------------- 字节域一拍：入队 ----------------
     def wr_tick(self, line_start, line_end, grp_valid, grp):
-        if line_start:
+        # 条目 = {start, end, dvalid, data}：一拍一条，行首/行尾与数据同拍时共存
+        if line_start or line_end or grp_valid:
+            self.fifo.append((bool(line_start), bool(line_end), bool(grp_valid), grp))
+        # FIFO 深度 8：正常流量下占用 ≤2；溢出说明流量估算错了
+        assert len(self.fifo) <= 8, f"FIFO 溢出（深度 {len(self.fifo)}）"
+
+    # ---------------- 缓冲域一拍：出队 + 写 ----------------
+    def buf_tick(self):
+        if not self.fifo:
+            return
+        st, en, dv, dat = self.fifo.pop(0)
+        # 顺序固定：行首（翻 bank、清地址）→ 数据 → 行尾（报完成）
+        if st:
             self.wr_bank ^= 1
-            self.wr_addr = 0
-        if grp_valid and self.wr_addr < ENTRIES:
-            self.mem[self.wr_bank][self.wr_addr] = grp
+            if dv:
+                self.mem[self.wr_bank][0] = dat
+                self.wr_addr = 1
+            else:
+                self.wr_addr = 0
+        elif dv and self.wr_addr < ENTRIES:
+            self.mem[self.wr_bank][self.wr_addr] = dat
             self.wr_addr += 1
-        if line_end:
+        if en:
             self.done_tgl ^= 1
-            self.bank_at_done = self.wr_bank
+            self.bank_at_done = (1 - self.wr_bank) if st else self.wr_bank
             self.line_cnt += 1
 
     # ---------------- 读侧一拍 ----------------
@@ -83,17 +105,21 @@ class CamLinebuf:
 
     # ---------------- 便于测试：写一整行 ----------------
     def write_line(self, pixels):
-        """pixels: 1280 个 10bit 值。按 RTL 的时序：行首发脉冲 + 每拍一组 + 行尾脉冲。"""
+        """pixels: 1280 个 10bit 值。字节域与缓冲域并发推进（真实系统两时钟 ≈ 1:1）。"""
         assert len(pixels) == ENTRIES * 4
         self.wr_tick(1, 0, 0, 0)
+        self.buf_tick()
         for g in range(ENTRIES):
             grp = 0
             for i in range(4):
                 grp |= (pixels[g * 4 + i] & 0x3FF) << (i * 10)
             self.wr_tick(0, 1 if g == ENTRIES - 1 else 0, 1, grp)
+            self.buf_tick()
 
     def drain_sync(self):
-        for _ in range(6):
+        for _ in range(8):          # 冲掉 FIFO（正常占用 ≤2）
+            self.buf_tick()
+        for _ in range(6):          # 冲掉读侧同步链
             self.rd_tick(0, 0, 0)
 
     # ---------------- 便于测试：读一行（de 有效 1280 拍） ----------------
@@ -150,9 +176,11 @@ def case_no_tearing():
     lb.drain_sync()
     # 开始写 B 行（bank 已翻转），只写一半就同时读
     lb.wr_tick(1, 0, 0, 0)
+    lb.buf_tick()
     for g in range(160):
         grp = sum(((b[g * 4 + i] & 0x3FF) << (i * 10)) for i in range(4))
         lb.wr_tick(0, 0, 1, grp)
+        lb.buf_tick()
     got = lb.read_line()
     exp = [gray_of(v) * 0x010101 for v in a]
     bad = [i for i, (x, y) in enumerate(zip(got, exp)) if x != y]
@@ -167,6 +195,7 @@ def case_overflow_and_isolation():
     # 行尾后又来 5 组垃圾（模拟异常多包的余量）
     for _ in range(5):
         lb.wr_tick(0, 0, 1, 0x3FF3FF3FF)
+        lb.buf_tick()
     lb.drain_sync()
     got = lb.read_line()
     exp = [gray_of(v) * 0x010101 for v in a]
