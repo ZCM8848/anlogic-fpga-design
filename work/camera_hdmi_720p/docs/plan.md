@@ -170,7 +170,7 @@ raw10_unpack → 灰度化((px-64)>>2) → 异步FIFO（8bit 像素 + 行标志�
    若失败，问题域收窄在 IP 接线，不必排查整条视频链。
 2. **②完整帧缓存版**：接上写/读/仲裁与 SW4 切换，按上面验收标准判定。
 
-*进度：①空载校准版 2026-09-27 **代码 + 构建均通过**（bit 已产出：final SWNS +0.101ns / HWNS +0.022ns，0 违例；`ip/ddr2/` 已入库、`.al` 增补 wrapper+IP、顶层例化、串口第三行 `DDR RDY/ARDY/WRDY`、`timing.sdc` 增 DDR 时钟组）。构建首败根因（IP 约束未加载 → `SYN-8534`）与固化方案见 README「M5 构建记录」与 `tools/td_run/` —— **IP 约束必须经命令行流程加载，勿用 GUI Run 启动这组 run**。待上板验证 `DDR RDY=1`；②未开始。*
+*进度：①空载校准版 2026-09-27 **重建通过**（**新** bit：final SWNS +0.101ns / HWNS +0.020ns、TNS/HTNS 0；`ip/ddr2/` 已入库、`.al` 增补 wrapper+IP、顶层例化、串口第三行 `DDR RDY/ARDY/WRDY`、`timing.sdc` 增 DDR 时钟组）。构建首败根因（IP 约束未加载 → `SYN-8534`）与固化方案见 README「M5 构建记录」与 `tools/td_run/` —— **IP 约束必须经命令行流程加载，勿用 GUI Run 启动这组 run**。首版上板暴露串口回归（`status_report` 里 `7'd144/7'd145` 位宽截断 → MIPI/DDR 两行全 0x00），已修（提交 `b9b3695`）并重建。待上板验证 `DDR RDY=1`；②未开始。*
 
 **风险与对策**
 

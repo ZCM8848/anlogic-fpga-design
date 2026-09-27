@@ -41,7 +41,28 @@ SYN-8534 ERROR: Can not get the inst "u_ph1p35_324_ddr_wrapper/u_ddr2/ph1p_ddrmc
 `syn_1/run.log`（519 行）是 **11:55 GUI 失败运行**遗留的日志；**命令行运行不更新 run.log**，
 其完整输出在控制台（本次已重定向保存为本目录两份 log）。
 
+## 第二轮重建（2026-09-27 12:29–12:46）：修复串口回归后重建
+
+首版 bit 上板发现回归：串口只有 CAM 行正常，MIPI+DDR 两行整段输出 0x00（每周期恒 128 字节）。
+根因 = `status_report.v` 中 `pc <= 7'd144` / `dl[pc - 7'd145]`：144/145 超 7 位上限被静默截断
+成 16/17（TD 日志有两条 `HDL-5007`）→ 比较永假 + 数组索引越界 → 输出 0。
+
+修复（提交 `b9b3695`）：行边界改用 8 位 localparam；`check_rtl.py` 升级为裸字面量全量扫描
+（旧文件 2/2 命中、修复后 0）；`i2c_master` 的 `3'd8` 显式写 `3'd0`（等效消警告）。
+
+重建结果（日志：`syn_1_rebuild_stdout.log` / `phy_1_rebuild_stdout.log`）：
+
+- syn：0 ERROR、`SYN-8534` ×0、本工程 `rtl/` 的 HDL-5007 ×0；Setup WNS 860ps / Hold WNS 114ps；
+  IP 约束进场证据：`set_ippin_assignment` ×45 + `set_ipinst_assignment` ×16。
+- phy：0 ERROR；final **SWNS +0.101ns / HWNS +0.020ns，TNS/HTNS = 0**；
+  DDR PHY 硬核放置可见（`u_ddrphy_byte` LOCATION="X0Y70Z0"）。
+- 新 bit：`phy_1/camera_hdmi_720p.bit`（1,789,539 B，12:46）md5 `b4ec8fb2a504dc722d2d4767472e0724`。
+
 ## 上板验收（待做）
 
-下载后串口第三行应出现 `DDR RDY=1`（ARDY/WRDY 空闲应为 1）；画面维持 M4 现状
-（滚动 + Bayer 网格 —— 本步未接视频通路，属预期）。`RDY` 一直 0 → 按预案换板上 100MHz 差分钟振作 ref_clk。
+下载**新** bit（md5 `b4ec8fb2a504dc722d2d4767472e0724`）后：
+
+- 串口应出三行（每 500ms）：CAM 行照旧；MIPI 行照旧（含 `HS=1 F=… SW4=1 … RX=1`）；
+  **第三行 DDR 行出现 `DDR RDY=1 ARDY=1 WRDY=1`** ← 本次关键验收点。
+- 画面维持 M4 现状（滚动 + Bayer 网格 —— 本步未接视频通路，属预期）。
+- `RDY` 一直 0 → 按预案换板上 100MHz 差分钟振作 ref_clk。

@@ -13,7 +13,7 @@ PH1P35MDG324（HX1P35A 开发板 / TD 6.2.1）上，从零搭建的 **SC500CS / 
 | M2 | 摄像头上电时序 + I²C 配置（读 Sensor ID 验证） | ✅ **上板验收通过**（2026-09-26 23:10；串口 `ID=EE4B ADR=36 W=A5 P=9E4B OK=1 E=0`） |
 | M3 | MIPI 接收 + CSI-2/RAW10 解包 + 帧统计 | ✅ **上板验收通过**（2026-09-27；串口 `MIPI HS=1 F=… L=0720 W=01280 G=0320 ER=00 HW=2B06403B PL=0000 HC=0`） |
 | M4 | 灰度直通出图（行缓存版，暂不接 DDR） | ✅ **上板验收通过**（2026-09-27 11:35）：实时灰度画面、感光正常；串口 `HS=1 … RX=1`（MIPI 链路完好，帧率 **≈59.6fps**）。画面证据 `work/test/M4_00/`。已知（预期）现象：纵向细条纹 = Bayer 网格（M6 去马赛克消）、缓慢自上而下滚动 = 相机帧率 59.6fps 与显示 60Hz 未锁相（相差约 0.4Hz）而行缓存「跟随最新行」的固有现象（M5 帧缓存消）。**注意：串口 F/L/W/G 是 BCD 码（RTL 字段名 `D_fs_bcd` 等），解析勿按 hex。** |
-| M5 | DDR2 帧缓存（自研读写控制器） | 🔨 **①空载校准版已实现并构建通过**（2026-09-27 12:15；构建方式与坑见 `tools/td_run/`）：时序 final SWNS +0.101ns / HWNS +0.022ns、0 违例，`camera_hdmi_720p.bit` 已产出，**待上板验证 `DDR RDY=1`**；②完整帧缓存版未开始 |
+| M5 | DDR2 帧缓存（自研读写控制器） | 🔨 **①空载校准版已实现并重建通过**（2026-09-27 12:46；构建方式与坑见 `tools/td_run/`）：final SWNS +0.101ns / HWNS +0.020ns、TNS/HTNS 0，新 bit md5 `b4ec8fb2…`（首版串口回归已修，见「M5 构建记录」），**待上板验证 `DDR RDY=1`**；②完整帧缓存版未开始 |
 | M6 | 彩色 ISP（去马赛克 + 简易 AWB/gamma） | 未开始 |
 | M7 | 收尾（按键模式接口、参数化、文档、CI） | 未开始 |
 
@@ -259,10 +259,17 @@ MIPI HS=1 F=000012 L=0720 W=01280 G=0320 ER=00 HW=2B0640xx PW=xxxx PL=0000 HC=0 
 - `tools/td_run/{syn_1,phy_1}.settings.cfg`（补 `IpADCList/IpSDCList`，照厂商 lab 写法）+ 自愈式 `run.bat`
   （先恢复模板再跑流程，防 GUI 覆盖）。**今后重建一律双击 `*_Runs/{syn_1,phy_1}/run.bat`；这两个 run 别再按 GUI 的 Run。**
 - 命令行运行的完整日志在控制台 stdout（本次已存 `work/test/M5_00/`）；`run.log` 是 GUI 运行遗留，排查勿看错文件。
-- 数字与证据：`work/test/M5_00/NOTES.md`（syn `Setup +0.860 / Hold +0.114`；phy final `+0.101 / +0.022`，均 0 违例；
-  bit md5 `460779cbd30d42262554c382bea10c5a`）。
+- 数字与证据：`work/test/M5_00/NOTES.md`（重建后：syn `Setup +0.860 / Hold +0.114`；
+  phy final `+0.101 / +0.020`，TNS/HTNS 0；新 bit md5 `b4ec8fb2a504dc722d2d4767472e0724`）。
 
-**待上板验收**：串口第三行出现 `DDR RDY=1`；画面维持 M4 现状（滚动/Bayer 网格 —— 本步未接视频通路，属预期）。
+**首验回归与修复（同日 12:46 重建）**：首版 bit 上板后串口 MIPI+DDR 两行整段输出 0x00
+（每周期恒 128 字节）——根因 `status_report.v` 的 `pc <= 7'd144` / `dl[pc - 7'd145]`
+（144/145 超 7 位上限、静默截断成 16/17 → 比较永假 + 索引越界；TD 日志两条 `HDL-5007`）。
+已改用 8 位 localparam（提交 `b9b3695`），并把"裸字面量全量扫描"加进 `check_rtl.py`、
+"构建后 grep HDL-5007"写进 `tools/td_run/README.md`。
+
+**待上板验收**：下载**新** bit（md5 `b4ec8fb2a504dc722d2d4767472e0724`）；
+串口第三行出现 `DDR RDY=1`；画面维持 M4 现状（滚动/Bayer 网格 —— 本步未接视频通路，属预期）。
 
 ## 已知事项
 

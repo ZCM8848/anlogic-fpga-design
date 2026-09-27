@@ -41,3 +41,19 @@ set IpSDCList { ddr2 ../../../ip/ddr2/ddr2/src/sdc/ddr2.sdc }
 - `run.log` 是 **GUI 运行**留下的日志文件，命令行运行**不会**更新它 —— 排查时别看错文件；
 - 关键数字：syn 看 `flow.status`（Setup/Hold WNS）；phy 看 `camera_hdmi_720p_phy.ts`、
   `camera_hdmi_720p_pr.timing`、`route_flow.status`；比特流 `phy_1/camera_hdmi_720p.bit`。
+
+## 构建后检查清单（每次重建必过，M5 教训）
+
+```bash
+cd td_project/camera_hdmi_720p_Runs/syn_1        # phy 同理，换 phy_1 目录
+grep -c "SYN-8534" stdout.log                    # 必须 0：IP 约束是否进场
+grep "HDL-5007" stdout.log | grep "../../../rtl/" # 必须空：本工程 rtl/ 的常量截断警告
+grep -E "Setup|Hold|WNS" flow.status             # syn；phy 看 route_flow.status 的 SWNS/HWNS、
+                                                 #   TNS/HTNS —— 有违例就不下载
+md5sum ../phy_1/camera_hdmi_720p.bit
+```
+
+- `HDL-5007 ... literal value 'dN truncated to fit in M bits` 是**静默截断**的预警：
+  M5 首版就因 `7'd144`/`7'd145`（超 7 位上限）被截断成 16/17，把串口 MIPI+DDR 两行整段
+  变成 0x00。IP 路径（`ip/**`）自带的告警是正常噪声，**只盯 `../../../rtl/`（自研）部分**。
+- 同一规则已内置进 `tools/check_rtl.py`（裸字面量全量扫描）——构建前先跑自检。
