@@ -40,7 +40,13 @@ module csi2_pkt_rx (
 
     output reg         O_err_dt,
     output reg         O_err_wc,
-    output reg         O_err_hdr
+    output reg         O_err_hdr,
+
+    // ---- 诊断（M3 联调用，不参与数据通路）----
+    output reg  [31:0] O_dbg_hdr,     // 最近一个 RAW10 包收到的 4 个包头字节 {DI,WC_hi,WC_lo,ECC}
+    output reg  [15:0] O_dbg_pw,      // 该包负载首拍的 2 字节
+    output reg  [14:0] O_dbg_pleft,   // 包体提前结束那一拍还剩多少拍
+    output reg  [3:0]  O_dbg_hcause   // err_hdr 成因（粘滞）：0 包头中断 / 1 包体中断 / 2 IDLE 超时 / 3 疑似同步码
 );
 
     // ---- CSI-2 数据类型 ----
@@ -99,6 +105,10 @@ module csi2_pkt_rx (
             O_err_dt  <= 1'b0;
             O_err_wc  <= 1'b0;
             O_err_hdr <= 1'b0;
+            O_dbg_hdr     <= 32'd0;
+            O_dbg_pw      <= 16'd0;
+            O_dbg_pleft   <= 15'd0;
+            O_dbg_hcause  <= 4'd0;
         end else begin
             v1d <= I_hs_valid;
             O_fs <= 1'b0;
@@ -115,8 +125,12 @@ module csi2_pkt_rx (
                     idle_vcnt <= 5'd0;
                     st        <= S_HDR;
                 end else if (I_hs_valid) begin
-                    if (idle_vcnt >= 5'd15) O_err_hdr <= 1'b1;   // 包未正常结束
-                    else                    idle_vcnt <= idle_vcnt + 5'd1;
+                    if (idle_vcnt >= 5'd15) begin                // 包未正常结束
+                        O_err_hdr <= 1'b1;
+                        O_dbg_hcause[2] <= 1'b1;
+                    end else begin
+                        idle_vcnt <= idle_vcnt + 5'd1;
+                    end
                 end else begin
                     idle_vcnt <= 5'd0;
                 end
@@ -129,6 +143,7 @@ module csi2_pkt_rx (
                     O_last_dt <= hdr_b0[5:0];
                     if (hdr_b0 == SYNC_B8) begin           // 疑似同步码（正常不应出现）
                         O_err_hdr <= 1'b1;
+                        O_dbg_hcause[3] <= 1'b1;
                         st        <= S_SKIP;
                     end else if (hdr_b0[5:0] == DT_FS) begin
                         O_fs <= 1'b1;  st <= S_SKIP;
@@ -140,6 +155,7 @@ module csi2_pkt_rx (
                         O_le <= 1'b1;  st <= S_SKIP;
                     end else if (hdr_b0[5:0] == DT_RAW10) begin
                         if (wc_now != WC_720P) O_err_wc <= 1'b1;
+                        O_dbg_hdr <= {hdr_b0, hdr_b1, b_hi, b_lo};   // 收到的 4 个包头字节
                         pay_left  <= {1'b0, wc_now[15:1]};  // WC>>1 拍
                         pay_first <= 1'b1;
                         st        <= S_PAY;
@@ -149,17 +165,21 @@ module csi2_pkt_rx (
                     end
                 end else begin
                     O_err_hdr <= 1'b1;   // 包头未取全
+                    O_dbg_hcause[0] <= 1'b1;
                     st        <= S_IDLE;
                 end
             end
             // ---- 输出 RAW10 负载 ----
             S_PAY: begin
                 if (I_hs_valid) begin
+                    if (pay_first) O_dbg_pw <= I_hs_data;   // 负载首拍原始 2 字节
                     pay_first <= 1'b0;
                     if (pay_left > 15'd1) pay_left <= pay_left - 15'd1;
                     else                  st       <= S_IDLE;
                 end else begin
                     O_err_hdr <= 1'b1;   // 包体提前结束
+                    O_dbg_hcause[1] <= 1'b1;
+                    O_dbg_pleft   <= pay_left;
                     st        <= S_IDLE;
                 end
             end

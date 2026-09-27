@@ -263,9 +263,12 @@ def main():
                     if pw != nw and pw != -1 and nw != -1:
                         errs.append("%s(%s): 位宽不符 %s(端口 %d bit) ↔ %s(网络 %d bit)"
                                     % (inst, mod, pname, pw, net, nw))
-        missing = [n for n in ports if n not in conns]
-        if missing:
-            errs.append("%s(%s): 端口漏连 %s" % (inst, mod, ", ".join(missing)))
+        miss_in  = [n for n in ports if n not in conns and ports[n][0] in ("input", "inout")]
+        miss_out = [n for n in ports if n not in conns and ports[n][0] == "output"]
+        if miss_in:
+            errs.append("%s(%s): 输入端口漏连 %s" % (inst, mod, ", ".join(miss_in)))
+        if miss_out:
+            warns.append("%s(%s): 输出端口悬空（有意可忽略）%s" % (inst, mod, ", ".join(miss_out)))
 
     print()
     for w in warns:

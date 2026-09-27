@@ -32,6 +32,10 @@ module mipi_stats (
     input  wire        I_err_dt,
     input  wire        I_err_wc,
     input  wire        I_err_hdr,
+    input  wire [31:0] I_dbg_hdr,        // 诊断：最近 RAW10 包头 4 字节
+    input  wire [15:0] I_dbg_pw,         // 诊断：负载首拍 2 字节
+    input  wire [14:0] I_dbg_pleft,      // 诊断：包体中断时剩余拍数
+    input  wire [3:0]  I_dbg_hcause,     // 诊断：err_hdr 成因
 
     // ---- 字节域 → 100M 域（快照，握手保护）----
     output reg  [23:0] O_snap_fs,
@@ -40,6 +44,10 @@ module mipi_stats (
     output reg  [15:0] O_snap_grp,
     output reg  [7:0]  O_snap_err,
     output reg         O_snap_hs,
+    output reg  [31:0] O_snap_hdr,
+    output reg  [15:0] O_snap_pw,
+    output reg  [14:0] O_snap_pleft,
+    output reg  [3:0]  O_snap_hcause,
     output reg         O_req_t,          // 请求翻转（随快照）
 
     // ---- 100M 时钟域 ----
@@ -53,7 +61,11 @@ module mipi_stats (
     output reg  [19:0] O_wpx_bcd,
     output reg  [15:0] O_grp_bcd,
     output reg  [7:0]  O_err,
-    output reg         O_hs_seen
+    output reg         O_hs_seen,
+    output reg  [31:0] O_dbg_hdr,
+    output reg  [15:0] O_dbg_pw,
+    output reg  [14:0] O_dbg_pleft,
+    output reg  [3:0]  O_dbg_hcause
 );
 
     localparam [15:0] LINE_720  = 16'h0720;   // 720 的 BCD
@@ -122,6 +134,10 @@ module mipi_stats (
             O_snap_grp  <= 16'd0;
             O_snap_err  <= 8'd0;
             O_snap_hs   <= 1'b0;
+            O_snap_hdr  <= 32'd0;
+            O_snap_pw   <= 16'd0;
+            O_snap_pleft<= 15'd0;
+            O_snap_hcause <= 4'd0;
             O_req_t     <= 1'b0;
         end else begin
             hb <= (hb == HB_ROLL) ? 24'd0 : (hb + 24'd1);
@@ -183,6 +199,10 @@ module mipi_stats (
                 O_snap_grp  <= grp_bcd;
                 O_snap_err  <= err_b;
                 O_snap_hs   <= hs_seen_b;
+                O_snap_hdr  <= I_dbg_hdr;
+                O_snap_pw   <= I_dbg_pw;
+                O_snap_pleft<= I_dbg_pleft;
+                O_snap_hcause <= I_dbg_hcause;
                 O_req_t     <= ~O_req_t;
                 busy        <= 1'b1;
             end
@@ -201,6 +221,10 @@ module mipi_stats (
             O_grp_bcd  <= 16'd0;
             O_err      <= 8'd0;
             O_hs_seen  <= 1'b0;
+            O_dbg_hdr  <= 32'd0;
+            O_dbg_pw   <= 16'd0;
+            O_dbg_pleft<= 15'd0;
+            O_dbg_hcause <= 4'd0;
             O_ack_t    <= 1'b0;
         end else begin
             req_s1 <= O_req_t;
@@ -213,6 +237,10 @@ module mipi_stats (
                 O_grp_bcd  <= O_snap_grp;
                 O_err      <= O_snap_err;
                 O_hs_seen  <= O_snap_hs;
+                O_dbg_hdr  <= O_snap_hdr;
+                O_dbg_pw   <= O_snap_pw;
+                O_dbg_pleft<= O_snap_pleft;
+                O_dbg_hcause <= O_snap_hcause;
                 O_ack_t    <= ~O_ack_t;      // 回执：字节域据此清 busy
             end
         end

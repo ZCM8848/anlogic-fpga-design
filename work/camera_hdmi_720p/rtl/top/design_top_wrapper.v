@@ -281,6 +281,10 @@ module design_top_wrapper (
     wire [15:0] S_pay_data, S_last_wc;
     wire [5:0]  S_last_dt;
     wire        S_err_dt, S_err_wc, S_err_hdr;
+    wire [31:0] S_dbg_hdr;      // 字节域诊断（csi2 → stats）
+    wire [15:0] S_dbg_pw;
+    wire [14:0] S_dbg_pleft;
+    wire [3:0]  S_dbg_hcause;
 
     csi2_pkt_rx u_csi2_pkt_rx (
         .clk         ( S_rx_byte_clk ),
@@ -299,7 +303,11 @@ module design_top_wrapper (
         .O_last_dt   ( S_last_dt     ),
         .O_err_dt    ( S_err_dt      ),
         .O_err_wc    ( S_err_wc      ),
-        .O_err_hdr   ( S_err_hdr     )
+        .O_err_hdr   ( S_err_hdr     ),
+        .O_dbg_hdr   ( S_dbg_hdr     ),
+        .O_dbg_pw    ( S_dbg_pw      ),
+        .O_dbg_pleft ( S_dbg_pleft   ),
+        .O_dbg_hcause( S_dbg_hcause  )
     );
 
     // ---- RAW10 解包（5 字节 → 4 个 10bit 像素）----
@@ -327,6 +335,10 @@ module design_top_wrapper (
     wire [7:0]  S_merr, S_snap_err;
     wire        S_hs_seen, S_snap_hs;
     wire        S_req_t, S_ack_t;
+    wire [31:0] S_rdbg_hdr;      // 100M 域诊断（stats → status_report）
+    wire [15:0] S_rdbg_pw;
+    wire [14:0] S_rdbg_pleft;
+    wire [3:0]  S_rdbg_hcause;
 
     mipi_stats u_mipi_stats (
         .clk_b         ( S_rx_byte_clk ),
@@ -341,6 +353,10 @@ module design_top_wrapper (
         .I_err_dt      ( S_err_dt      ),
         .I_err_wc      ( S_err_wc      ),
         .I_err_hdr     ( S_err_hdr     ),
+        .I_dbg_hdr     ( S_dbg_hdr     ),
+        .I_dbg_pw      ( S_dbg_pw      ),
+        .I_dbg_pleft   ( S_dbg_pleft   ),
+        .I_dbg_hcause  ( S_dbg_hcause  ),
 
         .O_snap_fs     ( S_snap_fs     ),
         .O_snap_line   ( S_snap_line   ),
@@ -360,7 +376,11 @@ module design_top_wrapper (
         .O_wpx_bcd     ( S_wpx_bcd     ),
         .O_grp_bcd     ( S_grp_bcd     ),
         .O_err         ( S_merr        ),
-        .O_hs_seen     ( S_hs_seen     )
+        .O_hs_seen     ( S_hs_seen     ),
+        .O_dbg_hdr     ( S_rdbg_hdr    ),
+        .O_dbg_pw      ( S_rdbg_pw     ),
+        .O_dbg_pleft   ( S_rdbg_pleft  ),
+        .O_dbg_hcause  ( S_rdbg_hcause )
     );
 
     // --------------------------------------------- M2+M3：串口状态上报（两行循环）
@@ -378,6 +398,10 @@ module design_top_wrapper (
         .D_grp_bcd  ( S_grp_bcd    ),
         .D_merr     ( S_merr       ),
         .D_hs_seen  ( S_hs_seen    ),
+        .D_dbg_hdr  ( S_rdbg_hdr   ),
+        .D_dbg_pw   ( S_rdbg_pw    ),
+        .D_dbg_pleft( S_rdbg_pleft ),
+        .D_dbg_hcause(S_rdbg_hcause),
         .O_uart_tx  ( O_uart_tx    )
     );
 

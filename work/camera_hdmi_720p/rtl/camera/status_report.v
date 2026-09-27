@@ -4,10 +4,14 @@
 //
 // 每 REPEAT_MS 连发两行（115200 8N1）：
 //   CAM  ID=<pre4> ADR=<dev2> W=<cnt2> P=<post4> OK=<0/1> E=<code1>      （41 字符，与 M2 完全一致）
-//   MIPI HS=<0/1> F=<6位> L=<4位> W=<5位> G=<4位> ER=<2位16进制>          （48 字符）
+//   MIPI HS=<0/1> F=<6位> L=<4位> W=<5位> G=<4位> ER=<2位16进制>
+//        HW=<8位16进制> PW=<4位16进制> PL=<4位16进制> HC=<1位16进制>   （81 字符）
 //     F  = 累计帧数（FS 计数，BCD 十进制）      L = 上一帧行数（应为 0720）
 //     W  = 上一行像素数（应为 01280）           G = 上一行 RAW10 组数（应为 0320）
 //     ER = 错误位图（见 mipi_stats.v 注释）     HS = 是否见过 HS 流量
+//     HW = 最近一个 RAW10 包收到的 4 个包头字节（应为 2B 06 40 xx）
+//     PW = 该包负载首拍的 2 字节（RAW10 头 4 像素的高 8 位）
+//     PL = 包体提前结束那一拍还剩多少拍（0 表示未发生）  HC = err_hdr 成因位图
 //=============================================================================
 module status_report #(
     parameter CLK_FREQ  = 100_000_000,
@@ -32,10 +36,16 @@ module status_report #(
     input  wire [7:0]  D_merr,
     input  wire        D_hs_seen,
 
+    // ---- M3 诊断（仅联调用）----
+    input  wire [31:0] D_dbg_hdr,      // 最近 RAW10 包头 4 字节
+    input  wire [15:0] D_dbg_pw,       // 负载首拍 2 字节
+    input  wire [14:0] D_dbg_pleft,    // 包体中断时剩余拍数
+    input  wire [3:0]  D_dbg_hcause,   // err_hdr 成因位
+
     output wire        O_uart_tx
 );
 
-    localparam [6:0]  LAST        = 7'd88;   // 0..40 = CAM 行；41..88 = MIPI 行
+    localparam [6:0]  LAST        = 7'd121;  // 0..40 = CAM 行；41..121 = MIPI 行
     localparam integer REPEAT_CYC = (CLK_FREQ / 1000) * REPEAT_MS;
 
     function [7:0] hx(input [3:0] v);
@@ -46,8 +56,8 @@ module status_report #(
         dc = 8'h30 + {4'b0, v};
     endfunction
 
-    // ---- MIPI 行字符表（48 字节，组合生成）----
-    wire [7:0] ml [0:47];
+    // ---- MIPI 行字符表（81 字节，组合生成）----
+    wire [7:0] ml [0:80];
 
     assign ml[0]  = "M";
     assign ml[1]  = "I";
@@ -95,8 +105,41 @@ module status_report #(
     assign ml[43] = "=";
     assign ml[44] = hx(D_merr[7:4]);
     assign ml[45] = hx(D_merr[3:0]);
-    assign ml[46] = 8'h0D;
-    assign ml[47] = 8'h0A;
+    assign ml[46] = " ";
+    assign ml[47] = "H";
+    assign ml[48] = "W";
+    assign ml[49] = "=";
+    assign ml[50] = hx(D_dbg_hdr[31:28]);
+    assign ml[51] = hx(D_dbg_hdr[27:24]);
+    assign ml[52] = hx(D_dbg_hdr[23:20]);
+    assign ml[53] = hx(D_dbg_hdr[19:16]);
+    assign ml[54] = hx(D_dbg_hdr[15:12]);
+    assign ml[55] = hx(D_dbg_hdr[11:8]);
+    assign ml[56] = hx(D_dbg_hdr[7:4]);
+    assign ml[57] = hx(D_dbg_hdr[3:0]);
+    assign ml[58] = " ";
+    assign ml[59] = "P";
+    assign ml[60] = "W";
+    assign ml[61] = "=";
+    assign ml[62] = hx(D_dbg_pw[15:12]);
+    assign ml[63] = hx(D_dbg_pw[11:8]);
+    assign ml[64] = hx(D_dbg_pw[7:4]);
+    assign ml[65] = hx(D_dbg_pw[3:0]);
+    assign ml[66] = " ";
+    assign ml[67] = "P";
+    assign ml[68] = "L";
+    assign ml[69] = "=";
+    assign ml[70] = hx(D_dbg_pleft[14:12]);
+    assign ml[71] = hx(D_dbg_pleft[11:8]);
+    assign ml[72] = hx(D_dbg_pleft[7:4]);
+    assign ml[73] = hx(D_dbg_pleft[3:0]);
+    assign ml[74] = " ";
+    assign ml[75] = "H";
+    assign ml[76] = "C";
+    assign ml[77] = "=";
+    assign ml[78] = hx(D_dbg_hcause);
+    assign ml[79] = 8'h0D;
+    assign ml[80] = 8'h0A;
 
     // ---- 字符发生器 ----
     reg [6:0]   pc;
