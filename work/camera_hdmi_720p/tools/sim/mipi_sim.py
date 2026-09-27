@@ -4,9 +4,13 @@
 mipi_sim.py — M3 链路行为级仿真（M3 自研件的"无 iverilog"验证手段）
 
 逐拍建模（对照 RTL 逻辑）：
+  lane_deint.v   —— D-PHY 原始拍流（lane0/lane1 并行字节）→ 标准 CSI-2 字节流
   csi2_pkt_rx.v  —— CSI-2 包解析（包起始 = HS valid 上升沿；每拍 2 字节，高字节先到）
   raw10_unpack.v —— RAW10 解包（5 字节 → {P3,P2,P1,P0}，MIPI/V4L2 Y10P 位序）
   mipi_stats.v   —— 字节域计数（BCD）→ 快照
+
+激励按真实硬件行为构造：包字节先按「每 2 字节一段、lane 轮转」编码成原始拍流
+（实测 RAW10 行包 WC=0x0640 的原始流 = 2B 40 06 3B，2026-09-27 上板核对）。
 
 用例：
   1) 一帧 720 行完整往返：921600 个像素逐点比对 + 统计核对
@@ -41,12 +45,31 @@ def raw10_unpack_ref(b5):
     return [((b5[i] << 2) | ((b5[4] >> (2 * i)) & 3)) for i in range(4)]
 
 
+def to_raw_beats(bs):
+    """真正的 CSI-2 字节流 → D-PHY 原始拍流（2 字节一段、lane0/lane1 轮转）。
+
+    硬件行为（BYTE_NUM=1、2-lane）：每个字节时钟给出 lane0 与 lane1 各 1 字节，
+    拍 = (lane0[k] << 8) | lane1[k]。实测行包 WC 字段位于「上一拍低字节 + 当拍高字节」，
+    即原始流配对为 (b0,b2), (b1,b3), (b4,b6), ...，与本函数一致。
+    """
+    lanes = [[], []]
+    for c in range(0, len(bs), 2):
+        lanes[(c // 2) % 2] += bs[c:c + 2]
+    n = max(len(lanes[0]), len(lanes[1]))
+    out = []
+    for k in range(n):
+        hi = lanes[0][k] if k < len(lanes[0]) else 0
+        lo = lanes[1][k] if k < len(lanes[1]) else 0
+        out.append((1, (hi << 8) | lo))
+    return out
+
+
 def pkt_beats(dt, wc, payload, crc=(0x00, 0x00), ecc=0x00, gap=2):
-    """一个 CSI-2 包 → 拍列表 [(valid, data16), ...]（4 字节头 + 负载 + 2 字节 CRC + 包间空隙）"""
+    """一个 CSI-2 包 → D-PHY 原始拍流（4 字节头 + 负载 + 2 字节 CRC + 包间空隙）"""
     b = [dt & 0xFF, (wc >> 8) & 0xFF, wc & 0xFF, ecc & 0xFF] + list(payload) + list(crc)
     if len(b) % 2:
         b.append(0)
-    out = [(1, (b[i] << 8) | b[i + 1]) for i in range(0, len(b), 2)]
+    out = to_raw_beats(b)
     out += [(0, 0)] * gap          # 包间 HS valid 拉低（真实 IP 在包与包之间有 LP 间隔）
     return out
 
@@ -76,6 +99,40 @@ def build_frame(rows=ROWS, pixel_fn=None, wc_lines=None, drop_last_line=False):
     beats += pkt_beats(DT_FE, 1, [0x00])                   # FE
     beats += [(0, 0)] * 2
     return src, beats
+
+
+# ============================================================ 模型：lane_deint.v
+class LaneDeint:
+    """原始拍流 → 标准 CSI-2 字节流。
+
+    规则：每「拍对 (A,B)」输出两拍 —— {A高,B高} 然后 {A低,B低}；
+    包首（valid 上升沿）重置配对相位；包尾欠配对的孤拍丢弃。
+    """
+    def __init__(self):
+        self.v1d = 0
+        self.ph = 0
+        self.a_d = 0
+        self.q = []
+        self.max_q = 0
+
+    def tick(self, valid, data):
+        out_v, out_d = 0, 0
+        if self.q:                       # 发射：先消费队头
+            out_v, out_d = 1, self.q.pop(0)
+        if valid and not self.v1d:       # 包首
+            self.ph, self.a_d = 1, data
+        elif valid and self.ph == 0:
+            self.ph, self.a_d = 1, data
+        elif valid and self.v1d and self.ph == 1:      # 拍对收齐 → 入队 2 拍
+            self.ph = 0
+            self.q.append(((self.a_d >> 8) & 0xFF) << 8 | ((data >> 8) & 0xFF))
+            self.q.append(((self.a_d & 0xFF) << 8) | (data & 0xFF))
+            self.max_q = max(self.max_q, len(self.q))
+        elif (not valid) and self.v1d:   # 包间：重置配对相位（孤拍丢弃）
+            self.ph = 0
+        assert self.max_q <= 4, "lane_deint 队列深度超出 RTL 容量"
+        self.v1d = valid
+        return out_v, out_d
 
 
 # ============================================================ 模型：csi2_pkt_rx.v
@@ -260,11 +317,12 @@ class MipiStats:
 
 # ============================================================ 顶层：跑一段拍流
 def run(beats, collect_pixels=True, snap_at_fe=True):
-    csi, upd, st = Csi2Rx(), Raw10Unpack(), MipiStats()
+    dei, csi, upd, st = LaneDeint(), Csi2Rx(), Raw10Unpack(), MipiStats()
     pixels = []
     n_fs = n_fe = 0
     for valid, data in beats:
-        out = csi.tick(valid, data)
+        d_valid, d_data = dei.tick(valid, data)
+        out = csi.tick(d_valid, d_data)
         # 事件（csi.events 在 HDR 拍追加；本拍内的脉冲视为本拍）
         for ev in csi.events:
             if ev == 'FS':
@@ -382,9 +440,32 @@ def case_packer(fails):
     check("RAW10 打包↔解包参考一致（5 组边界值）", ok, fails)
 
 
+def case_header_contract(fails):
+    print("==== 用例4：包头原始字节约定（2026-09-27 上板实测回归） ====")
+    b = [DT_RAW10, 0x06, 0x40, 0x3B]          # 标准 CSI-2 包头：DI, WC_hi, WC_lo, ECC（WC=1600）
+    raws = [d for _, d in to_raw_beats(b)]
+    got = "%02X%02X%02X%02X" % ((raws[0] >> 8) & 0xFF, raws[0] & 0xFF,
+                                (raws[1] >> 8) & 0xFF, raws[1] & 0xFF)
+    check("WC=1600 的原始拍流 = 2B40063B（与上板实测一致）", got == "2B40063B", fails)
+    dei = LaneDeint()
+    out = []
+    for _, d in to_raw_beats(b):
+        v, dd = dei.tick(1, d)
+        if v:
+            out += [(dd >> 8) & 0xFF, dd & 0xFF]
+    for _ in range(3):                        # 冲刷队列（RTL 为 1~2 拍延迟）
+        v, dd = dei.tick(0, 0)
+        if v:
+            out += [(dd >> 8) & 0xFF, dd & 0xFF]
+    check("lane_deint 重排后 = DI,WC_hi,WC_lo,ECC", out == b, fails)
+    if got != "2B40063B":
+        print("     实测不一致: %s" % got)
+
+
 def main():
     fails = []
     case_packer(fails)
+    case_header_contract(fails)
     case_roundtrip(fails)
     case_errors(fails)
     print()

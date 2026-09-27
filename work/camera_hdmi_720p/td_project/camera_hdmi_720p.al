@@ -131,6 +131,14 @@
                     <Attr Name="CompileOrder" Val="19"/>
                 </FileInfo>
             </File>
+            <File Path="../rtl/mipi/lane_deint.v">
+                <FileInfo>
+                    <Attr Name="UsedInSyn" Val="true"/>
+                    <Attr Name="UsedInP&R" Val="true"/>
+                    <Attr Name="BelongTo" Val="design_1"/>
+                    <Attr Name="CompileOrder" Val="20"/>
+                </FileInfo>
+            </File>
             <File Path="../rtl/mipi/csi2_pkt_rx.v">
                 <FileInfo>
                     <Attr Name="UsedInSyn" Val="true"/>

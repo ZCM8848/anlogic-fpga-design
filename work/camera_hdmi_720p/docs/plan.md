@@ -47,7 +47,7 @@ camera 控制(自研 M2): 上电时序 + I²C 主机 + 寄存器表加载 + 状�
 |---|---|---|
 | M1 | 工程骨架 + HDMI 测试图案 | ✅ 彩条+移动方块稳定显示；LED 心跳；时序 0 违例 |
 | M2 | 摄像头控制（上电/I²C/寄存器表） | ✅ 串口 `ID=EE4B ADR=36 W=A5 P=9E4B OK=1 E=0`（500ms 循环）；LED4=ID 校验通过 |
-| M3 | MIPI 接收 + CSI/RAW10 解包 + 帧统计 | 🟡 编码完成、仿真通过（921600 像素逐点往返 + 5 类错误注入）；待上板：串口 `MIPI HS=1 F=… L=0720 W=01280 G=0320 ER=00` |
+| M3 | MIPI 接收 + CSI/RAW10 解包 + 帧统计 | 🟡 首轮上板：物理层通（HS=1 / 稳定 60fps / 无 lane 错）；发现 D-PHY 字节配对问题 → 已加 `lane_deint.v` 重排，待二次上板：串口 `MIPI HS=1 F=… L=0720 W=01280 G=0320 ER=00` |
 | M4 | 灰度直通（行缓存） | 屏幕出现实时灰度画面 |
 | M5 | DDR2 帧缓存 | 无撕裂、稳定 60fps |
 | M6 | 彩色 ISP | 全彩实时画面 |
@@ -60,15 +60,19 @@ camera 控制(自研 M2): 上电时序 + I²C 主机 + 寄存器表加载 + 状�
 - 调试通道：板上 UART（USB-JTAG Cable 的 Type-C 双通道之一，115200 8N1；**H1=TXD / J1=RXD**）输出 `CAM ID=.. ADR=.. W=.. P=.. OK=.. E=..`，错误码 E 区分"无应答/写表 NAK/ID 不符"。
 - 上板前验证：`tools/check_rtl.py`（静态）+ `tools/sim/i2c_sim.py`（协议）+ `tools/sim/cam_sim.py`（流程，含真实 ROM 与 SC520 模型）。
 
-### M3 实施要点（编码 + 仿真已完成，2026-09-27）
+### M3 实施要点（2026-09-27）
 
 - **复用**：`ip/mipi_dphy_rx/`（D-PHY 硬核 IP + 官方配套件，与厂商原件逐字节一致）；参数取 SC520 720P lab 原值
   （`HS_EQUALIZER="3dB"` 对应 828Mbps/lane）。硬核 pad 是器件专用脚，**不进 `pin.adc`**。
-- **自研**：`rtl/mipi/csi2_pkt_rx.v`（包解析）、`raw10_unpack.v`（解包）、`mipi_stats.v`（统计 + 跨域握手）、
-  `rtl/camera/status_report.v`（两行串口上报）。
+- **自研**：`rtl/mipi/lane_deint.v`（拍对重排）、`csi2_pkt_rx.v`（包解析）、`raw10_unpack.v`（解包）、
+  `mipi_stats.v`（统计 + 跨域握手）、`rtl/camera/status_report.v`（两行串口上报）。
+- **字节序（首轮上板踩到的坑）**：硬核每拍给出 lane0/lane1 各 1 字节，原始流配对为 `(b0,b2),(b1,b3),…`
+  （实测 `HW=2B40063B`）；必须还原为 `A高,B高,A低,B低` 才是标准 CSI-2 次序，否则 WC 会被读成 0x4006
+  这种荒谬值、负载永远消费不完。`lane_deint.v` 就是干这个的（包首重置配对相位）。
 - **时钟**：`timing.sdc` 增加 `mipi_rx_ck_pad`(2.415ns) → `MIPI_RX_BYTE_CLK`（IP 内部 ÷4 字节时钟）+
   两域 `set_clock_groups -asynchronous`；跨域只有统计快照，用 req/ack 双相握手。
-- **验证**：`tools/check_rtl.py` 0 错 0 警；`tools/sim/mipi_sim.py` 一帧 921600 像素逐点一致 + 错误注入 5 场景通过。
+- **验证**：`tools/check_rtl.py` 0 错 0 警；`tools/sim/mipi_sim.py` 一帧 921600 像素逐点一致 + 错误注入 5 场景
+  + 包头契约回归（`WC=1600` 原始流必须 = `2B40063B`）通过；仿真激励按硬件真实拍流格式构造。
 - **风险**：见 README「M3 待上板确认的假设」（包间 valid 拉低 / 2-lane WC=1600 / 720 行 1280 列），
   失败均有对应 `ER` 错误位可定位。
 

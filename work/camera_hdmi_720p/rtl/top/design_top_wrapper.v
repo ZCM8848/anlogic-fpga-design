@@ -229,6 +229,8 @@ module design_top_wrapper (
     wire        S_hs_valid;
     wire [15:0] S_hs_data;
     wire [1:0]  S_lane_err;
+    wire        S_di_valid;      // lane_deint 重排后的 CSI-2 字节流
+    wire [15:0] S_di_data;
 
     mipi_dphy_rx_ph1p_mipiio_wrapper #(
         .DPHY_RX_LOCATION ( "DPHY0"  ),
@@ -286,11 +288,21 @@ module design_top_wrapper (
     wire [14:0] S_dbg_pleft;
     wire [3:0]  S_dbg_hcause;
 
+    // ---- M3：D-PHY 字节流「拍对」重排（lane0/lane1 并行字节 → 标准 CSI-2 字节序）----
+    lane_deint u_lane_deint (
+        .clk        ( S_rx_byte_clk ),
+        .rst_n      ( S_rst_n_rx    ),
+        .I_hs_valid ( S_hs_valid    ),
+        .I_hs_data  ( S_hs_data     ),
+        .O_valid    ( S_di_valid    ),
+        .O_data     ( S_di_data     )
+    );
+
     csi2_pkt_rx u_csi2_pkt_rx (
         .clk         ( S_rx_byte_clk ),
         .rst_n       ( S_rst_n_rx    ),
-        .I_hs_valid  ( S_hs_valid    ),
-        .I_hs_data   ( S_hs_data     ),
+        .I_hs_valid  ( S_di_valid    ),
+        .I_hs_data   ( S_di_data     ),
         .O_fs        ( S_fs          ),
         .O_fe        ( S_fe          ),
         .O_ls        ( S_ls          ),
