@@ -62,3 +62,7 @@ Desktop.ini
 *.swp
 *~
 ~$*
+
+# ---- Python 工具（tools/ 下的验证脚本）----
+__pycache__/
+*.pyc
