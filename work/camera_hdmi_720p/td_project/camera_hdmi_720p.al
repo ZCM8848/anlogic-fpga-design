@@ -139,6 +139,22 @@
                     <Attr Name="CompileOrder" Val="21"/>
                 </FileInfo>
             </File>
+            <File Path="../rtl/video/cam_linebuf.v">
+                <FileInfo>
+                    <Attr Name="UsedInSyn" Val="true"/>
+                    <Attr Name="UsedInP&R" Val="true"/>
+                    <Attr Name="BelongTo" Val="design_1"/>
+                    <Attr Name="CompileOrder" Val="29"/>
+                </FileInfo>
+            </File>
+            <File Path="../rtl/video/video_mux.v">
+                <FileInfo>
+                    <Attr Name="UsedInSyn" Val="true"/>
+                    <Attr Name="UsedInP&R" Val="true"/>
+                    <Attr Name="BelongTo" Val="design_1"/>
+                    <Attr Name="CompileOrder" Val="30"/>
+                </FileInfo>
+            </File>
             <File Path="../rtl/mipi/csi2_pkt_rx.v">
                 <FileInfo>
                     <Attr Name="UsedInSyn" Val="true"/>

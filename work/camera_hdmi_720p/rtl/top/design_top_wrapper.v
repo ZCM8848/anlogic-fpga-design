@@ -33,7 +33,10 @@ module design_top_wrapper (
     inout  wire [3:0]  IO_rx_data_pad_p,  // D0=V14 / D1=V15 / D2=V17 / D3=U18（本设计只用 D0/D1）
     inout  wire [3:0]  IO_rx_data_pad_n,  // D0=U14 / D1=U15 / D2=U17 / D3=V18
     // ---- M2：板载 USB-UART（USB-JTAG Cable 的 Type-C 双通道之一）----
-    output wire        O_uart_tx      // H1 = FPGA uart_tx（依据官方例程 uart_test.adc；J1 是 uart_rx，本阶段未用）
+    output wire        O_uart_tx,    // H1 = FPGA uart_tx（依据官方例程 uart_test.adc；J1 是 uart_rx，本阶段未用）
+
+    // ---- M4：画面切换开关（板手册 2-22 乒乓开关：SW4 = D11，拨上=1、拨下=0）----
+    input  wire        I_sw4         // 1=摄像头画面，0=彩条测试图案
 );
 
     // ---------------------------------------------------------------- 时钟
@@ -98,6 +101,52 @@ module design_top_wrapper (
         .vs_o  ( S_pat_vs    )
     );
 
+    // ------------------------------------------------- M4：摄像头灰度直通（行缓存）
+    // 写侧在 MIPI 字节时钟域把 raw10_unpack 的像素组按行写入 BRAM；
+    // 读侧在 HDMI 像素域按 x 取数；读侧显示"已完成的那一行"，跨域用 2 级同步 + 翻转标志。
+    wire [23:0] S_cam_gray;
+    wire        S_cam_de, S_cam_vs;
+    wire [15:0] S_cam_lines, S_cam_switches;
+    wire [23:0] S_vid_data;
+    wire        S_vid_de, S_vid_vs, S_vid_sel;
+
+    cam_linebuf u_cam_linebuf (
+        .I_clk_wr        ( S_rx_byte_clk  ),
+        .I_rst_n_wr      ( S_rst_n_rx     ),
+        .I_wr_line_start ( S_pay_start    ),   // CSI-2 负载首拍 = 行首
+        .I_wr_line_end   ( S_pay_end      ),   // CSI-2 负载末拍 = 行尾
+        .I_wr_grp_valid  ( S_px_valid     ),
+        .I_wr_grp        ( S_px           ),
+
+        .I_clk_rd        ( S_pixel_clk    ),
+        .I_rst_n_rd      ( S_rst_n_pix    ),
+        .I_rd_de         ( S_de           ),
+        .I_rd_x          ( S_x            ),
+        .I_rd_vs         ( S_vs           ),
+
+        .O_rd_data       ( S_cam_gray     ),
+        .O_rd_de         ( S_cam_de       ),
+        .O_rd_vs         ( S_cam_vs       ),
+        .O_line_cnt      ( S_cam_lines    ),
+        .O_rd_switch_cnt ( S_cam_switches )
+    );
+
+    video_mux u_video_mux (
+        .clk        ( S_pixel_clk ),
+        .rst_n      ( S_rst_n_pix ),
+        .I_sw4      ( I_sw4       ),       // D11：拨上(1)=摄像头画面
+        .I_pat_data ( S_pat_data  ),
+        .I_pat_de   ( S_pat_de    ),
+        .I_pat_vs   ( S_pat_vs    ),
+        .I_cam_data ( S_cam_gray  ),
+        .I_cam_de   ( S_cam_de    ),
+        .I_cam_vs   ( S_cam_vs    ),
+        .O_data     ( S_vid_data  ),
+        .O_de       ( S_vid_de    ),
+        .O_vs       ( S_vid_vs    ),
+        .O_sel      ( S_vid_sel   )
+    );
+
     // --------------------------------------------- HDMI 1.4b 发送（复用 IP）
     // 复位说明：HDMI IP 的复位直接用 PLL lock（异步），与厂商参考设计一致。
     // 原因：IP 内部既有像素域又有 375MHz 串行域寄存器，若用某一域的同步复位驱动，
@@ -116,13 +165,13 @@ module design_top_wrapper (
 
         // RGB 时序输入模式（hdmi_tx 内部转 stream 时序）
         .I_video_rgb_enable ( 1'b1          ),
-        .I_video_in_de      ( S_pat_de      ),
-        .I_video_in_vs      ( S_pat_vs      ),
+        .I_video_in_de      ( S_vid_de      ),
+        .I_video_in_vs      ( S_vid_vs      ),
         .I_video_in_user    ( 1'b0          ),
         .I_video_in_valid   ( 1'b0          ),
         .I_video_in_last    ( 1'b0          ),
         .O_video_in_ready   (               ),
-        .I_video_in_data    ( S_pat_data    ),
+        .I_video_in_data    ( S_vid_data    ),
 
         // 音频不使用
         .I_audio_valid      ( 1'b0          ),
@@ -396,6 +445,14 @@ module design_top_wrapper (
     );
 
     // --------------------------------------------- M2+M3：串口状态上报（两行循环）
+    // M4：SW4 在 100MHz 域再同步一路（用于串口上报；视频侧 video_mux 内部另有独立同步）
+    reg [2:0] S_sw4_sync;
+    always @(posedge S_clk_100m) begin
+        if (!S_rst_n_100m) S_sw4_sync <= 3'd0;
+        else               S_sw4_sync <= {S_sw4_sync[1:0], I_sw4};
+    end
+    wire S_sw4_100m = S_sw4_sync[2];
+
     status_report u_status_report (
         .clk        ( S_clk_100m   ),
         .rst_n      ( S_rst_n_100m ),
@@ -414,6 +471,7 @@ module design_top_wrapper (
         .D_dbg_pw   ( S_rdbg_pw    ),
         .D_dbg_pleft( S_rdbg_pleft ),
         .D_dbg_hcause(S_rdbg_hcause),
+        .D_sw4      ( S_sw4_100m   ),
         .O_uart_tx  ( O_uart_tx    )
     );
 

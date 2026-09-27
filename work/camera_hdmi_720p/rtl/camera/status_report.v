@@ -42,10 +42,12 @@ module status_report #(
     input  wire [14:0] D_dbg_pleft,    // 包体中断时剩余拍数
     input  wire [3:0]  D_dbg_hcause,   // err_hdr 成因位
 
+    input  wire        D_sw4,          // M4：SW4 状态（100MHz 域同步后）
+
     output wire        O_uart_tx
 );
 
-    localparam [6:0]  LAST        = 7'd121;  // 0..40 = CAM 行；41..121 = MIPI 行
+    localparam [6:0]  LAST        = 7'd127;  // 0..40 = CAM 行；41..127 = MIPI 行
     localparam integer REPEAT_CYC = (CLK_FREQ / 1000) * REPEAT_MS;
 
     function [7:0] hx(input [3:0] v);
@@ -57,7 +59,7 @@ module status_report #(
     endfunction
 
     // ---- MIPI 行字符表（81 字节，组合生成）----
-    wire [7:0] ml [0:80];
+    wire [7:0] ml [0:86];
 
     assign ml[0]  = "M";
     assign ml[1]  = "I";
@@ -138,8 +140,14 @@ module status_report #(
     assign ml[76] = "C";
     assign ml[77] = "=";
     assign ml[78] = hx(D_dbg_hcause);
-    assign ml[79] = 8'h0D;
-    assign ml[80] = 8'h0A;
+    assign ml[79] = " ";
+    assign ml[80] = "S";
+    assign ml[81] = "W";
+    assign ml[82] = "4";
+    assign ml[83] = "=";
+    assign ml[84] = D_sw4 ? "1" : "0";     // 画面切换开关状态（1=摄像头画面）
+    assign ml[85] = 8'h0D;
+    assign ml[86] = 8'h0A;
 
     // ---- 字符发生器 ----
     reg [6:0]   pc;
