@@ -29,7 +29,8 @@
 module fb_wr #(
     parameter FDEPTH = 8,          // 跨域 FIFO 深度（2 的幂）
     parameter FA     = 3,          // FIFO 地址位数
-    parameter PROBE_OVL = 1'b0     // 【M5-② 诊断 v1】打包坐标白框探针（定位后置 0）
+    parameter PROBE_OVL = 1'b0,    // 【M5-② 诊断 v1】打包坐标白框探针（定位后置 0）
+    parameter DIAG_W5   = 1'b0     // 【M5-② 诊断 v3】打包写索引 5 的字 → 全白（判别 +13 字偏差所在级，定位后置 0）
 ) (
     // ---------------- 字节域（MIPI 恢复时钟）----------------
     input  wire         I_clk_b,
@@ -191,6 +192,13 @@ module fb_wr #(
     wire          S_wdone  = S_ev_dv && !S_ev_st && (S_wcnt == 2'd3);
     wire [6:0]    S_pack_waddr = S_ev_st ? 7'd0 : S_pack_ptr;
 
+    // 【M5-② 诊断 v3】W5：把「打包写索引 == 5」的那个字整体替换为全白（16px 白带）。
+    //   白带落点判别 +13 字偏差所在级：屏幕 x≈80..95 ⇒ 打包写入地址级；
+    //   x≈288..303 ⇒ 排空读出级（读索引/次写地址）；x≈1152..1167 ⇒ 回填读出级。
+    //   与 W1 白框、W2 白条、W3/W4 灰柱互不重叠；定位后 DIAG_W5 置回 1'b0。
+    wire [127:0]  S_wr_din = (DIAG_W5 && (S_pack_waddr == 7'd5))
+                             ? {128{1'b1}} : S_w_next;
+
     always @(posedge I_clk_d) begin
         if (!I_rst_n_d) begin
             item        <= {W{1'b0}};
@@ -265,8 +273,8 @@ module fb_wr #(
                     else         S_wcnt <= S_wcnt + 2'd1;
                 end
                 if (S_wdone && (S_pack_ptr < 7'd80)) begin
-                    if (S_cur_slot) S_rb1[S_pack_waddr] <= S_w_next;
-                    else            S_rb0[S_pack_waddr] <= S_w_next;
+                    if (S_cur_slot) S_rb1[S_pack_waddr] <= S_wr_din;
+                    else            S_rb0[S_pack_waddr] <= S_wr_din;
                     if (S_pack_ptr == 7'd79) begin
                         if (S_cur_slot) S_ptgl1 <= ~S_ptgl1;
                         else            S_ptgl0 <= ~S_ptgl0;

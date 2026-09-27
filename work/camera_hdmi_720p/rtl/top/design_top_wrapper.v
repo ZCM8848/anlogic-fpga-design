@@ -239,7 +239,8 @@ module design_top_wrapper (
 
     // ---- M5-②：写引擎（字节域入队 FIFO + 用户域打包/行缓冲/排空）----
     fb_wr #(
-        .PROBE_OVL      ( 1'b1          )   // 【M5-② 诊断 v1】打包坐标白框探针（定位后置回 1'b0）
+        .PROBE_OVL      ( 1'b1          ),  // 【M5-② 诊断 v1】打包坐标白框探针（定位后置回 1'b0）
+        .DIAG_W5        ( 1'b1          )   // 【M5-② 诊断 v3】写索引 5 → 全白带（定位后置回 1'b0）
     ) u_fb_wr (
         .I_clk_b        ( S_rx_byte_clk ),
         .I_rst_n_b      ( S_rst_n_rx    ),
