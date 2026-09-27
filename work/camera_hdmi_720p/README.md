@@ -13,7 +13,7 @@ PH1P35MDG324（HX1P35A 开发板 / TD 6.2.1）上，从零搭建的 **SC500CS / 
 | M2 | 摄像头上电时序 + I²C 配置（读 Sensor ID 验证） | ✅ **上板验收通过**（2026-09-26 23:10；串口 `ID=EE4B ADR=36 W=A5 P=9E4B OK=1 E=0`） |
 | M3 | MIPI 接收 + CSI-2/RAW10 解包 + 帧统计 | ✅ **上板验收通过**（2026-09-27；串口 `MIPI HS=1 F=… L=0720 W=01280 G=0320 ER=00 HW=2B06403B PL=0000 HC=0`） |
 | M4 | 灰度直通出图（行缓存版，暂不接 DDR） | ✅ **上板验收通过**（2026-09-27 11:35）：实时灰度画面、感光正常；串口 `HS=1 … RX=1`（MIPI 链路完好，帧率 **≈59.6fps**）。画面证据 `work/test/M4_00/`。已知（预期）现象：纵向细条纹 = Bayer 网格（M6 去马赛克消）、缓慢自上而下滚动 = 相机帧率 59.6fps 与显示 60Hz 未锁相（相差约 0.4Hz）而行缓存「跟随最新行」的固有现象（M5 帧缓存消）。**注意：串口 F/L/W/G 是 BCD 码（RTL 字段名 `D_fs_bcd` 等），解析勿按 hex。** |
-| M5 | DDR2 帧缓存（自研读写控制器） | 🔨 **①空载校准版已实现**（2026-09-27，待上板验证 `DDR RDY=1`）；②完整帧缓存版未开始 |
+| M5 | DDR2 帧缓存（自研读写控制器） | 🔨 **①空载校准版已实现并构建通过**（2026-09-27 12:15；构建方式与坑见 `tools/td_run/`）：时序 final SWNS +0.101ns / HWNS +0.022ns、0 违例，`camera_hdmi_720p.bit` 已产出，**待上板验证 `DDR RDY=1`**；②完整帧缓存版未开始 |
 | M6 | 彩色 ISP（去马赛克 + 简易 AWB/gamma） | 未开始 |
 | M7 | 收尾（按键模式接口、参数化、文档、CI） | 未开始 |
 
@@ -53,7 +53,8 @@ camera_hdmi_720p/
 │  └─ sc520reg/       # SC520CS 720p60 原厂寄存器表（数据件）
 ├─ tools/             # 自研验证工具（无 iverilog 环境下的替代手段）
 │  ├─ check_rtl.py    # 静态自检：.al 清单 / 端口-网络-位宽交叉校验
-│  └─ sim/            # 行为级仿真：i2c_sim.py（I²C 主机协议）、cam_sim.py（上电流程）
+│  ├─ sim/            # 行为级仿真：i2c_sim.py（I²C 主机协议）、cam_sim.py（上电流程）
+│  └─ td_run/         # TD run 参数模板 + 自愈式 run.bat（命令行构建，说明见其中 README）
 └─ td_project/        # TD 工程目录（camera_hdmi_720p.al + 自动生成的 *_Runs/）
 ```
 
@@ -243,6 +244,26 @@ MIPI HS=1 F=000012 L=0720 W=01280 G=0320 ER=00 HW=2B0640xx PW=xxxx PL=0000 HC=0 
 - **验收**：见 docs/plan.md「M4 实施要点与预期效果」（实时灰度画面 + 串口 M3 不退化；
   允许轻微撕裂/偏暗/Bayer 网格）。
 
+## M5 构建记录（DDR2 空载校准版，2026-09-27）
+
+**首败（GUI 运行）**：TD 报
+`SYN-8534 ERROR: Can not get the inst ".../ac_byte[0]$ac_byte_used$u_ddrphy_ac_byte_wrapper/u_ddrphy_byte" location`，
+卡在 opt_rtl 50%。根因：DDR2 IP 自带的 `ddr2.adc`（45 条引脚 + 16 条 PHY 硬核位置约束）**未加载**。
+
+**机制（已定论）**：IP 约束只能经 run 目录 `settings.cfg` 的 `IpADCList/IpSDCList` 加载，
+流程据此生成 `read_ip_adc -ip ddr2 -file ...` / `read_sdc -ip ddr2 ...`（带 IP 作用域，IP 内相对路径才解析得了）。
+**TD GUI 的 Run 用内部参数运行并重写 settings.cfg**（reset 时甚至删除），**只有命令行流程会读 settings.cfg**。
+
+**修复与固化**
+
+- `tools/td_run/{syn_1,phy_1}.settings.cfg`（补 `IpADCList/IpSDCList`，照厂商 lab 写法）+ 自愈式 `run.bat`
+  （先恢复模板再跑流程，防 GUI 覆盖）。**今后重建一律双击 `*_Runs/{syn_1,phy_1}/run.bat`；这两个 run 别再按 GUI 的 Run。**
+- 命令行运行的完整日志在控制台 stdout（本次已存 `work/test/M5_00/`）；`run.log` 是 GUI 运行遗留，排查勿看错文件。
+- 数字与证据：`work/test/M5_00/NOTES.md`（syn `Setup +0.860 / Hold +0.114`；phy final `+0.101 / +0.022`，均 0 违例；
+  bit md5 `460779cbd30d42262554c382bea10c5a`）。
+
+**待上板验收**：串口第三行出现 `DDR RDY=1`；画面维持 M4 现状（滚动/Bayer 网格 —— 本步未接视频通路，属预期）。
+
 ## 已知事项
 
 1. `I_rst_n`（厂商用 R10 = 以太网 TXEN 引脚做复位）本工程**不使用**，系统复位由 PLL lock 同步产生（`reset_ctrl.v`）。
@@ -274,3 +295,7 @@ MIPI HS=1 F=000012 L=0720 W=01280 G=0320 ER=00 HW=2B0640xx PW=xxxx PL=0000 HC=0 
     HS 流量停止时该域逻辑冻结（统计保持不变，串口显示 `HS=0 F=000000`），便于区分"链路没通"与"解析错"。
 13. `status_report.v` 的 CAM 行字符序列与 M2 的 `cam_report.v` **逐字符一致**（方便与 M2 验收输出对照），
     MIPI 行紧随其后（两行共 89 字符，每 500ms 重发）。
+14. **TD 构建方式（M5 定案）**：涉及 IP 约束（如 DDR2 的 `ddr2.adc/.sdc`）的构建**必须走命令行** ——
+    双击 `*_Runs/{syn_1,phy_1}/run.bat`（自愈版先恢复含 `IpADCList/IpSDCList` 的 settings.cfg）。
+    GUI 的 Run 会 reset 并用内部参数重写 settings.cfg → 约束丢失、报 `SYN-8534`；GUI 只用于下载/查看。
+    命令行构建的日志在控制台 stdout（**不会**写 run.log —— 那是 GUI 运行的遗留文件），细节见 `tools/td_run/README.md`。

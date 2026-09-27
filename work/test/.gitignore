@@ -2,3 +2,7 @@
 # 只保留降采样版（*_small.jpg）作为验收证据。
 *.jpg
 !*_small.jpg
+
+# M5 起：命令行构建的 stdout 日志作为构建验收证据入库（*_build_stdout.log）。
+# 注意本文件优先级高于根 .gitignore 的 *.log。
+!*_build_stdout.log

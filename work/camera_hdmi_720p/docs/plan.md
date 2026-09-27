@@ -170,7 +170,7 @@ raw10_unpack → 灰度化((px-64)>>2) → 异步FIFO（8bit 像素 + 行标志�
    若失败，问题域收窄在 IP 接线，不必排查整条视频链。
 2. **②完整帧缓存版**：接上写/读/仲裁与 SW4 切换，按上面验收标准判定。
 
-*进度：①空载校准版 2026-09-27 已实现（`ip/ddr2/` 已入库、`.al` 增补 wrapper+IP、顶层例化、串口第三行 `DDR RDY/ARDY/WRDY`、`timing.sdc` 增 DDR 时钟组、run `settings.cfg` 预置 IpADCList/IpSDCList），待上板验证；②未开始。*
+*进度：①空载校准版 2026-09-27 **代码 + 构建均通过**（bit 已产出：final SWNS +0.101ns / HWNS +0.022ns，0 违例；`ip/ddr2/` 已入库、`.al` 增补 wrapper+IP、顶层例化、串口第三行 `DDR RDY/ARDY/WRDY`、`timing.sdc` 增 DDR 时钟组）。构建首败根因（IP 约束未加载 → `SYN-8534`）与固化方案见 README「M5 构建记录」与 `tools/td_run/` —— **IP 约束必须经命令行流程加载，勿用 GUI Run 启动这组 run**。待上板验证 `DDR RDY=1`；②未开始。*
 
 **风险与对策**
 
@@ -178,6 +178,9 @@ raw10_unpack → 灰度化((px-64)>>2) → 异步FIFO（8bit 像素 + 行标志�
 2. paxi 协议细节误读：①步只用到最小功能；协议判读以 IPUG035 与 IP 端口注释为准，仿真先行。
 3. 时序：新增 dhi_clk 域 + IP 自带约束；缺的跨域声明按 M4 经验用 `set_clock_groups` 补齐，编译后读 clock summary 核对。
 4. `.al` 增补（TD 覆盖清单的老坑）：改动前确认 TD 已完全退出；只加两条（wrapper .v + ddr2.xml）。
+5. **构建流程（M5 已解决，留档）**：DDR2 IP 约束只能经 run `settings.cfg` 的 `IpADCList/IpSDCList` 由命令行流程加载；
+   GUI Run 不读该文件且会 reset/重写它 → 报 `SYN-8534`。已固化 `tools/td_run/`（模板 + 自愈 run.bat），
+   今后重建一律双击 `*_Runs/{syn_1,phy_1}/run.bat`。
 
 ## 四、风险与对策
 
