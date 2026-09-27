@@ -24,8 +24,16 @@ def strip_comments(s):
     return COMMENT_RE.sub(" ", s)
 
 
+def width_of(rng):
+    """范围文本 → 位宽；None=无范围(1bit)，-1=符号表达式(未知)"""
+    if rng is None:
+        return 1
+    m = re.match(r"(\d+)\s*:\s*(\d+)$", rng.strip())
+    return (int(m.group(1)) - int(m.group(2)) + 1) if m else -1
+
+
 def parse_modules(text):
-    """返回 {模块名: [(方向, 位宽, 名), ...]}"""
+    """返回 {模块名: [(方向, 位宽, 名), ...]}；位宽 -1 表示符号表达式未知"""
     out = {}
     for m in re.finditer(r"\bmodule\s+(\w+)\s*", text):
         name = m.group(1)
@@ -72,11 +80,10 @@ def parse_modules(text):
                 continue
             pm = re.match(
                 r"(input|output|inout)\s*(?:wire|reg|logic)?\s*"
-                r"(?:signed\s*)?(?:\[\s*(\d+)\s*:\s*(\d+)\s*\])?\s*(\w+)", p)
+                r"(?:signed\s*)?(?:\[\s*([^\]]+?)\s*\])?\s*(\w+)", p)
             if pm:
-                d, hi, lo, nm = pm.group(1), pm.group(2), pm.group(3), pm.group(4)
-                w = (int(hi) - int(lo) + 1) if hi is not None else 1
-                ports.append((d, w, nm))
+                d, rng, nm = pm.group(1), pm.group(2), pm.group(3)
+                ports.append((d, width_of(rng), nm))
         out[name] = ports
     return out
 
@@ -102,13 +109,18 @@ def parse_decls(text):
     d = {}
     for m in re.finditer(
             r"\b(?:wire|reg|input|output|inout)\b\s*(?:signed\s*)?"
-            r"(\[\s*(\d+)\s*:\s*(\d+)\s*\])?\s*([\w,\s]+);", text):
-        hi, lo, names = m.group(2), m.group(3), m.group(4)
-        w = (int(hi) - int(lo) + 1) if hi is not None else 1
+            r"(\[\s*([^\]]+?)\s*\])?\s*([\w,\s]+?)"
+            r"(?:\s*=\s*[^;]*)?;", text):
+        rng, names = m.group(2), m.group(3)
+        w = width_of(rng)
         for nm in names.split(","):
             nm = nm.strip()
             if re.fullmatch(r"\w+", nm):
-                d[nm] = max(d.get(nm, 0), w)
+                old = d.get(nm)
+                if old is None or old == -1:
+                    d[nm] = w
+                elif w != -1:
+                    d[nm] = max(old, w)
     return d
 
 
@@ -183,12 +195,15 @@ def main():
         if p.endswith(".v"):
             listed.add(fp)
 
-    ondisk = set()
+    ondisk, svdisk = set(), set()
     for sub in ("rtl", "ip"):
         for dp, _, fns in os.walk(os.path.join(root, sub)):
             for fn in fns:
+                fp = os.path.normpath(os.path.join(dp, fn))
                 if fn.endswith(".v"):
-                    ondisk.add(os.path.normpath(os.path.join(dp, fn)))
+                    ondisk.add(fp)
+                elif fn.endswith(".sv"):
+                    svdisk.add(fp)
 
     # ip/pll/PLL.v 由 TD 从 PLL.xml 生成（不必也不应写进 .al 的 Verilog 列表）
     generated = {p for p in ondisk if os.sep + "ip" + os.sep + "pll" + os.sep in p}
@@ -197,13 +212,18 @@ def main():
     for p in sorted(listed - ondisk):
         errs.append(".al 收录但文件不存在: %s" % os.path.relpath(p, root))
     for p in sorted(listed_all - listed - ondisk):
-        if not p.endswith((".adc", ".sdc", ".xml")):
-            errs.append(".al 收录的非 .v 文件不存在: %s" % os.path.relpath(p, root))
+        if p.endswith((".adc", ".sdc", ".xml")):
+            continue
+        # 非 .v 条目（如 SystemVerilog 的 .sv）按磁盘实际存在性判定
+        if p not in svdisk:
+            errs.append(".al 收录的文件不存在: %s" % os.path.relpath(p, root))
+    # 参与解析的源码 = 全部 .v + 未加密的 .sv（.enc.sv 是加密件，跳过）
+    parse_srcs = sorted(ondisk | {q for q in svdisk if ".enc." not in q})
 
     # 解析所有模块
     srcs = {}
     mods = {}
-    for p in sorted(ondisk):
+    for p in parse_srcs:
         t = strip_comments(open(p, encoding="utf-8", errors="replace").read().replace("\r\n", "\n"))
         srcs[p] = t
         for nm, ports in parse_modules(t).items():
@@ -240,7 +260,7 @@ def main():
                 else:
                     pw = ports[pname][1]
                     nw = decls[net]
-                    if pw != nw:
+                    if pw != nw and pw != -1 and nw != -1:
                         errs.append("%s(%s): 位宽不符 %s(端口 %d bit) ↔ %s(网络 %d bit)"
                                     % (inst, mod, pname, pw, net, nw))
         missing = [n for n in ports if n not in conns]

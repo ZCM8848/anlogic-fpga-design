@@ -11,7 +11,7 @@ PH1P35MDG324（HX1P35A 开发板 / TD 6.2.1）上，从零搭建的 **SC500CS / 
 |---|---|---|
 | M1 | 工程骨架 + HDMI 测试图案（不接摄像头） | ✅ **上板验收通过**（时序 0 违例，图案/LED 全部正确） |
 | M2 | 摄像头上电时序 + I²C 配置（读 Sensor ID 验证） | ✅ **上板验收通过**（2026-09-26 23:10；串口 `ID=EE4B ADR=36 W=A5 P=9E4B OK=1 E=0`） |
-| M3 | MIPI 接收 + CSI-2/RAW10 解包 + 帧统计 | 未开始 |
+| M3 | MIPI 接收 + CSI-2/RAW10 解包 + 帧统计 | 🟡 **编码完成 + 仿真通过**（2026-09-27；待编译上板验收） |
 | M4 | 灰度直通出图（行缓存版，暂不接 DDR） | 未开始 |
 | M5 | DDR2 帧缓存（自研读写控制器） | 未开始 |
 | M6 | 彩色 ISP（去马赛克 + 简易 AWB/gamma） | 未开始 |
@@ -28,7 +28,7 @@ PH1P35MDG324（HX1P35A 开发板 / TD 6.2.1）上，从零搭建的 **SC500CS / 
 | 通用 PLL IP | `ip/pll/`（`PLL.xml/.v` + `RTL/ph1p_phy_pll_wrapper_25a56e5ce2f9.v`） | 厂商工程 `ip_source/PLL/` |
 | HDMI 1.4b TX IP | `ip/hdmi/hdmi_1_4b_transmitter_core_wrapper.enc.v` | 厂商加密 IP |
 | HDMI 配套件 | `hdmi_tx.v`、`hdmi_phy_warpper.v`、`lane_lvds_10_1.v`、`I2S_receiver.v`、`audio_arc_calculate.v`、`key_remove_shakes.v` | 厂商工程 `hdl_source/`（HDMI 参考设计的配套模块） |
-| MIPI D-PHY RX IP（M3 起） | `mipi_dphy_rx_ph1p_mipiio_wrapper` 等 | 厂商加密 IP |
+| MIPI D-PHY RX IP（M3） | `ip/mipi_dphy_rx/`（`mipi_dphy_rx_ph1p_mipiio_wrapper.sv`、`ph1p_mipiio_rx_wrapper.v`、`hs_detect.enc.v`、`byte_aligner(.enc).v`、`channel_aligner(.enc).v`） | 厂商加密 IP 及其官方配套件 |
 | DDR2 控制器 IP（M5 起） | `ph1p35_324_ddr_wrapper` + `ddr2/` | 厂商加密 IP |
 | 传感器寄存器表（M2 起） | SC520CS 720p60 初始化表（数据） | 原厂参数表，数据手册不含完整序列 |
 
@@ -113,7 +113,7 @@ camera_hdmi_720p/
 |---|---|
 | `rtl/common/i2c_master.v` | 单主机 I²C（开漏）：单字节写 / 16 位子地址读（重复起始 + NACK + STOP），100kHz |
 | `rtl/camera/cam_ctrl.v` | 上电时序 + ID 读取（地址自适应）+ 165 条寄存器表写入 + 复读校验，输出错误码 |
-| `rtl/camera/cam_report.v` | 结果格式化 + 115200 串口输出（每 500ms 重发一次） |
+| `rtl/camera/status_report.v` | 结果格式化 + 115200 串口输出（每 500ms 连发 CAM 与 MIPI 两行，取代 M2 的 `cam_report.v`） |
 | `rtl/common/uart_tx.v` | 简单 UART 发送器（8N1） |
 | `tools/check_rtl.py`、`tools/sim/*` | 静态自检 + 行为级仿真（本机无 iverilog，作为上板前的验证手段） |
 
@@ -149,14 +149,60 @@ HDMI 测试图案在 M2 仍然输出（屏幕可继续作为参考画面）。
 
 
 
+## M3 实现（MIPI 接收 + CSI-2/RAW10 解包 + 帧统计，2026-09-27）
+
+**链路**：MIPI 差分对 → `ip/mipi_dphy_rx/`（D-PHY 硬核 IP，1:8 模式，2 lane）→ 字节流（`O_hs_rx_clk`
+= 串行时钟/4 ≈ 103.5MHz，每拍 2 字节，lane0 在高字节）→ `csi2_pkt_rx.v`（包解析）→
+`raw10_unpack.v`（5 字节 → 4 像素）→ `mipi_stats.v`（字节域计数 + 跨域快照握手）→ `status_report.v`（串口）。
+
+| 文件 | 说明 |
+|---|---|
+| `rtl/mipi/csi2_pkt_rx.v` | CSI-2 包解析：包起始 = HS valid 上升沿；解析 4 字节包头（DI/WC/ECC）；FS/FE/LS/LE 短包脉冲；RAW10 长包负载直通；粘滞错误位（非预期 DT / WC≠1600 / 包头包体异常） |
+| `rtl/mipi/raw10_unpack.v` | RAW10 解包：每拍 2 字节 → 每 5 字节出 4 个 10bit 像素（`O_px={P3,P2,P1,P0}`），行首对齐 |
+| `rtl/mipi/mipi_stats.v` | 字节域统计（帧/行/行像素/行组数，BCD）+ 错误位图 + req/ack 双相握手快照到 100MHz 域 |
+| `rtl/camera/status_report.v` | 每 500ms 连发两行（CAM 行与 M2 完全一致 + MIPI 行），取代 M2 的 `cam_report.v` |
+| `constraints/timing.sdc` | 新增 `mipi_rx_ck_pad`（2.415ns = 828Mbps/lane）、`MIPI_RX_BYTE_CLK`（重命名 IP 内部字节时钟）、两域 `set_clock_groups -asynchronous` |
+| `tools/sim/mipi_sim.py` | 逐拍行为级仿真（本机无 iverilog，作为上板前验证手段） |
+
+**串口上报格式（115200 8N1，每 500ms 两行）**
+
+```
+CAM ID=EE4B ADR=36 W=A5 P=9E4B OK=1 E=0
+MIPI HS=1 F=000012 L=0720 W=01280 G=0320 ER=00
+```
+
+- `F` 累计帧数（BCD 十进制）、`L` 上一帧行数（应 0720）、`W` 上一行像素数（应 01280）、
+  `G` 上一行组数（应 0320）、`HS` 是否见过 HS 流量（无流量时整行显示 0，可据此判断链路是否通）。
+- `ER` 错误位图：bit0 通道错误 / bit1 非预期 DT / bit2 WC≠1600 / bit3 包头或包体异常 /
+  bit4 行数≠720 / bit5 行像素≠1280 / bit6 FS/FE 不配对 / bit7 保留。
+
+**上板前验证记录**
+
+- `tools/check_rtl.py`：**0 错误 0 警告**（26 个模块；`.al` 清单、顶层例化端口/位宽/连接全部一致）。
+- `tools/sim/mipi_sim.py`：**一帧 720 行 921600 像素逐点往返一致**（RAW10 打包↔解包），统计计数
+  （`F/L/W/G`）与错误位图全部符合预期；错误注入 5 场景（WC 不符 / 未知 DT / 包体截断 / 疑似同步码 /
+  嵌入数据行 0x12）均按设计给出对应错误位并可恢复。
+- 仿真抓到并修掉 1 处 RTL 缺陷：`raw10_unpack.v` 的行首对齐原本在"推字节之后"执行，会清掉每行头 2 字节、
+  并让上一行残留的 3 字节跨行拼组（现象：每行少 4 像素且像素错位）；改为在组合块中"先对齐、再推字节"。
+- 关键位序显式核对：RAW10 前 4 字节是像素高 8 位、第 5 字节 bit1:0 = P0 低 2 位（MIPI CSI-2 / V4L2 Y10P）。
+
+**M3 待上板确认的假设（失败时均有诊断路径）**
+
+1. HS valid 在包与包之间有拉低（本设计以"上升沿"识别包起始）。若 IP 输出是连续流，`ER` bit3 会置 1
+   → 改为按同步码（0xB8）字节对齐即可。
+2. 传感器按 2-lane RAW10、WC=1600（1600 字节/行）输出；否则 `ER` bit2 置 1。
+3. 帧行数 720 / 行像素 1280；嵌入数据行（DT=0x12）按已知包跳过、不产像素也不报错。
+
 ## 已知事项
 
 1. `I_rst_n`（厂商用 R10 = 以太网 TXEN 引脚做复位）本工程**不使用**，系统复位由 PLL lock 同步产生（`reset_ctrl.v`）。
 2. **HDMI IP 的复位用异步 `~S_pll_lock`**（见 `design_top_wrapper.v` 注释）：IP 内部跨 75MHz/375MHz 两域，
    若用单域同步复位驱动，TD 会把复位分发路径当定时路径分析并违例（实测 -0.365ns）；无发起时钟的 lock 不参与分析。
 3. LED 为**高电平点亮**（手册 p20 明确 + 原理图 LED 阴极接 GND）；板上红色 **LED14 是电源指示灯**，常亮正常、与本设计无关。
-4. 摄像头控制引脚（I²C/XCLK/PWDNB）与 UART TX 已在 M2 接入 `constraints/pin.adc`；MIPI 差分对（CK/D0/D1）留待 M3 接入
-   （引脚：CK_P=V16 / CK_N=U16 / D0=V14,U14 / D1=V15,U15，D2/D3 本设计不用）。
+4. 摄像头控制引脚（I²C/XCLK/PWDNB）与 UART TX 已在 M2 接入 `constraints/pin.adc`。
+   **MIPI 差分对（CK/D0/D1）是器件专用脚，不写进 `pin.adc`**（厂商 SC520 lab 的 `pin.adc` 里同样没有任何 MIPI 条目）——
+   它们由顶层 `IO_rx_clk_pad_*` / `IO_rx_data_pad_*` 直连 D-PHY IP 的硬核 pad；
+   引脚：CK_P=V16 / CK_N=U16、D0=V14,U14、D1=V15,U15，D2/D3 本设计不用（但顶层端口仍需声明全部 4 lane 的 pad 数组）。
 5. 本机无 iverilog；语法/时序验证靠 TD 编译（`td_command_prompt` 可做命令行构建，待验证），
    上板前用 `tools/check_rtl.py`（静态自检）与 `tools/sim/*.py`（行为级仿真）替代。
 6. **目录命名坑**：约束目录必须用 `constraints/`，不能用 `con/`——`CON` 是 Windows 保留设备名，git 无法索引其下文件（TD 能正常用，但提交会报 "No such file or directory"）。
@@ -169,3 +215,12 @@ HDMI 测试图案在 M2 仍然输出（屏幕可继续作为参考画面）。
    实际作输入的 J1（既发不出数据，又与桥的 TXD 输出顶牛）。本设计取 **O_uart_tx → H1**。
 10. 摄像头控制信号在 FPGA（BANK21，3.3V）与 42P FPC 座之间有 **TXS0104E 电平转换**；I²C 为开漏，
     RTL 只在"拉低/释放"之间切换，上拉由模组板载 4.7K 与 TXS 内部上拉提供。
+11. **D-PHY IP 例化硬约束（M3）**：参数必须取 SC520 720P lab 原值
+    （`DPHY_RX_LOCATION="DPHY0"`、`HS_EQUALIZER="3dB"`、`HS_VGA_GAIN="8dB"`、`LANE_NUM=2`、`BYTE_NUM=1`；
+    SC500 lab 的 `"0dB"` 是更低链路速率的取值，勿混用）；顶层实例名必须是 `u_mipi_dphy_rx_ph1p_mipiio_wrapper`，
+    否则 SDC 的 `rename_clock MIPI_RX_BYTE_CLK` 找不到时钟。IP 文件按普通源码进 `.al`
+    （`.v` → `<Verilog>`，`.sv` → `<System_Verilog>`），**不是** `IP_FILE`。
+12. **字节时钟域复位**：`S_rst_n_rx` 由 100MHz 域复位异步置位、在 `O_hs_rx_clk` 上同步释放。
+    HS 流量停止时该域逻辑冻结（统计保持不变，串口显示 `HS=0 F=000000`），便于区分"链路没通"与"解析错"。
+13. `status_report.v` 的 CAM 行字符序列与 M2 的 `cam_report.v` **逐字符一致**（方便与 M2 验收输出对照），
+    MIPI 行紧随其后（两行共 89 字符，每 500ms 重发）。
