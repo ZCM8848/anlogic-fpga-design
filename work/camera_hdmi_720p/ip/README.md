@@ -61,6 +61,36 @@
 本工程只把它当**数据表**使用（初始化寄存器序列属于传感器厂商给定的配置数据，非应用逻辑）；
 按**半净室**约定整份拷贝、不改内容，加载时序由自研 `rtl/camera/cam_ctrl.v` 控制。
 
+## ddr2/ — DDR2 控制器 IP 与引脚适配件（M5 起）
+
+| 文件 | 说明 |
+|---|---|
+| `ddr2/ddr2.xml` | IP-XACT 描述（TD 通过它加载 IP；fileSet 以相对路径引用 `ddr2.v`、控制器包装、`src/rtl/**`、`src/adc/ddr2.adc`、`src/sdc/ddr2.sdc`） |
+| `ddr2/ddr2.v` | IP 顶层：`ref_clk` / `sys_rst_n` / APB 配置口 / **`dhi_clk`（用户侧时钟输出）** / `ddrphy_rdy`（校准完成）+ 原生 128bit 单拍接口 `paxi_*` + DDR2 引脚组 |
+| `ddr2/ph1p_ddrmc_wrapper_63f4ac254419.v` | 控制器+PHY 包装（内部含加密件 `src/rtl/mc/alc_mc_top_all.enc.sv` 等） |
+| `ddr2/src/rtl/**` | PHY / 初始化 / 时钟 / 扫描校准 / 时序参数（`timing/ddr2/ddr2_1066.vh` 等六个速度档）——**逐字节保真** |
+| `ddr2/src/adc/ddr2.adc` | IP 自带引脚约束（BANK11 全部 DDR 引脚 SSTL15/DIFF_SSTL15 + PHY 硬核/IOCLK/BANKREF 位置） |
+| `ddr2/src/sdc/ddr2.sdc` | IP 自带时序约束（PLL0/PLL1 时钟 rename、`mcu_clk` 异步组） |
+| `ph1p35_324_ddr_wrapper.v` | 厂商引脚适配件（324 封装）：原生接口 → `I_mc_app_*`/`O_mc_app_*` 风格总线，暴露 `O_ddr_clk`(=dhi_clk)、`O_init_calib_complete`(=ddrphy_rdy) |
+| `ddr2_proc.log` / `ddr2_drc_check.log` | 生成过程日志（备查） |
+
+来源：厂商 SC520 720P lab zip（`ref/HX1P35A_Contest_202606/3_原理图/摄像头SC520CS.zip` 内
+`lab_ex1_mipi_hdmi_SC520/lab_ex1_mipi_hdmi/user_source/hdl_source/ph1p35_ddr/`）。
+54 个文件与原件**逐字节一致**（md5 已核对）；IP 生成于 TD 6.2.168116 = 本机 TD 版本。
+
+配置事实（`.m_params_ddr2.txt` / `.params_ddr2.txt`）：
+
+- **DDR2-1066**（tCK=1876ps，CL=7 / CWL=6）、**16bit**（DX_NUM=2）、Row13/Col10/BA2（512Mb x16 → 64MB）、IO 1.5V、`MASTER_BK=BANK11`；
+- 控制器/AXI 数据宽 **128bit**、地址宽 25（MC）/26（AXI）；板级延时档 `PH1P_DELAY_B0/B1_AC/DQ=110`（见 `src/rtl/phy/include/ph1p_ddrphy_board_delay.vh`）；
+- **参考时钟接法**：板上 50MHz 晶振（C4，`I_sys_clk`）**直接接 `ref_clk`**（厂商三个 lab 均如此并验证通过）。参数文件里 `PLL0_REFCLK_FREQ=100.0` 与实际接法不一致，属历史遗留，**照厂商接法即可**；若上板校准失败（`ddrphy_rdy` 不置位），备选板上 100MHz 差分钟振（原理图 `FPGA_DDR_100MHZ_LVDS_P/N`）。
+
+使用约定：
+
+- 用户侧逻辑（读写引擎/仲裁）**一律用 IP 输出的 `dhi_clk`（即 `ph1p35_324_ddr_wrapper` 的 `O_ddr_clk`）**作时钟、`sys_rst_n` 作复位（与厂商 lab 一致）。
+- IP 自带 `.adc/.sdc` 经 XML fileSet **自动引入，不手写进 `.al` 的 ADC/SDC 段**；DDR 引脚是 PHY 专用脚，**不进 `pin.adc`**。
+- `.al` 登记（参照 lab `camera_to_dsi_display.al`）：`ph1p35_324_ddr_wrapper.v` 进 `<Verilog>` 段，`ddr2/ddr2.xml` 进 `<IP_FILE>` 段。
+- `.IpToolIpDataBackupDir_ddr2/`（TD IP 工具备份）为空目录，未入库；需要时从 lab zip 取。
+
 ## 约定
 
 - 本目录文件**不提交任何修改**；如需改行为，在 `rtl/` 中包一层或改顶层连接。
