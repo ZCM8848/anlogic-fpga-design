@@ -150,9 +150,10 @@ raw10_unpack → 灰度化((px-64)>>2) → 异步FIFO（8bit 像素 + 行标志�
             读侧在 vsync 时刻若存在"更新的完整帧"→ 切帧基址，否则重复读当前帧
 ```
 
-**帧缓冲布局**（128bit 字地址）：一帧 = 921600B = **57600 字（0xE100）**；三缓冲抗冲突：
-`FRAME0=0x00000 / FRAME1=0x10000 / FRAME2=0x20000`（各隔 1MB；帧仅占 0.879MB）；行地址 = 基址 + 行号×80。
-写侧若目标缓冲仍被读侧占用 → 跳过该帧并计 `OV`（宁可丢帧不撕裂）。
+**帧缓冲布局**（**地址单位 = 2 字节**；依据 IPUG035 表 3-5 与 lab 实测「每 128bit 字 +8」）：一帧 = 921600B =
+**460800 单位（0x70800）**；三缓冲抗冲突：`FRAME0=0x00000 / FRAME1=0x80000 / FRAME2=0x100000`
+（各隔 1MB 字节；帧仅占 0.879MB）；行 y、字 k 的地址 = `FRAME + y*640 + k*8`。
+写侧若目标缓冲仍被读侧占用 → 换缓冲并计 `OV`（宁可丢帧不撕裂）。
 
 **复用与自研边界（半净室）**
 
@@ -170,7 +171,50 @@ raw10_unpack → 灰度化((px-64)>>2) → 异步FIFO（8bit 像素 + 行标志�
    若失败，问题域收窄在 IP 接线，不必排查整条视频链。
 2. **②完整帧缓存版**：接上写/读/仲裁与 SW4 切换，按上面验收标准判定。
 
-*进度：①空载校准版 2026-09-27 **重建通过**（**新** bit：final SWNS +0.101ns / HWNS +0.020ns、TNS/HTNS 0；`ip/ddr2/` 已入库、`.al` 增补 wrapper+IP、顶层例化、串口第三行 `DDR RDY/ARDY/WRDY`、`timing.sdc` 增 DDR 时钟组）。构建首败根因（IP 约束未加载 → `SYN-8534`）与固化方案见 README「M5 构建记录」与 `tools/td_run/` —— **IP 约束必须经命令行流程加载，勿用 GUI Run 启动这组 run**。首版上板暴露串口回归（`status_report` 里 `7'd144/7'd145` 位宽截断 → MIPI/DDR 两行全 0x00），已修（提交 `b9b3695`）并重建。**①已上板验收通过（2026-09-27：`DDR RDY=1` 稳定，证据 `work/test/M5_00/`）**；②未开始。*
+*进度：①空载校准版 2026-09-27 **重建通过**（**新** bit：final SWNS +0.101ns / HWNS +0.020ns、TNS/HTNS 0；`ip/ddr2/` 已入库、`.al` 增补 wrapper+IP、顶层例化、串口第三行 `DDR RDY/ARDY/WRDY`、`timing.sdc` 增 DDR 时钟组）。构建首败根因（IP 约束未加载 → `SYN-8534`）与固化方案见 README「M5 构建记录」与 `tools/td_run/` —— **IP 约束必须经命令行流程加载，勿用 GUI Run 启动这组 run**。首版上板暴露串口回归（`status_report` 里 `7'd144/7'd145` 位宽截断 → MIPI/DDR 两行全 0x00），已修（提交 `b9b3695`）并重建。**①已上板验收通过（2026-09-27：`DDR RDY=1` 稳定，证据 `work/test/M5_00/`）**；②实施计划已细化（见下）。*
+
+### M5-② 实施计划（细化，2026-09-27 核对后定稿）
+
+**接口事实（从 IPUG035 + 厂商 lab + 构建报告三方核对，实现时逐条对照）**
+
+| 项 | 结论 | 依据 |
+|---|---|---|
+| 用户时钟 | `dhi_clk`（IP `usr_clk`）= **66.667MHz**，TD 自动推导并计时（15ns 预算） | phy 报告 `clk2: 66.667`、area `usr_clk 66MHz` |
+| DDR 实际速率 | **266.7MHz 即 DDR2-533（半速）**：板给 50MHz，IP 参数按 100MHz 参考生成（三 lab 同款）→ 峰值带宽 **1066MB/s**（需求≈110MB/s，≈10× 余量） | `.params_ddr2.txt` + 报告实测 |
+| 地址单位 | **2 字节**：`axi_byte_addr={paxi_addr,1'b0}`（Data=128）；128bit 字=+8；行=640；帧=460800（0x70800）单位 | IPUG035 表 3-5；lab `+8` 步进实测 |
+| 命令颗粒度 | **单拍**：一次 `en`（cmd[0]：0=写/1=读）= 1×128bit 字；写数据可滞后地址 ≤2 拍；读响应恰 1 拍、延迟 ≥40 拍 | IPUG035 3.7.3 + lab 注释 |
+| 就绪门控 | 读写统一等 `O_mc_app_rdy & O_mc_app_wdf_rdy` 同拍接受（OR 语义照厂商 lab 用法；写实判=awready） | `mc_to_user_interface.v`、`video_in/out.v` |
+| 掩码/杂项 | `wdf_mask=0`=全写（paxi 掩码高=屏蔽该字节）；`O_mc_app_rd_data_end` 适配件未驱动、勿用 | IPUG035 + lab |
+| 参考手册 | `D:\Anlogic\TD_6.2.1_Engineer_6.2.168.116\doc\IPUG\IPUG035_PH1A_DDR_IP_Guide.pdf` | — |
+
+**模块划分（自研，rtl/video/）**
+
+1. `fb_wr.v`：字节域入队段沿用 M4 `cam_linebuf` v2 的异步 FIFO（自研复用；条目扩为
+   `{fs,fe,line_start,line_end,dvalid,px[39:0]}`，45bit×8，纯触发器）；usr_clk 侧灰度化 `(px-64)>>2`
+   → 4 组拼 128bit → 行内 k=0..79 逐字发写请求 → 帧完成（FS 后第 720 个行尾）上报 fb_ctrl；统计 `WR/OV/ER`。
+2. `fb_rd.v`：usr_clk 侧行预取（显示行 y 开始即预取 y+1 的 80 字；y=719 不预取；vsync 预取 y=0）；
+   行缓存 = **160×128bit 双时钟 BRAM**（bank=y&1，每 bank 80 字）；像素侧读口：字索引 `x[10:4]`、
+   字内字节 `x[3:0]`，2 级流水、`data/de/vs` 同拍（沿用 M4 约定）；统计 `RD/UN`。
+3. `ddr_arb.v`：两路请求 → 单 mc_app 口；**读优先**；`rdy&wdf_rdy` 同拍接受；读响应按序回送；
+   watchdog（>256 拍无 rvalid → 计错并复位预取行为）。`ARDY` 偶低（M5-① 实测）= 正常等待。
+4. `fb_ctrl.v`：三缓冲状态机（FREE/WRITING/READY/DISPLAY）+ 基址查表；写侧帧完成 → READY；
+   显示 vsync（pixel 域 → usr_clk 翻转脉冲）→ 换 DISPLAY；无新帧 → 重复旧帧（judder，属预期）。
+   跨域只用翻转脉冲，usr_clk 侧自维护行计数（无多比特直接跨域）。
+5. 顶层：`cam_linebuf` 退役（文件保留不例化）；新增 usr_clk 域 `reset_ctrl`（`ddrphy_rdy=1` 后才释放）；
+   `status_report` 第三行扩为 `DDR RDY=? WR=xxxx RD=xxxx OV=x UN=x ER=x`（req/ack 快照，同
+   mipi_stats 结构；字节表常量位宽 ≥8 位，过 check_rtl）。
+
+**实施顺序**：RTL → `tools/sim/fb_sim.py`（Python 行为级：打包/预取/仲裁/三缓冲/端到端比对，
+注入 rdy 抖动与读延迟）→ 命令行重建（syn→phy，检查项同 ①，另看 usr_clk 组 slack）→ 上板
+（先 SW4=0 基准不退化，再 SW4=1 验收）→ 证据入库 + README/技能库同步。
+
+**② 专项风险**：① 读接受语义（`app_rdy` 为 OR）—— 按厂商 lab 同款门控 + watchdog 兜底，
+上板 UN=0 即证；② 读延迟 ≥40 拍 —— 预取提前整行（≈22µs）余量巨大；③ 换帧后立读新缓冲的
+写完成性 —— vsync 换帧 + blanking ≥0.5ms，写侧早已排空；④ 行缓存 BRAM 推断（128bit 宽、双时钟）
+—— 构建后核对 area/EBR 报告，异常则降位宽拆份。
+
+**验收（沿用上节标准）**：≥30s 无滚动无撕裂；串口 `WR≈59.6/s 递增、RD 递增、OV=0 UN=0 ER=0`；
+MIPI 行与 SW4=0 彩条均不退化。
 
 **风险与对策**
 
