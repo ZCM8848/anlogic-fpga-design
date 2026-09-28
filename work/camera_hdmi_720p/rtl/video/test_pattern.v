@@ -7,7 +7,9 @@
  *   3) 行 y=300..419 的灰度渐变带（R=G=B=x[7:0]，验证水平 1280 全分辨率）
  *   4) 橙色方块每帧右移 8 像素、天蓝色方块每帧下移 6 像素（验证帧在持续刷新）
  *
- * 输出 data/de_o/vs_o 同为 1 拍寄存，与 hdmi_tx 输入要求一致（de 与 data 同拍）。
+ * 输出 data/de_o/vs_o 经 2 级流水（= 组合de+3），与 hdmi_mixer 输出同相，
+ * 使 video_mux 在彩条↔摄像头切换时 de/vs/hs 无相位跳变（避免 hdmi_tx/monitor
+ * 因相位扰动产生变量水平回绕）。
  ******************************************************************************/
 `timescale 1ns / 1ps
 
@@ -87,17 +89,27 @@ module test_pattern (
                         S_grad   ? {x[7:0], x[7:0], x[7:0]} :
                                    S_bar_color;
 
-    // ---------------- 输出寄存（与 de 同拍） ----------------
+    // ---------------- 输出寄存（2 级流水：与 hdmi_mixer 输出同相，避免 video_mux 切换时 de/vs 相位跳变） ----------------
+    reg [23:0] data_r;
+    reg        de_r;
+    reg        vs_r;
+
     always @(posedge clk) begin
         if (!rst_n) begin
-            data <= 24'd0;
-            de_o <= 1'b0;
-            vs_o <= 1'b0;
+            de_r  <= 1'b0;
+            vs_r  <= 1'b0;
+            data_r<= 24'd0;
+            de_o  <= 1'b0;
+            vs_o  <= 1'b0;
+            data  <= 24'd0;
         end
         else begin
-            de_o <= de;
-            vs_o <= vs;
-            data <= de ? S_pix : 24'h000000;
+            de_r  <= de;
+            vs_r  <= vs;
+            data_r<= de ? S_pix : 24'h000000;
+            de_o  <= de_r;
+            vs_o  <= vs_r;
+            data  <= data_r;
         end
     end
 

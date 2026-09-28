@@ -172,30 +172,30 @@ module video_out (
    end
 
    always @(posedge I_dsi_clk) begin
-       if(S_video_rd_en_1d)
-           begin
-               case(S_fifo_rd_cnt_1d)
-                   'd0: O_vdieo_data  <= S_fifo_rd_data[127:104];
-                   'd1: O_vdieo_data  <= S_fifo_rd_data[103:80];
-                   'd2: O_vdieo_data  <= S_fifo_rd_data[79:56];
-                   'd3: O_vdieo_data  <= S_fifo_rd_data[55:32];
-                   'd4: O_vdieo_data  <= S_fifo_rd_data[31:8];
-                   'd5: O_vdieo_data  <= {S_fifo_rd_data_1d[7:0],S_fifo_rd_data[127:112]};
-                   'd6: O_vdieo_data  <= S_fifo_rd_data[111:88];
-                   'd7: O_vdieo_data  <= S_fifo_rd_data[87:64];
-                   'd8: O_vdieo_data  <= S_fifo_rd_data[63:40];
-                   'd9: O_vdieo_data  <= S_fifo_rd_data[39:16];
-                   'd10: O_vdieo_data <= {S_fifo_rd_data_1d[15:0],S_fifo_rd_data[127:120]};
-                   'd11: O_vdieo_data <= S_fifo_rd_data[119:96];
-                   'd12: O_vdieo_data <= S_fifo_rd_data[95:72];
-                   'd13: O_vdieo_data <= S_fifo_rd_data[71:48];
-                   'd14: O_vdieo_data <= S_fifo_rd_data[47:24];
-                   'd15: O_vdieo_data <= S_fifo_rd_data[23:0];
-               endcase
-           end
-       else
-           O_vdieo_data <= 'd0;
-   end
+        if(S_video_rd_en_1d)
+            begin
+                case(S_fifo_rd_cnt_1d)
+                    'd0: O_vdieo_data  <= S_fifo_rd_data[127:104];
+                    'd1: O_vdieo_data  <= S_fifo_rd_data[103:80];
+                    'd2: O_vdieo_data  <= S_fifo_rd_data[79:56];
+                    'd3: O_vdieo_data  <= S_fifo_rd_data[55:32];
+                    'd4: O_vdieo_data  <= S_fifo_rd_data[31:8];
+                    'd5: O_vdieo_data  <= {S_fifo_rd_data_1d[7:0],S_fifo_rd_data[127:112]};
+                    'd6: O_vdieo_data  <= S_fifo_rd_data[111:88];
+                    'd7: O_vdieo_data  <= S_fifo_rd_data[87:64];
+                    'd8: O_vdieo_data  <= S_fifo_rd_data[63:40];
+                    'd9: O_vdieo_data  <= S_fifo_rd_data[39:16];
+                    'd10: O_vdieo_data <= {S_fifo_rd_data_1d[15:0],S_fifo_rd_data[127:120]};
+                    'd11: O_vdieo_data <= S_fifo_rd_data[119:96];
+                    'd12: O_vdieo_data <= S_fifo_rd_data[95:72];
+                    'd13: O_vdieo_data <= S_fifo_rd_data[71:48];
+                    'd14: O_vdieo_data <= S_fifo_rd_data[47:24];
+                    'd15: O_vdieo_data <= S_fifo_rd_data[23:0];
+                endcase
+            end
+        else
+            O_vdieo_data <= 'd0;
+    end
 
     
 endmodule

@@ -34,17 +34,28 @@ module video_mux (
     output wire        O_sel       // 供串口上报（同步后的开关状态）
 );
 
-    // ---------------- SW4 同步（2 级） ----------------
+    // ---------------- SW4 同步（2 级）+ 帧边界门控 ----------------
+    // sel 不再每拍跟随 SW4，而是仅在 vsync 上升沿（帧边界）采纳已同步的 SW4，
+    // 使切换发生在消隐期（de=0）：① 无半帧撕裂（整帧来自同一源）；
+    //   ② 即便两源仍有残余相位差，扰动也落在 de=0 区不可见。
+    //   （配合 test_pattern 2 级流水与 hdmi_mixer 同相后，切换处 de/vs 连续无跳变。）
     reg [2:0] sync_sw;
-    reg       sel;
+    reg       sel_want;   // 已同步的 SW4（期望 sel）
+    reg       sel;        // 实际 sel（仅帧边界更新）
+    reg       vs_d;       // I_cam_vs 延迟，用于上升沿检测
+    wire      vs_rise = I_cam_vs & ~vs_d;
 
     always @(posedge clk) begin
         if (!rst_n) begin
-            sync_sw <= 3'd0;
-            sel     <= 1'b0;                    // 复位默认：测试图案
+            sync_sw  <= 3'd0;
+            sel_want <= 1'b0;
+            sel      <= 1'b0;
+            vs_d     <= 1'b0;
         end else begin
-            sync_sw <= {sync_sw[1:0], I_sw4};
-            sel     <= sync_sw[2];
+            sync_sw  <= {sync_sw[1:0], I_sw4};
+            sel_want <= sync_sw[2];
+            vs_d     <= I_cam_vs;
+            if (vs_rise) sel <= sel_want;   // 仅帧边界切换
         end
     end
 
