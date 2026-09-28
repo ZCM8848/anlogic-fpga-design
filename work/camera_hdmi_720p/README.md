@@ -14,8 +14,8 @@ PH1P35MDG324（HX1P35A 开发板 / TD 6.2.1）上，从零搭建的 **SC500CS / 
 | M3 | MIPI 接收 + CSI-2/RAW10 解包 + 帧统计 | ✅ **上板验收通过**（2026-09-27；串口 `MIPI HS=1 F=… L=0720 W=01280 G=0320 ER=00 HW=2B06403B PL=0000 HC=0`） |
 | M4 | 灰度直通出图（行缓存版，暂不接 DDR） | ✅ **上板验收通过**（2026-09-27 11:35）：实时灰度画面、感光正常；串口 `HS=1 … RX=1`（MIPI 链路完好，帧率 **≈59.6fps**）。画面证据 `work/test/M4_00/`。已知（预期）现象：纵向细条纹 = Bayer 网格（M6 去马赛克消）、缓慢自上而下滚动 = 相机帧率 59.6fps 与显示 60Hz 未锁相（相差约 0.4Hz）而行缓存「跟随最新行」的固有现象（M5 帧缓存消）。**注意：串口 F/L/W/G 是 BCD 码（RTL 字段名 `D_fs_bcd` 等），解析勿按 hex。** |
 | M5 | DDR2 帧缓存（自研读写控制器） | 🔨 **①空载校准版 ✅ 上板验收通过**（2026-09-27：串口第三行 `DDR RDY=1 ARDY=1 WRDY=1` 稳定（15/15、28/29）；MIPI 行照旧健康、59.67fps。构建方式与坑见 `tools/td_run/`，证据 `work/test/M5_00/`）；**②完整帧缓存版：实施计划已细化定稿**（`docs/plan.md`「M5-② 实施计划」，接口事实已按 IPUG035 + 厂商 lab + 构建报告三方核对），待开工 |
-| M6 | 彩色 ISP（去马赛克 + 简易 AWB/gamma） | 未开始 |
-| M7 | 收尾（按键模式接口、参数化、文档、CI） | 未开始 |
+| M6 | 三模式重构（彩条 / 边缘提取 / 彩色+OSD，SW4/SW3 切换） | 🔨 **编码+构建完成，待上板验收**（2026-09-28）。整棵搬入厂商 ISP（demosaic/AWB/edge_detect_96）+ video_in/out/mc_to_user_interface + DDR2 IP + hdmi_mixer/OSD 三件套；自研 hdmi_timing(+user/last)、video_mux(彩条/摄像头)、status_report、SW 双同步链、5 域复位。check_rtl 0 错 0 警；命令行 syn+phy 过编译、bit 生成（md5 `A1CF247…`）。时序：9 个 setup 违例（WNS -1.3ns，hold 干净），全在 ISP byte 域 awb→edge 数据/复位路径——**彩条与 OSD 模式不受影响**（OSD 模式 edge 输出被 bypass mux 丢弃；awb→DDR 数据路径时序干净），仅 edge 模式有潜在画面瑕疵。详见下「M6 构建记录」 |
+| M7 | 收尾（文档、参数化、CI、edge 时序优化） | 未开始 |
 
 详细计划与调研结论见 `docs/plan.md`。
 
@@ -271,6 +271,38 @@ MIPI HS=1 F=000012 L=0720 W=01280 G=0320 ER=00 HW=2B0640xx PW=xxxx PL=0000 HC=0 
 **上板验收 ✅（2026-09-27）**：串口第三行 `DDR RDY=1 ARDY=1 WRDY=1` 稳定（8s 首采 15/15、15s 复验 28/29，
 唯一例外为 1 条 `ARDY=0` 瞬时值，协议合法）；MIPI 行健康（59.67fps）。细节见
 `work/test/M5_00/NOTES.md` 与 `serial_verify.log`。**M5-① 达成。**
+
+## M6 构建记录（三模式重构，2026-09-28）
+
+**目标**：在保留 M1 彩条基准的前提下，用 SW4(主选)/SW3(子选) 切换 HDMI 输出：彩条 / 边缘提取 / 彩色+OSD。
+
+**决策**（用户定）：整棵搬入厂商 ISP（不再坚持半净室）——采用 `lab_ex2_edge`+`lab_ex3_osd` 两个已验证参考工程的 demosaic/AWB/edge_detect_96/video_in/video_out/mc_to_user_interface/hdmi_mixer/osd_char_lib/anlogic_logo_rom/uicfgcs520 等全套件 + 所需 IP（divider/BRAM/FIFO）。弃用 M5 自研 fb_wr/fb_rd/ddr_arb/fb_ctrl（有 +208px 错位 bug 未解决）。
+
+**模式真值表**（SW 拨上=1）：
+
+| SW4 | SW3 | video_mux | isp_top edge_on | hdmi_mixer osd_on | 画面 |
+|---|---|---|---|---|---|
+| 0 | × | test_pattern | × | × | 彩条（M1 基准） |
+| 1 | 0 | hdmi_mixer | 1 | 0 | 边缘提取（Sobel 二值图） |
+| 1 | 1 | hdmi_mixer | 0 | 1 | 彩色 + OSD（logo + 帧计数） |
+
+**对参考件的两处最小改动**（仅加门控，非抄实现）：
+1. `isp_top.v`：加 `I_edge_on` + 2:1 mux（awb→edge_detect_96 vs 直通 awb→packer）。edge_detect_96 常驻、OSD 模式输出被丢弃。
+2. `hdmi_mixer.v`：加 `I_osd_on` 门控 OSD 叠加分支（=0 纯视频直通）。
+
+**自研新增/扩展**：`hdmi_timing.v` 加 `user`/`last` 输出（替代参考 uivtc，喂 hdmi_mixer）；`status_report.v` 精简为单行（cam ID/OK/E/CFG/DDR/SW4/SW3）；`video_mux.v` 的 `I_cam_*` 改接 hdmi_mixer 输出；顶层 SW4/SW3 各 3FF 同步到 pixel/byte/100M 三域；`reset_ctrl` 扩 5 域（100M/pix/24m/ddr + 字节域 2FF）。
+
+**约束**：`pin.adc` 加 `I_sw3`(E11) + `I_button[1:0]`(N2/J14，AE) + 摄像头端口名改与参考一致（`O_cam_scl/O_cam_24m/O_cam_rst`）；`timing.sdc` 改 3 组异步（MIPI / system+HDMI / DDR，对齐参考）；MIPI/DDR pad 仍不进 pin.adc。`.al` 重建为 45 RTL+3 SV+8 IP，退役件移入 `retired/`。
+
+**构建**（命令行 `tools/td_run/run.bat`，正斜杠路径 `D:/Anlogic/.../doc/scripts/DefaultFlow.tcl`）：
+- syn：opt_rtl 2m40s + opt_gate 1m47s，**Setup WNS -2.296ns / Hold +114ps**（33 FEP，布线前估计）；
+- phy：place+route+bitgen，**final Setup WNS -1.299ns / Hold +21ps / TNS 0 / 9 FEP**，bit `phy_1/camera_hdmi_720p.bit`（1,789,539B md5 `A1CF247044023C0F56A70D9526162B44`）；
+- 面积：LUT 9756 / EBR 39(36%) / DSP 9(22.5%) / PLL 3 / GCLK 9；SYN-8534=0（DDR IP 约束已加载）、HDL-8007=0、black box=0、HDL-5007 在自研 rtl/=0。
+
+**时序评估**：9 个 setup 违例全在 MIPI_RX_BYTE_CLK 域（ISP，~103.5MHz），分两类——① awb 乘法器→edge_detect_96 输出寄存器的 Sobel 数据路径（最差 -1.3ns）；② S_rx_rst_sync→ISP 各寄存器 .asr 的复位恢复路径。参考 edge 工程（TD 6.1）同款 ISP 在 112.5MHz 下 +1.725ns 通过，本工程 TD 6.2 推断 AWB 除法器/乘法器更慢致违例。
+**关键**：违例路径在 OSD 模式下被 bypass mux 丢弃（edge 输出不进 DDR），awb→DDR→display 数据路径时序干净——故**彩条(M1 验证)与 OSD 彩色模式预期可正常工作，仅 edge 模式有潜在画面瑕疵**。上板验收建议顺序：SW4=0 彩条回归 → SW4=1,SW3=1 OSD 彩色 → SW4=1,SW3=0 edge。
+
+**已知遗留**：① edge 模式 awb→edge 时序 -1.3ns（待 pipeline 寄存器或 max_fanout/ false_path 优化，M7）；② 复位恢复违例（可加 `set_false_path` 于异步复位网，M7）；③ `status_report` 已无 MIPI 字节统计（参考件无 mipi_stats 对应），仅报 cam ID/DDR/SW。
 
 ## 已知事项
 

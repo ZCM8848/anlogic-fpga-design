@@ -338,22 +338,45 @@ def main():
                 elif fn.endswith(".sv"):
                     svdisk.add(fp)
 
-    # ip/pll/PLL.v 由 TD 从 PLL.xml 生成（不必也不应写进 .al 的 Verilog 列表）
-    # ip/ddr2/ddr2/** 同理：由 ddr2.xml 的 fileSet 引入（厂商 IP 生成件，逐字节保真），
-    #   不逐文件登 .al，也不参与解析/自检（其风格不受本项目规则约束）。
-    #   注意 ip/ddr2/ph1p35_324_ddr_wrapper.v（IP 外层适配件）仍登 .al 并参与解析。
-    ip_managed = {os.sep + "ip" + os.sep + "ddr2" + os.sep + "ddr2" + os.sep}
+    # IP 生成件子树（由 .xml/.ipc 的 fileSet 引入，不逐文件登 .al，不参与解析/自检）：
+    #   ip/pll/、ip/ddr2/ddr2/、以及 M6 引入的 FIFO/BRAM/divider IP 与 demosaic 行缓存 BRAM。
+    #   ip/ddr2/ph1p35_324_ddr_wrapper.v（IP 外层适配件）仍登 .al 并参与解析。
+    ip_managed = {
+        os.sep + "ip" + os.sep + "ddr2" + os.sep + "ddr2" + os.sep,
+        os.sep + "ip" + os.sep + "w128_d512_fifo" + os.sep,
+        os.sep + "ip" + os.sep + "w155_d512_fifo" + os.sep,
+        os.sep + "ip" + os.sep + "blk_mem_gen_awb_delay_signal" + os.sep,
+        os.sep + "ip" + os.sep + "divider" + os.sep,
+        os.sep + "blk_mem_gen_demosaic" + os.sep,
+        os.sep + "blk_mem_gen_zhenghe" + os.sep,
+    }
     generated = {p for p in ondisk
                  if os.sep + "ip" + os.sep + "pll" + os.sep in p or any(k in p for k in ip_managed)}
-    check_literal_widths({p for p in (ondisk | svdisk) if not any(k in p for k in ip_managed)}, errs)
-    check_decl_order({p for p in (ondisk | svdisk) if not any(k in p for k in ip_managed)}, errs)
-    check_multi_driver({p for p in (ondisk | svdisk) if not any(k in p for k in ip_managed)}, errs)
+    # M6 起整棵搬入的厂商 ISP/视频通路/OSD/摄像头配置 RTL：参与解析（供顶层例化端口校验）
+    #   与 .al 一致性检查，但不参与多驱动/声明顺序/字面量位宽等"自研代码质量"检查
+    #   （厂商件风格不受本项目规则约束；其在 TD 已验证可编译；check_rtl 对单行 always
+    #   块的多驱动检测有已知误报，故整棵豁免）。
+    vendor_rtl_dirs = {os.sep + "rtl" + os.sep + "isp" + os.sep}
+    vendor_rtl_names = {
+        "video_in.v", "video_out.v", "mc_to_user_interface.v",
+        "hdmi_mixer.v", "osd_char_lib.v", "anlogic_logo_rom.v",
+        "uicfgcs520.v", "uii2c.v", "ae_set.v", "SC520GainTbl.v",
+        "uics520reg_720p60.v", "uics520regAE.v",
+    }
+    def is_vendor(p):
+        return (any(k in p for k in vendor_rtl_dirs)
+                or os.path.basename(p) in vendor_rtl_names)
+    quality_set = {p for p in (ondisk | svdisk)
+                   if not any(k in p for k in ip_managed) and not is_vendor(p)}
+    check_literal_widths(quality_set, errs)
+    check_decl_order(quality_set, errs)
+    check_multi_driver(quality_set, errs)
     for p in sorted(ondisk - listed - generated):
         errs.append("磁盘有但 .al 未收录: %s" % os.path.relpath(p, root))
     for p in sorted(listed - ondisk):
         errs.append(".al 收录但文件不存在: %s" % os.path.relpath(p, root))
     for p in sorted(listed_all - listed - ondisk):
-        if p.endswith((".adc", ".sdc", ".xml")):
+        if p.endswith((".adc", ".sdc", ".xml", ".ipc")):
             continue
         # 非 .v 条目（如 SystemVerilog 的 .sv）按磁盘实际存在性判定
         if p not in svdisk:

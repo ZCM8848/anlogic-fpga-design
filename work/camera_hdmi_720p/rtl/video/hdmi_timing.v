@@ -28,7 +28,9 @@ module hdmi_timing #(
     output reg         hs,   // 行同步（有效高）
     output reg         de,   // 数据有效
     output reg  [11:0] x,    // 像素列坐标（de=1 时有效）
-    output reg  [11:0] y     // 像素行坐标（de=1 时有效）
+    output reg  [11:0] y,    // 像素行坐标（de=1 时有效）
+    output reg         user,
+    output reg         last
 );
 
     reg  [11:0] S_hcnt;
@@ -37,6 +39,8 @@ module hdmi_timing #(
     wire S_hs_i = (S_hcnt >= H_SYNC_START) && (S_hcnt < H_SYNC_END);
     wire S_vs_i = (S_vcnt >  V_SYNC_START) && (S_vcnt <= V_SYNC_END);
     wire S_de_i = (S_hcnt <  H_ACTIVE)     && (S_vcnt <  V_ACTIVE);
+    wire S_user_i = (S_hcnt == 12'd0)      && (S_vcnt == 12'd0);
+    wire S_last_i = (S_hcnt == H_ACTIVE - 1) && (S_vcnt <  V_ACTIVE);
 
     // 行计数器
     always @(posedge clk) begin
@@ -59,10 +63,12 @@ module hdmi_timing #(
         if (!rst_n) begin
             vs <= 1'b0;  hs <= 1'b0;  de <= 1'b0;
             x  <= 12'd0; y  <= 12'd0;
+            user <= 1'b0; last <= 1'b0;
         end
         else begin
             vs <= S_vs_i;  hs <= S_hs_i;  de <= S_de_i;
             x  <= S_hcnt;  y  <= S_vcnt;
+            user <= S_user_i;  last <= S_last_i;
         end
     end
 
