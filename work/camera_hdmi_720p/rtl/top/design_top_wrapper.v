@@ -572,10 +572,42 @@ module design_top_wrapper (
         .O_hdmi_data     ( S_hdmi_out_data     )
     );
 
+    // ============================================================ CV 叠加（M7 钢珠检测）
+    // 串在 hdmi_mixer → video_mux 之间。组合直通保相位；I_cv_on=1 时叠加白框。
+    wire [23:0] S_cv_data;
+    wire        S_cv_de;
+    wire        S_cv_vs;
+    wire [5:0]  S_cv_blob_cnt;
+    wire [10:0] S_cv_run_cnt;
+    wire        S_cv_ccl_busy;
+    wire        S_cv_run_overflow;
+
+    cv_top #(
+        .IMG_W    ( 1280   ),
+        .IMG_H    ( 720    ),
+        .BIN_THR  ( 8'd120 ),
+        .MIN_AREA ( 16'd8  ),
+        .MAX_AREA ( 16'd20000 ),
+        .MIN_FILL ( 6'd15  ),
+        .MIN_RATIO( 6'd25  ),
+        .EDGE_MG  ( 12'd4  )
+    ) u_cv_top (
+        .I_clk          ( S_pixel_clk      ),
+        .I_rst_n        ( S_rst_n_pix      ),
+        .I_cv_on        ( r_cv_on          ),
+        .I_de           ( S_hdmi_out_de    ),
+        .I_vs           ( S_hdmi_out_vsync ),
+        .I_data         ( S_hdmi_out_data  ),
+        .O_de           ( S_cv_de          ),
+        .O_vs           ( S_cv_vs          ),
+        .O_data         ( S_cv_data        ),
+        .O_blob_cnt     ( S_cv_blob_cnt    ),
+        .O_run_cnt      ( S_cv_run_cnt     ),
+        .O_ccl_busy     ( S_cv_ccl_busy    ),
+        .O_run_overflow ( S_cv_run_overflow)
+    );
+
     // ============================================================ video_mux（自研，彩条 vs 摄像头二选一）
-    // 注：cv_top（M7 钢珠检测）暂摘除重写中，hdmi_mixer 直连 video_mux（等价 M6 接法）。
-    //     KEY2/cv_on 逻辑与串口 CV=/NB= 字段保留：按 KEY2 仍翻转 cv_on，串口报 CV=0/1；
-    //     cv_on=1 时经 osd_on 强制使 logo 消失（可验证按键+串口链路）；NB 恒 0（无检测）。
     wire [23:0] S_vid_data;
     wire        S_vid_de;
     wire        S_vid_vs;
@@ -588,9 +620,9 @@ module design_top_wrapper (
         .I_pat_data ( S_pat_data       ),
         .I_pat_de   ( S_pat_de         ),
         .I_pat_vs   ( S_pat_vs         ),
-        .I_cam_data ( S_hdmi_out_data  ),
-        .I_cam_de   ( S_hdmi_out_de    ),
-        .I_cam_vs   ( S_hdmi_out_vsync ),
+        .I_cam_data ( S_cv_data        ),
+        .I_cam_de   ( S_cv_de          ),
+        .I_cam_vs   ( S_cv_vs          ),
         .O_data     ( S_vid_data       ),
         .O_de       ( S_vid_de         ),
         .O_vs       ( S_vid_vs         ),
@@ -642,16 +674,19 @@ module design_top_wrapper (
     reg [2:0] S_sw4_sync_100m;
     reg [2:0] S_sw3_sync_100m;
     reg [2:0] S_cv_on_sync_100m;
-    // cv_top 暂摘除：blob_cnt 恒 0（串口报 NB=00）。cv_on 仍同步供串口 CV= 字段。
+    reg [5:0] S_cv_blob_cnt_s1, S_cv_blob_cnt_s2;
     always @(posedge S_clk_100m) begin
         if (!S_rst_n_100m) begin
             S_sw4_sync_100m <= 3'd0;
             S_sw3_sync_100m <= 3'd0;
             S_cv_on_sync_100m <= 3'd0;
+            S_cv_blob_cnt_s1 <= 6'd0; S_cv_blob_cnt_s2 <= 6'd0;
         end else begin
             S_sw4_sync_100m <= {S_sw4_sync_100m[1:0], I_sw4};
             S_sw3_sync_100m <= {S_sw3_sync_100m[1:0], I_sw3};
             S_cv_on_sync_100m <= {S_cv_on_sync_100m[1:0], r_cv_on};
+            S_cv_blob_cnt_s1 <= S_cv_blob_cnt;       // 6bit 慢变（帧级），2FF 同步足够
+            S_cv_blob_cnt_s2 <= S_cv_blob_cnt_s1;
         end
     end
 
@@ -666,7 +701,7 @@ module design_top_wrapper (
         .I_sw4         ( S_sw4_sync_100m[2]  ),
         .I_sw3         ( S_sw3_sync_100m[2]  ),
         .I_cv_on       ( S_cv_on_sync_100m[2]),
-        .I_blob_cnt    ( 6'd0               ),
+        .I_blob_cnt    ( S_cv_blob_cnt_s2    ),
         .O_uart_tx     ( O_uart_tx           )
     );
 

@@ -90,74 +90,44 @@ def overlap(a_xs, a_xe, b_xs, b_xe):
 
 
 def rtl_ccl(runs):
-    """复刻 cv_top FSM。返回 feature 表（list of dict，index=label）。"""
-    MAX_LABELS = 64
-    parent = list(range(MAX_LABELS))
+    """复刻 cv_top 简化 CCL（无 union-find：取第一个 x 重叠的 prev label 或新 label，
+    直接累加 feature[label]）。有内部间隙的 blob 可能过分割（圆球无间隙→不受影响）。"""
+    MAX_LABELS = 32
     feature = [{"valid": False, "min_x": 0, "max_x": 0, "min_y": 0, "max_y": 0, "area": 0}
                for _ in range(MAX_LABELS)]
-
-    def find(a):
-        t = a
-        for _ in range(6):
-            t = parent[t]
-        return t
-
-    label_ram = [0] * len(runs)
     next_label = 0
     prev_cache = []   # list of (xs,xe,label)
     cur_cache = []
     cur_row_y = -1
 
-    # pass A
     for i, (y, rxs, rxe) in enumerate(runs):
         if y != cur_row_y:
-            # 仅当相邻行(y==prev+1)才把 cur 当 prev；隔行(gap)则 prev 清空，
-            # 否则隔行的球会被错误并到上一个球（实测 bug）。
             if cur_row_y != -1 and y == cur_row_y + 1:
                 prev_cache = cur_cache
             else:
                 prev_cache = []
             cur_cache = []
             cur_row_y = y
-        # scan prev_cache (sorted by xs) from 0
         cur_lbl = 0
         found_any = False
         for (pxs, pxe, plbl) in prev_cache:
             if pxs > rxe:
-                break  # w_past
+                break
             if overlap(rxs, rxe, pxs, pxe):
                 if not found_any:
                     cur_lbl = plbl
                     found_any = True
-                else:
-                    r1, r2 = find(plbl), find(cur_lbl)
-                    if r1 != r2:
-                        if r1 < r2:
-                            parent[r2] = r1
-                        else:
-                            parent[r1] = r2
-            # else skip (left)
+                # 无 union：只取第一个
         if not found_any:
             if next_label < MAX_LABELS:
                 cur_lbl = next_label
                 next_label += 1
             else:
                 cur_lbl = 0
-        else:
-            cur_lbl = find(cur_lbl)
-        label_ram[i] = cur_lbl
         cur_cache.append((rxs, rxe, cur_lbl))
-
-    # resolve
-    for l in range(MAX_LABELS):
-        parent[l] = find(l)
-
-    # pass B: accumulate under root
-    for i, (y, rxs, rxe) in enumerate(runs):
-        lbl = label_ram[i]
-        root = parent[lbl]
+        # 累加 feature[cur_lbl]
         seg = rxe - rxs + 1
-        f = feature[root]
+        f = feature[cur_lbl]
         if not f["valid"]:
             f.update(valid=True, min_x=rxs, max_x=rxe, min_y=y, max_y=y, area=seg)
         else:
@@ -167,15 +137,7 @@ def rtl_ccl(runs):
             f["max_y"] = max(f["max_y"], y)
             f["area"] += seg
 
-    # collect roots
-    blobs = []
-    for l in range(MAX_LABELS):
-        if parent[l] != l:
-            continue
-        f = feature[l]
-        if not f["valid"]:
-            continue
-        blobs.append(dict(f))
+    blobs = [f for f in feature if f["valid"]]
     return blobs
 
 

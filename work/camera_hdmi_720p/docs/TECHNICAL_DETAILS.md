@@ -9,11 +9,12 @@
 ### 目标
 在 PH1P35MDG324（HX1P35A 开发板）上实现 SC520CS MIPI 摄像头 → HDMI 1280×720@60fps 三模式显示工程，通过板载拨码开关 SW4（主选）/SW3（子选）在以下三种 HDMI 输出间切换：
 
-| SW4 | SW3 | 画面 | 数据通路 |
-|-----|-----|------|----------|
-| 0 | × | 彩条测试图案 | test_pattern → video_mux → hdmi_tx |
-| 1 | 0 | 边缘提取（Sobel 二值图） | camera → ISP(edge_on=1) → DDR → hdmi_mixer → video_mux → hdmi_tx |
-| 1 | 1 | 彩色摄像头 + OSD | camera → ISP(edge_on=0) → DDR → hdmi_mixer(osd_on=1) → video_mux → hdmi_tx |
+| SW4 | SW3 | KEY2 | 画面 | 数据通路 |
+|-----|-----|------|------|----------|
+| 0 | × | × | 彩条测试图案 | test_pattern → video_mux → hdmi_tx |
+| 1 | 0 | 关 | 边缘提取（Sobel 二值图） | camera → ISP(edge_on=1) → DDR → hdmi_mixer → video_mux → hdmi_tx |
+| 1 | 1 | 关 | 彩色摄像头 + OSD | camera → ISP(edge_on=0) → DDR → hdmi_mixer(osd_on=1) → video_mux → hdmi_tx |
+| 1 | × | **按一下→开** | 摄像头 + 钢珠白框（M7） | camera → ISP(edge/osd 关) → DDR → hdmi_mixer → **cv_top(叠加)** → video_mux → hdmi_tx |
 
 ### 设计决策
 - **整棵搬入厂商 ISP**（demosaic/AWB/edge_detect_96/video_in/video_out/mc_to_user_interface/hdmi_mixer/osd_char_lib/anlogic_logo_rom/uicfgcs520 等），来自两个已验证参考工程 `lab_ex2_edge_SC520`（边缘提取）和 `lab_ex3_osd_SC520`（彩色+OSD）。
@@ -148,6 +149,17 @@
 #### `rtl/common/uart_tx.v` — UART 发送器
 - 115200 8N1，`I_valid` 脉冲接收、单字节发送（起始+8 数据+停止）。
 
+#### `rtl/cv/cv_top.v` — 钢珠亮斑检测 + 白框叠加（M7 Phase A）
+- **角色**：串在 hdmi_mixer→video_mux 间，组合直通保相位；`I_cv_on=1` 时叠加白框。1 帧延迟（本帧 vblank 算框→下一帧叠加）。
+- **算法（简化 CCL，无 union-find）**：
+  - 段1 流式 run 提取（active）：`Y=R/4+G/2+B/4 > BIN_THR` → 1-bit → 连续 1-串 → run{y,xs,xe} 写 `run_mem`(BRAM 同步读)。
+  - 段2 CCL（vblank）：逐 run 扫 prev 行缓存（双缓冲 rca，仅相邻行 y==prev+1 才用，隔行清空），取【第一个 x 重叠的 prev label】或新 label，直接累加 `feature[label]`{min/max x/y, area}。无 union-find → 无 `parent[parent[..]]` 嵌套异步读（曾致 TD Map Macro coredump）。过滤 feature→overlay 表。
+  - 段3 叠加（下一帧 active）：像素(x,y) 与 overlay 表（≤MAX_BLOBS）并行比较→落边框→白。
+- **存储**：`run_mem`=BRAM 同步读；`feature`/`rca`/`ov`=`ram_style="dram"`（分布式 LUTRAM，异步读 1 级地址来自寄存器不嵌套→不崩；写同步单口→无 part-select 写译码爆炸）；`ov` 叠加读常量变址→固定 tap。
+- **调参**：`BIN_THR`/`MIN_AREA`/`MAX_AREA`/`MIN_FILL`/`MIN_RATIO`/`EDGE_MG`/`FBOX_W`/`MAX_BLOBS`(16)/`MAX_LABELS`(32)（编译期 parameter）。详见 README「M7 构建记录」。
+- **时序**：WNS -1.83ns / 1478 FEP，全在 cv_top 组合路径。CV 关时像素路径仅一 mux（干净，等价 M6）；CV 开时叠加路径有违例（白框可能偶有瑕疵）。
+- **CV 开关**：KEY2(A9) 去抖翻转 `r_cv_on`（像素域），同步到 byte/100M；cv_on 强制 `edge_on=0`/`osd_on=0`。
+
 ### 5.2 参考件（整棵搬入，来自 lab_ex2_edge + lab_ex3_osd）
 
 #### ISP 子树（`rtl/isp/`）
@@ -268,7 +280,8 @@ video_mux 的 sel 仅在 vsync 上升沿（帧边界，消隐期 de=0）采纳 S
 ### 命令行构建（必须，DDR IP 约束需经 settings.cfg 加载）
 1. **syn**：双击 `td_project/camera_hdmi_720p_Runs/syn_1/run.bat`（自愈版：先恢复 settings.cfg 模板再跑流程）。
 2. **phy**：双击 `td_project/camera_hdmi_720p_Runs/phy_1/run.bat`（依赖 syn 产出的 gate.db）。
-3. td_commands_prompt 调用 `D:/Anlogic/TD_6.2.1_Engineer_6.2.168.116/doc/scripts/DefaultFlow.tcl`（正斜杠路径，避免 PowerShell 吃反斜杠）。
+3. td_commands_prompt 调用 `D:/Anlogic/TD_6.2.1_Engineer_6.2.168.116/doc/scripts/DefaultFlow.tcl`（**正斜杠**路径——Tcl `source` 把反斜杠当转义，`\a`=bell 会吃掉；**run.bat 须纯 ASCII**——中文 `rem` 在 GBK cmd 下被误解码致注释行被执行）。
+4. **新增源文件后须同步 `.prj`**：TD 命令行 `open_project <prj>.prj` 打开的是 `*_Runs/<run>/<prj>.prj`（工程运行态二进制），**不是 `td_project/<prj>.al`（文本）**。往 `.al` 加源文件后若不重开 GUI，`.prj` 仍旧清单→`HDL-8007 ... is a black box`。用 `python tools/td_run/sync_prj.py <工程目录>` 把 `.al` 同步进各 `.prj`（幂等，只补缺失项）。
 
 ### 关键构建文件
 | 文件 | 角色 |
