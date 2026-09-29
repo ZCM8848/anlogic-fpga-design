@@ -14,12 +14,14 @@ PH1P35MDG324（HX1P35A 开发板 / TD 6.2.1）上，从零搭建的 **SC500CS / 
 | M3 | MIPI 接收 + CSI-2/RAW10 解包 + 帧统计 | ✅ **上板验收通过**（2026-09-27；串口 `MIPI HS=1 F=… L=0720 W=01280 G=0320 ER=00 HW=2B06403B PL=0000 HC=0`） |
 | M4 | 灰度直通出图（行缓存版，暂不接 DDR） | ✅ **上板验收通过**（2026-09-27 11:35）：实时灰度画面、感光正常；串口 `HS=1 … RX=1`（MIPI 链路完好，帧率 **≈59.6fps**）。画面证据 `work/test/M4_00/`。已知（预期）现象：纵向细条纹 = Bayer 网格（M6 去马赛克消）、缓慢自上而下滚动 = 相机帧率 59.6fps 与显示 60Hz 未锁相（相差约 0.4Hz）而行缓存「跟随最新行」的固有现象（M5 帧缓存消）。**注意：串口 F/L/W/G 是 BCD 码（RTL 字段名 `D_fs_bcd` 等），解析勿按 hex。** |
 | M5 | DDR2 帧缓存（自研读写控制器） | 🔨 **①空载校准版 ✅ 上板验收通过**（2026-09-27：串口第三行 `DDR RDY=1 ARDY=1 WRDY=1` 稳定（15/15、28/29）；MIPI 行照旧健康、59.67fps。构建方式与坑见 `tools/td_run/`，证据 `work/test/M5_00/`）；**②完整帧缓存版：实施计划已细化定稿**（`docs/plan.md`「M5-② 实施计划」，接口事实已按 IPUG035 + 厂商 lab + 构建报告三方核对），待开工 |
-| M6 | 三模式重构（彩条 / 边缘提取 / 彩色+OSD，SW4/SW3 切换） | 🔨 **编码+构建完成，待上板验收**（2026-09-28）。整棵搬入厂商 ISP（demosaic/AWB/edge_detect_96）+ video_in/out/mc_to_user_interface + DDR2 IP + hdmi_mixer/OSD 三件套；自研 hdmi_timing(+user/last)、video_mux(彩条/摄像头)、status_report、SW 双同步链、5 域复位。check_rtl 0 错 0 警；命令行 syn+phy 过编译、bit 生成（md5 `A1CF247…`）。时序：9 个 setup 违例（WNS -1.3ns，hold 干净），全在 ISP byte 域 awb→edge 数据/复位路径——**彩条与 OSD 模式不受影响**（OSD 模式 edge 输出被 bypass mux 丢弃；awb→DDR 数据路径时序干净），仅 edge 模式有潜在画面瑕疵。详见下「M6 构建记录」 |
-| M7 | 收尾（文档、参数化、CI、edge 时序优化） | 未开始 |
+| M6 | 三模式重构（彩条 / 边缘提取 / 彩色+OSD，SW4/SW3 切换） | ✅ **上板验收通过**（2026-09-28~29）。整棵搬入厂商 ISP + video_in/out/mc + DDR2 IP + hdmi_mixer/OSD 三件套；自研 hdmi_timing(复刻 uivtc)、test_pattern(2 级流水)、video_mux(帧边界门控)、status_report(握手修复)。经 4 轮调试修复：① status_report 发送 FSM 握手竞态→串口丢字 ② video_mux 两源 de 相位跳变→变量水平回绕 ③ hdmi_timing 与 uivtc 时序差→logo/画面静态偏移 ④ PROBE_PHASE 探针定位（后回滚）。check_rtl 0 错 0 警；bit md5 `B96CCE65`，时序 -1.7ns/9（ISP edge 域，OSD/彩条干净）。详见下「M6 构建记录」 |
+| M7 | 收尾（文档✅、edge 时序优化、画面重复根因、CV 扩展） | 🔨 文档完成（`docs/TECHNICAL_DETAILS.md`）；待办：edge 模式 -1.7ns 优化、OSD 左侧 ~5px 画面重复根因、CV+形态学钢珠反射识别 |
 
 详细计划与调研结论见 `docs/plan.md`。
 
-## 半净室边界
+## 半净室边界（M1–M5）
+
+> **M6 起本边界已调整**：三模式重构采用"整棵搬入厂商 ISP"策略（demosaic/AWB/edge/video_in/out/mc/hdmi_mixer/OSD/cam config 全套），不再坚持自研 ISP。M1–M5 的自研件已退役移入 `retired/`（fb_wr/fb_rd/ddr_arb/fb_ctrl/cam_linebuf/csi2_pkt_rx/lane_deint/raw10_unpack/mipi_stats/cam_ctrl/i2c_master）。M6 自研件仅保留：hdmi_timing(复刻 uivtc)、test_pattern、video_mux、status_report、reset_ctrl、uart_tx。
 
 **直接复用（不改动，见 `ip/`）**
 
@@ -31,9 +33,10 @@ PH1P35MDG324（HX1P35A 开发板 / TD 6.2.1）上，从零搭建的 **SC500CS / 
 | MIPI D-PHY RX IP（M3） | `ip/mipi_dphy_rx/`（`mipi_dphy_rx_ph1p_mipiio_wrapper.sv`、`ph1p_mipiio_rx_wrapper.v`、`hs_detect.enc.v`、`byte_aligner(.enc).v`、`channel_aligner(.enc).v`） | 厂商加密 IP 及其官方配套件 |
 | DDR2 控制器 IP（M5 起） | `ph1p35_324_ddr_wrapper` + `ddr2/` | 厂商加密 IP |
 | 传感器寄存器表（M2 起） | SC520CS 720p60 初始化表（数据） | 原厂参数表，数据手册不含完整序列 |
+| **ISP/视频通路/OSD（M6 起）** | `rtl/isp/`(demosaic/awb/edge/csi/raw10/uial2axis/data宽变换)、`rtl/video/`(video_in/out/mc/hdmi_mixer/osd_char_lib/anlogic_logo_rom)、`rtl/camera/`(uicfgcs520/uii2c/ae_set/增益表/寄存器表) | 厂商 `lab_ex2_edge`+`lab_ex3_osd`，仅加 edge bypass(osd_on 门控) |
+| **配套 IP（M6 起）** | `ip/divider`、`ip/blk_mem_gen_awb_delay_signal`、`ip/w128_d512_fifo`、`ip/w155_d512_fifo`、demosaic 行缓存 BRAM | 厂商参考工程配套 |
 
-**自研（本工程 `rtl/`）**：顶层与时钟/复位、HDMI 时序发生器、测试图案、摄像头控制（I²C 主机 + 上电时序 + 寄存器表加载）、
-CSI-2 解包、RAW10 解包、帧统计/调试状态机、DDR2 帧缓存读写控制、去马赛克/AWB/gamma、按键/模式控制、全部约束文件。
+**M6 自研（`rtl/`）**：hdmi_timing(复刻 uivtc 时序)、test_pattern(2 级流水)、video_mux(帧边界门控)、status_report(两段握手)、reset_ctrl、uart_tx、全部约束文件。
 
 ## 目录结构
 
@@ -272,7 +275,7 @@ MIPI HS=1 F=000012 L=0720 W=01280 G=0320 ER=00 HW=2B0640xx PW=xxxx PL=0000 HC=0 
 唯一例外为 1 条 `ARDY=0` 瞬时值，协议合法）；MIPI 行健康（59.67fps）。细节见
 `work/test/M5_00/NOTES.md` 与 `serial_verify.log`。**M5-① 达成。**
 
-## M6 构建记录（三模式重构，2026-09-28）
+## M6 构建记录（三模式重构，2026-09-28~29）
 
 **目标**：在保留 M1 彩条基准的前提下，用 SW4(主选)/SW3(子选) 切换 HDMI 输出：彩条 / 边缘提取 / 彩色+OSD。
 
@@ -290,19 +293,35 @@ MIPI HS=1 F=000012 L=0720 W=01280 G=0320 ER=00 HW=2B0640xx PW=xxxx PL=0000 HC=0 
 1. `isp_top.v`：加 `I_edge_on` + 2:1 mux（awb→edge_detect_96 vs 直通 awb→packer）。edge_detect_96 常驻、OSD 模式输出被丢弃。
 2. `hdmi_mixer.v`：加 `I_osd_on` 门控 OSD 叠加分支（=0 纯视频直通）。
 
-**自研新增/扩展**：`hdmi_timing.v` 加 `user`/`last` 输出（替代参考 uivtc，喂 hdmi_mixer）；`status_report.v` 精简为单行（cam ID/OK/E/CFG/DDR/SW4/SW3）；`video_mux.v` 的 `I_cam_*` 改接 hdmi_mixer 输出；顶层 SW4/SW3 各 3FF 同步到 pixel/byte/100M 三域；`reset_ctrl` 扩 5 域（100M/pix/24m/ddr + 字节域 2FF）。
+**自研新增/扩展**：
+- `hdmi_timing.v`：**逐拍复刻参考 uivtc 时序**（de 延 2 拍/vs·hs 延 1 拍/uivtc 式 user·last），保留 x/y 供 test_pattern。消除与参考件 video_out/hdmi_mixer 的时序相位差。
+- `test_pattern.v`：输出改 **2 级流水**（de_o/data/vs_o = 组合de+3），与 hdmi_mixer 输出同相 → video_mux 切换时 de/vs/hs 无相位跳变。
+- `video_mux.v`：sel 用 **vsync 上升沿门控**（帧边界切换，无半帧撕裂，扰动落消隐期 de=0 区）。
+- `status_report.v`：发送 FSM 改**两段握手**（uart 变忙后推进 S_pc，修同拍重复自增致串口丢字）。
+- 顶层 SW4/SW3 各 3FF 同步到 pixel/byte/100M 三域；`reset_ctrl` 扩 5 域。
 
 **约束**：`pin.adc` 加 `I_sw3`(E11) + `I_button[1:0]`(N2/J14，AE) + 摄像头端口名改与参考一致（`O_cam_scl/O_cam_24m/O_cam_rst`）；`timing.sdc` 改 3 组异步（MIPI / system+HDMI / DDR，对齐参考）；MIPI/DDR pad 仍不进 pin.adc。`.al` 重建为 45 RTL+3 SV+8 IP，退役件移入 `retired/`。
 
-**构建**（命令行 `tools/td_run/run.bat`，正斜杠路径 `D:/Anlogic/.../doc/scripts/DefaultFlow.tcl`）：
-- syn：opt_rtl 2m40s + opt_gate 1m47s，**Setup WNS -2.296ns / Hold +114ps**（33 FEP，布线前估计）；
-- phy：place+route+bitgen，**final Setup WNS -1.299ns / Hold +21ps / TNS 0 / 9 FEP**，bit `phy_1/camera_hdmi_720p.bit`（1,789,539B md5 `A1CF247044023C0F56A70D9526162B44`）；
-- 面积：LUT 9756 / EBR 39(36%) / DSP 9(22.5%) / PLL 3 / GCLK 9；SYN-8534=0（DDR IP 约束已加载）、HDL-8007=0、black box=0、HDL-5007 在自研 rtl/=0。
+**调试时间线**（4 轮上板修复）：
+1. **初版**（bit `A1CF247`）：3 模式显示正常，但串口乱码（每发 1 字节跳 1 字节）。
+2. **status_report 握手修复**（bit `064B350C`）：串口干净 `CAM ID=EE4B OK=1 E=1 CFG=1 DDR=1 SW4=1 SW3=1`。但发现 OSD↔彩条切换产生**变量水平回绕**（反复切换偏移量不固定，快切连彩条也错位）。
+3. **变量回绕修复**（test_pattern 2 级 + video_mux vsync 门控，bit `DB77CD5A`）：回绕消除，但暴露 OSD **静态偏移**（logo ~20px、视频 ~5px 重复在左）。
+4. **静态偏移修复**（hdmi_timing 复刻 uivtc，bit `A6DE22AA`）：logo 贴左，但**画面 ~5px(1 字) 重复仍在左侧**。加 PROBE_PHASE 探针诊断（bit `05ACC44A`），后回滚探针。
 
-**时序评估**：9 个 setup 违例全在 MIPI_RX_BYTE_CLK 域（ISP，~103.5MHz），分两类——① awb 乘法器→edge_detect_96 输出寄存器的 Sobel 数据路径（最差 -1.3ns）；② S_rx_rst_sync→ISP 各寄存器 .asr 的复位恢复路径。参考 edge 工程（TD 6.1）同款 ISP 在 112.5MHz 下 +1.725ns 通过，本工程 TD 6.2 推断 AWB 除法器/乘法器更慢致违例。
-**关键**：违例路径在 OSD 模式下被 bypass mux 丢弃（edge 输出不进 DDR），awb→DDR→display 数据路径时序干净——故**彩条(M1 验证)与 OSD 彩色模式预期可正常工作，仅 edge 模式有潜在画面瑕疵**。上板验收建议顺序：SW4=0 彩条回归 → SW4=1,SW3=1 OSD 彩色 → SW4=1,SW3=0 edge。
+**最终构建**（命令行 `tools/td_run/run.bat`，正斜杠路径 `D:/Anlogic/.../doc/scripts/DefaultFlow.tcl`）：
+- syn：**Setup WNS -2.3ns / Hold +114ps**（33 FEP，布线前估计）；
+- phy：**final Setup WNS -1.7ns / Hold +20ps / 9 FEP**，bit `phy_1/camera_hdmi_720p.bit`（1,789,539B md5 `B96CCE651D2628E92E0714F132186CF8`）；
+- 面积：LUT 9756 / EBR 39(36%) / DSP 9(22.5%) / PLL 3 / GCLK 9；SYN-8534=0、HDL-8007=0、black box=0、HDL-5007 在自研 rtl/=0。
 
-**已知遗留**：① edge 模式 awb→edge 时序 -1.3ns（待 pipeline 寄存器或 max_fanout/ false_path 优化，M7）；② 复位恢复违例（可加 `set_false_path` 于异步复位网，M7）；③ `status_report` 已无 MIPI 字节统计（参考件无 mipi_stats 对应），仅报 cam ID/DDR/SW。
+**时序评估**：9 个 setup 违例全在 MIPI_RX_BYTE_CLK 域（ISP，~103.5MHz），分两类——① awb 乘法器→edge_detect_96 输出寄存器的 Sobel 数据路径（最差 -1.7ns）；② S_rx_rst_sync→ISP 各寄存器 .asr 的复位恢复路径。参考 edge 工程（TD 6.1）同款 ISP 在 112.5MHz 下 +1.725ns 通过，本工程 TD 6.2 推断 AWB 除法器/乘法器更慢致违例。
+**关键**：违例路径在 OSD 模式下被 bypass mux 丢弃（edge 输出不进 DDR），awb→DDR→display 数据路径时序干净——故**彩条(M1 验证)与 OSD 彩色模式正常工作，仅 edge 模式有潜在画面瑕疵**。
+
+**上板验收**（2026-09-28~29）：✅ 通过。彩条/OSD 彩色/边缘三模式均可切换显示；串口 `CAM ID=EE4B OK=1 CFG=1 DDR=1 SW4/SW3` 读数正确。
+
+**已知遗留**：
+1. **OSD 左侧 ~5px(1 字) 画面重复**：uivtc 时序复刻后仍存在，与 timing 无关，在 video_in/DDR/video_out 数据通路 1 字级偏移。静态分析（打包 S_cnt、写地址、读地址、解包 case、FIFO L=1 同步 BRAM）均正确、与参考一致，未定位根因。对视觉显示轻微、对钢珠反射 CV 影响微小。可加 on-board 探针定位。
+2. **edge 模式 awb→edge 时序 -1.7ns**（TD 6.2 推断差异），待 pipeline 寄存器/false_path 优化（M7）。
+3. **串口 ID=EE4B / E=1**：参考件 uicfgcs520 只读上电初始 ID、E 为非关键标志；传感器配置已生效（OSD 画面正常），属上报语义差异非功能故障。
 
 ## 已知事项
 

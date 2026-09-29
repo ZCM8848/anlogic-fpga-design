@@ -391,8 +391,5 @@ video_mux 的 sel 仅在 vsync 上升沿（帧边界，消隐期 de=0）采纳 S
 | 版本 | 内容 | bit md5 |
 |------|------|---------|
 | M1-M5 | 自研 MIPI/DDR/灰度（半净室） | (历史) |
-| 6429287 | M6 三模式重构 + status_report 握手修复 | A1CF247 |
-| (未提交) | test_pattern 2 级 + video_mux vsync 门控（修变量回绕） | DB77CD5A |
-| (未提交) | hdmi_timing 复刻 uivtc（修静态偏移） | A6DE22AA |
-| (未提交) | PROBE_PHASE 探针（诊断） | 05ACC44A |
-| (当前) | 回滚探针 → 预探针版本 | B96CCE65 |
+| `6429287` | M6 三模式重构 + status_report 握手修复 | A1CF247 |
+| `6b262c1` | test_pattern 2 级 + video_mux vsync 门控（修变量回绕）+ hdmi_timing 复刻 uivtc（修静态偏移）+ 回滚探针 + 本技术文档 | B96CCE65 |
