@@ -40,6 +40,7 @@ module design_top_wrapper (
     // 模式切换
     input  wire        I_sw4,            // D11（主选：0=彩条，1=摄像头）
     input  wire        I_sw3,            // E11（子选：0=edge，1=OSD彩色）
+    input  wire        I_key2,           // A9 板载 KEY2（CV 叠加开关：按下切换 CV 开/关）
 
     // HDMI 1.4b TX
     output wire        O_tmds_ch0_p,     // G16
@@ -286,7 +287,14 @@ module design_top_wrapper (
             S_sw3_sync_rx <= {S_sw3_sync_rx[1:0], I_sw3};
         end
     end
-    wire S_edge_on = S_sw4_sync_rx[2] & ~S_sw3_sync_rx[2];
+    // CV 开关（r_cv_on 在像素域 KEY2 段赋值；此处先声明 + 同步到字节域供 edge_on 门控）
+    reg        r_cv_on;
+    reg [2:0]  r_cv_on_sync_rx;
+    always @(posedge S_csi_rx_clk or negedge S_rst_n_rx) begin
+        if (!S_rst_n_rx) r_cv_on_sync_rx <= 3'd0;
+        else             r_cv_on_sync_rx <= {r_cv_on_sync_rx[1:0], r_cv_on};
+    end
+    wire S_edge_on = S_sw4_sync_rx[2] & ~S_sw3_sync_rx[2] & ~r_cv_on_sync_rx[2];
 
     isp_top u_isp_top (
         .axi4s_video_aclk ( S_csi_rx_clk    ),
@@ -510,7 +518,30 @@ module design_top_wrapper (
             S_sw3_sync_pix <= {S_sw3_sync_pix[1:0], I_sw3};
         end
     end
-    wire S_osd_on = S_sw4_sync_pix[2] & S_sw3_sync_pix[2];
+    // ============================================================ KEY2 → CV 开关（像素域去抖 + 翻转 + 跨域同步）
+    // KEY2=A9 板载按键（PULLUP，按下=0）。计数器采样去抖（~14ms），下降沿翻转 r_cv_on。
+    // CV 开时强制 edge_on=0 / osd_on=0（让 hdmi_mixer/isp_top 直通纯摄像头画面供检测）。
+    reg [20:0] r_key2_cnt;
+    reg [2:0]  r_key2_sync;
+    reg        r_key2_d;
+    wire       key2_fall = ~r_key2_sync[2] & r_key2_d;
+    always @(posedge S_pixel_clk or negedge S_rst_n_pix) begin
+        if (!S_rst_n_pix) begin
+            r_key2_cnt <= 21'd0; r_key2_sync <= 3'd0; r_key2_d <= 1'b0; r_cv_on <= 1'b0;
+        end else begin
+            r_key2_sync <= {r_key2_sync[1:0], I_key2};
+            if (r_key2_cnt == 21'd1048575) begin   // ~14ms @75MHz
+                r_key2_cnt <= 21'd0;
+                r_key2_d   <= r_key2_sync[2];
+                if (key2_fall) r_cv_on <= ~r_cv_on;
+            end else begin
+                r_key2_cnt <= r_key2_cnt + 21'd1;
+            end
+        end
+    end
+
+    // osd_on = SW4&SW3 且 CV 关（CV 开时强制 0，纯摄像头画面）
+    wire S_osd_on = S_sw4_sync_pix[2] & S_sw3_sync_pix[2] & ~r_cv_on;
 
     wire        S_hdmi_out_vsync;
     wire        S_hdmi_out_hsync;
@@ -542,6 +573,9 @@ module design_top_wrapper (
     );
 
     // ============================================================ video_mux（自研，彩条 vs 摄像头二选一）
+    // 注：cv_top（M7 钢珠检测）暂摘除重写中，hdmi_mixer 直连 video_mux（等价 M6 接法）。
+    //     KEY2/cv_on 逻辑与串口 CV=/NB= 字段保留：按 KEY2 仍翻转 cv_on，串口报 CV=0/1；
+    //     cv_on=1 时经 osd_on 强制使 logo 消失（可验证按键+串口链路）；NB 恒 0（无检测）。
     wire [23:0] S_vid_data;
     wire        S_vid_de;
     wire        S_vid_vs;
@@ -607,13 +641,17 @@ module design_top_wrapper (
     // SW4/SW3 同步到 100M 域（供串口上报）
     reg [2:0] S_sw4_sync_100m;
     reg [2:0] S_sw3_sync_100m;
+    reg [2:0] S_cv_on_sync_100m;
+    // cv_top 暂摘除：blob_cnt 恒 0（串口报 NB=00）。cv_on 仍同步供串口 CV= 字段。
     always @(posedge S_clk_100m) begin
         if (!S_rst_n_100m) begin
             S_sw4_sync_100m <= 3'd0;
             S_sw3_sync_100m <= 3'd0;
+            S_cv_on_sync_100m <= 3'd0;
         end else begin
             S_sw4_sync_100m <= {S_sw4_sync_100m[1:0], I_sw4};
             S_sw3_sync_100m <= {S_sw3_sync_100m[1:0], I_sw3};
+            S_cv_on_sync_100m <= {S_cv_on_sync_100m[1:0], r_cv_on};
         end
     end
 
@@ -627,6 +665,8 @@ module design_top_wrapper (
         .I_ddr_rdy     ( S_ddr_rdy_s[1]      ),
         .I_sw4         ( S_sw4_sync_100m[2]  ),
         .I_sw3         ( S_sw3_sync_100m[2]  ),
+        .I_cv_on       ( S_cv_on_sync_100m[2]),
+        .I_blob_cnt    ( 6'd0               ),
         .O_uart_tx     ( O_uart_tx           )
     );
 

@@ -3,7 +3,7 @@
 // status_report.v — 状态串口上报（自研，M6 精简版）
 //
 // 每 REPEAT_MS 连发一行（115200 8N1）：
-//   CAM ID=<4hex> OK=<0/1> E=<0/1> CFG=<0/1> DDR=<0/1> SW4=<0/1> SW3=<0/1>\r\n
+//   CAM ID=<4hex> OK=<0/1> E=<0/1> CFG=<0/1> DDR=<0/1> SW4=<0/1> SW3=<0/1> CV=<0/1> NB=<2hex>\r\n
 //
 //   ID  = uicfgcs520 读回的 sensor ID（应为 9E4B）
 //   OK  = ID 校验通过
@@ -11,6 +11,8 @@
 //   CFG = 摄像头寄存器初始化完成（uicfgcs520.O_cfg_done）
 //   DDR = DDR2 校准完成（同步到 100M 域）
 //   SW4/SW3 = 模式开关（同步到 100M 域）
+//   CV  = 钢珠检测叠加开关（KEY2 翻转，同步到 100M 域）
+//   NB  = 当前帧检出的钢珠数（cv_top.O_blob_cnt，0..32）
 //=============================================================================
 module status_report #(
     parameter CLK_FREQ  = 100_000_000,
@@ -27,19 +29,21 @@ module status_report #(
     input  wire        I_ddr_rdy,
     input  wire        I_sw4,
     input  wire        I_sw3,
+    input  wire        I_cv_on,
+    input  wire [5:0]  I_blob_cnt,
 
     output wire        O_uart_tx
 );
 
     localparam integer REPEAT_CYC = (CLK_FREQ / 1000) * REPEAT_MS;
-    localparam [7:0]   LAST       = 8'd45;   // 字符表末索引（0..45 = 46 字节）
+    localparam [7:0]   LAST       = 8'd56;   // 字符表末索引（0..56 = 57 字节）
 
     function [7:0] hx(input [3:0] v);
         hx = (v < 4'd10) ? (8'h30 + {4'b0, v}) : (8'h37 + {4'b0, v});
     endfunction
 
-    // ---- 字符表（46 字节）----
-    wire [7:0] ln [0:45];
+    // ---- 字符表（57 字节）----
+    wire [7:0] ln [0:56];
 
     assign ln[0]  = "C";
     assign ln[1]  = "A";
@@ -85,8 +89,19 @@ module status_report #(
     assign ln[41] = "3";
     assign ln[42] = "=";
     assign ln[43] = I_sw3          ? "1" : "0";
-    assign ln[44] = 8'h0D;         // \r
-    assign ln[45] = 8'h0A;         // \n
+    assign ln[44] = " ";
+    assign ln[45] = "C";
+    assign ln[46] = "V";
+    assign ln[47] = "=";
+    assign ln[48] = I_cv_on        ? "1" : "0";
+    assign ln[49] = " ";
+    assign ln[50] = "N";
+    assign ln[51] = "B";
+    assign ln[52] = "=";
+    assign ln[53] = hx(I_blob_cnt[5:4]);
+    assign ln[54] = hx(I_blob_cnt[3:0]);
+    assign ln[55] = 8'h0D;         // \r
+    assign ln[56] = 8'h0A;         // \n
 
     // ---- 发送 FSM ----
     reg [31:0] S_wait_cnt;
