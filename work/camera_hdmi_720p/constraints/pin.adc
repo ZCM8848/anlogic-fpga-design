@@ -30,6 +30,9 @@ set_pin_assignment { I_button[1] }   { LOCATION = J14; IOSTANDARD = LVCMOS33; PU
 
 # ---- KEY2 板载按键（CV 叠加开关；手册 KEY2=A9）----
 set_pin_assignment { I_key2 }        { LOCATION = A9;  IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
+# ---- KEY3/KEY4 板载按键（CV 开时阈值 -/+；手册 KEY3=B9 / KEY4=C7）----
+set_pin_assignment { I_key3 }        { LOCATION = B9;  IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
+set_pin_assignment { I_key4 }        { LOCATION = C7;  IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
 
 # ---- 板载 USB-UART（USB-JTAG Cable Type-C 通道 B；uart_tx=H1）----
 set_pin_assignment { O_uart_tx }     { LOCATION = H1; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }

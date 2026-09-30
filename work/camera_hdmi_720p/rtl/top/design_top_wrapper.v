@@ -41,6 +41,8 @@ module design_top_wrapper (
     input  wire        I_sw4,            // D11（主选：0=彩条，1=摄像头）
     input  wire        I_sw3,            // E11（子选：0=edge，1=OSD彩色）
     input  wire        I_key2,           // A9 板载 KEY2（CV 叠加开关：按下切换 CV 开/关）
+    input  wire        I_key3,           // B9 板载 KEY3（CV 开时：阈值 -1）
+    input  wire        I_key4,           // C7 板载 KEY4（CV 开时：阈值 +1）
 
     // HDMI 1.4b TX
     output wire        O_tmds_ch0_p,     // G16
@@ -139,17 +141,10 @@ module design_top_wrapper (
     wire        S_cam_sensor_id_ok;
     wire        S_cam_i2c_error;
 
-    // cv_on 同步到 24m 域（喂 ae_set 门控：CV 开时禁用 AE，防曝光变化干扰阈值调参）
-    reg [1:0] r_cv_on_sync_24m;
-    always @(posedge S_24m_clk or negedge S_pll_lock) begin
-        if (!S_pll_lock) r_cv_on_sync_24m <= 2'b00;
-        else             r_cv_on_sync_24m <= {r_cv_on_sync_24m[0], r_cv_on};
-    end
-
     ae_set u_ae_set (
         .I_clk        ( S_24m_clk         ),
         .I_rst        ( ~S_pll_lock       ),
-        .I_btn        ( r_cv_on_sync_24m[1] ? 4'b1111 : {I_button, 2'b11} ),
+        .I_btn        ( {I_button, 2'b11} ),
         .I_cam_cfg_done( S_cam_cfg_done   ),
         .I_ae_cfg_done( S_ae_cfg_done     ),
         .O_ae_req     ( S_ae_req          ),
@@ -592,19 +587,19 @@ module design_top_wrapper (
     wire        S_cv_run_overflow;
     wire [7:0]  S_cv_bin_thr;
 
-    // N2/J14 在 CV 开时作阈值 ±1 调参（像素域去抖 → 单拍脉冲）
+    // K3(B9)/K4(C7) 板载按键：CV 开时作阈值 ±1 调参（像素域去抖 → 单拍脉冲）
     reg [20:0] r_btn_cnt;
     reg [2:0]  r_btn0_sync, r_btn1_sync;
     reg        r_btn0_d, r_btn1_d;
-    wire       btn0_fall = ~r_btn0_sync[2] & r_btn0_d;   // N2 按下（低有效）
-    wire       btn1_fall = ~r_btn1_sync[2] & r_btn1_d;   // J14 按下
+    wire       btn0_fall = ~r_btn0_sync[2] & r_btn0_d;   // K3 按下（低有效）
+    wire       btn1_fall = ~r_btn1_sync[2] & r_btn1_d;   // K4 按下
     always @(posedge S_pixel_clk or negedge S_rst_n_pix) begin
         if (!S_rst_n_pix) begin
             r_btn_cnt <= 21'd0; r_btn0_sync <= 3'd0; r_btn1_sync <= 3'd0;
             r_btn0_d <= 1'b0; r_btn1_d <= 1'b0;
         end else begin
-            r_btn0_sync <= {r_btn0_sync[1:0], I_button[0]};
-            r_btn1_sync <= {r_btn1_sync[1:0], I_button[1]};
+            r_btn0_sync <= {r_btn0_sync[1:0], I_key3};   // K3=B9
+            r_btn1_sync <= {r_btn1_sync[1:0], I_key4};   // K4=C7
             if (r_btn_cnt == 21'd1048575) begin
                 r_btn_cnt <= 21'd0;
                 r_btn0_d <= r_btn0_sync[2];
@@ -612,8 +607,8 @@ module design_top_wrapper (
             end else r_btn_cnt <= r_btn_cnt + 21'd1;
         end
     end
-    wire S_thr_dn = r_cv_on & btn0_fall;   // CV 开时 N2=阈值减
-    wire S_thr_up = r_cv_on & btn1_fall;   // CV 开时 J14=阈值加
+    wire S_thr_dn = r_cv_on & btn0_fall;   // CV 开时 K3=阈值减
+    wire S_thr_up = r_cv_on & btn1_fall;   // CV 开时 K4=阈值加
 
     cv_top #(
         .IMG_W    ( 1280   ),
