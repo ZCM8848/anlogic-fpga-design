@@ -3,7 +3,7 @@
 // status_report.v — 状态串口上报（自研，M6 精简版）
 //
 // 每 REPEAT_MS 连发一行（115200 8N1）：
-//   CAM ID=<4hex> OK=<0/1> E=<0/1> CFG=<0/1> DDR=<0/1> SW4=<0/1> SW3=<0/1> CV=<0/1> NB=<2hex>\r\n
+//   CAM ID=<4hex> OK=<0/1> E=<0/1> CFG=<0/1> DDR=<0/1> SW4=<0/1> SW3=<0/1> CV=<0/1> NB=<2hex> TH=<2hex>\r\n
 //
 //   ID  = uicfgcs520 读回的 sensor ID（应为 9E4B）
 //   OK  = ID 校验通过
@@ -12,7 +12,8 @@
 //   DDR = DDR2 校准完成（同步到 100M 域）
 //   SW4/SW3 = 模式开关（同步到 100M 域）
 //   CV  = 钢珠检测叠加开关（KEY2 翻转，同步到 100M 域）
-//   NB  = 当前帧检出的钢珠数（cv_top.O_blob_cnt，0..32）
+//   NB  = 当前帧检出的钢珠数（cv_top.O_blob_cnt，0..16）
+//   TH  = 当前亮度阈值（cv_top.O_bin_thr，运行期 N2/J14 可调）
 //=============================================================================
 module status_report #(
     parameter CLK_FREQ  = 100_000_000,
@@ -31,19 +32,20 @@ module status_report #(
     input  wire        I_sw3,
     input  wire        I_cv_on,
     input  wire [5:0]  I_blob_cnt,
+    input  wire [7:0]  I_bin_thr,
 
     output wire        O_uart_tx
 );
 
     localparam integer REPEAT_CYC = (CLK_FREQ / 1000) * REPEAT_MS;
-    localparam [7:0]   LAST       = 8'd56;   // 字符表末索引（0..56 = 57 字节）
+    localparam [7:0]   LAST       = 8'd62;   // 字符表末索引（0..62 = 63 字节）
 
     function [7:0] hx(input [3:0] v);
         hx = (v < 4'd10) ? (8'h30 + {4'b0, v}) : (8'h37 + {4'b0, v});
     endfunction
 
-    // ---- 字符表（57 字节）----
-    wire [7:0] ln [0:56];
+    // ---- 字符表（63 字节）----
+    wire [7:0] ln [0:62];
 
     assign ln[0]  = "C";
     assign ln[1]  = "A";
@@ -100,8 +102,14 @@ module status_report #(
     assign ln[52] = "=";
     assign ln[53] = hx(I_blob_cnt[5:4]);
     assign ln[54] = hx(I_blob_cnt[3:0]);
-    assign ln[55] = 8'h0D;         // \r
-    assign ln[56] = 8'h0A;         // \n
+    assign ln[55] = " ";
+    assign ln[56] = "T";
+    assign ln[57] = "H";
+    assign ln[58] = "=";
+    assign ln[59] = hx(I_bin_thr[7:4]);
+    assign ln[60] = hx(I_bin_thr[3:0]);
+    assign ln[61] = 8'h0D;         // \r
+    assign ln[62] = 8'h0A;         // \n
 
     // ---- 发送 FSM ----
     reg [31:0] S_wait_cnt;

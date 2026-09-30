@@ -102,6 +102,9 @@ module design_top_wrapper (
     // 异步复位最稳、且 TD 可走全局网络避免高扇出 recovery 违例）。本工程沿用。
     wire S_rst_n = S_pll_lock;
 
+    // CV 开关（前向声明：r_cv_on 在像素域 KEY2 段赋值，此处先声明供 ae_set/edge_on 早期引用）
+    reg r_cv_on;
+
     // ============================================================ 摄像头上电时序 + I2C 配置（参考件）
     reg  [17:0] S_cam_power_cnt;
     reg         S_cam_pwdnb;
@@ -136,10 +139,17 @@ module design_top_wrapper (
     wire        S_cam_sensor_id_ok;
     wire        S_cam_i2c_error;
 
+    // cv_on 同步到 24m 域（喂 ae_set 门控：CV 开时禁用 AE，防曝光变化干扰阈值调参）
+    reg [1:0] r_cv_on_sync_24m;
+    always @(posedge S_24m_clk or negedge S_pll_lock) begin
+        if (!S_pll_lock) r_cv_on_sync_24m <= 2'b00;
+        else             r_cv_on_sync_24m <= {r_cv_on_sync_24m[0], r_cv_on};
+    end
+
     ae_set u_ae_set (
         .I_clk        ( S_24m_clk         ),
         .I_rst        ( ~S_pll_lock       ),
-        .I_btn        ( {I_button, 2'b11} ),
+        .I_btn        ( r_cv_on_sync_24m[1] ? 4'b1111 : {I_button, 2'b11} ),
         .I_cam_cfg_done( S_cam_cfg_done   ),
         .I_ae_cfg_done( S_ae_cfg_done     ),
         .O_ae_req     ( S_ae_req          ),
@@ -287,8 +297,7 @@ module design_top_wrapper (
             S_sw3_sync_rx <= {S_sw3_sync_rx[1:0], I_sw3};
         end
     end
-    // CV 开关（r_cv_on 在像素域 KEY2 段赋值；此处先声明 + 同步到字节域供 edge_on 门控）
-    reg        r_cv_on;
+    // CV 开关（r_cv_on 在像素域 KEY2 段赋值；此处同步到字节域供 edge_on 门控）
     reg [2:0]  r_cv_on_sync_rx;
     always @(posedge S_csi_rx_clk or negedge S_rst_n_rx) begin
         if (!S_rst_n_rx) r_cv_on_sync_rx <= 3'd0;
@@ -581,6 +590,30 @@ module design_top_wrapper (
     wire [10:0] S_cv_run_cnt;
     wire        S_cv_ccl_busy;
     wire        S_cv_run_overflow;
+    wire [7:0]  S_cv_bin_thr;
+
+    // N2/J14 在 CV 开时作阈值 ±1 调参（像素域去抖 → 单拍脉冲）
+    reg [20:0] r_btn_cnt;
+    reg [2:0]  r_btn0_sync, r_btn1_sync;
+    reg        r_btn0_d, r_btn1_d;
+    wire       btn0_fall = ~r_btn0_sync[2] & r_btn0_d;   // N2 按下（低有效）
+    wire       btn1_fall = ~r_btn1_sync[2] & r_btn1_d;   // J14 按下
+    always @(posedge S_pixel_clk or negedge S_rst_n_pix) begin
+        if (!S_rst_n_pix) begin
+            r_btn_cnt <= 21'd0; r_btn0_sync <= 3'd0; r_btn1_sync <= 3'd0;
+            r_btn0_d <= 1'b0; r_btn1_d <= 1'b0;
+        end else begin
+            r_btn0_sync <= {r_btn0_sync[1:0], I_button[0]};
+            r_btn1_sync <= {r_btn1_sync[1:0], I_button[1]};
+            if (r_btn_cnt == 21'd1048575) begin
+                r_btn_cnt <= 21'd0;
+                r_btn0_d <= r_btn0_sync[2];
+                r_btn1_d <= r_btn1_sync[2];
+            end else r_btn_cnt <= r_btn_cnt + 21'd1;
+        end
+    end
+    wire S_thr_dn = r_cv_on & btn0_fall;   // CV 开时 N2=阈值减
+    wire S_thr_up = r_cv_on & btn1_fall;   // CV 开时 J14=阈值加
 
     cv_top #(
         .IMG_W    ( 1280   ),
@@ -590,11 +623,14 @@ module design_top_wrapper (
         .MAX_AREA ( 16'd20000 ),
         .MIN_FILL ( 6'd15  ),
         .MIN_RATIO( 6'd25  ),
-        .EDGE_MG  ( 12'd4  )
+        .EDGE_MG  ( 12'd4  ),
+        .MASK_VIEW( 1      )
     ) u_cv_top (
         .I_clk          ( S_pixel_clk      ),
         .I_rst_n        ( S_rst_n_pix      ),
         .I_cv_on        ( r_cv_on          ),
+        .I_thr_up       ( S_thr_up         ),
+        .I_thr_dn       ( S_thr_dn         ),
         .I_de           ( S_hdmi_out_de    ),
         .I_vs           ( S_hdmi_out_vsync ),
         .I_data         ( S_hdmi_out_data  ),
@@ -604,7 +640,8 @@ module design_top_wrapper (
         .O_blob_cnt     ( S_cv_blob_cnt    ),
         .O_run_cnt      ( S_cv_run_cnt     ),
         .O_ccl_busy     ( S_cv_ccl_busy    ),
-        .O_run_overflow ( S_cv_run_overflow)
+        .O_run_overflow ( S_cv_run_overflow),
+        .O_bin_thr      ( S_cv_bin_thr     )
     );
 
     // ============================================================ video_mux（自研，彩条 vs 摄像头二选一）
@@ -675,18 +712,22 @@ module design_top_wrapper (
     reg [2:0] S_sw3_sync_100m;
     reg [2:0] S_cv_on_sync_100m;
     reg [5:0] S_cv_blob_cnt_s1, S_cv_blob_cnt_s2;
+    reg [7:0] S_cv_bin_thr_s1, S_cv_bin_thr_s2;
     always @(posedge S_clk_100m) begin
         if (!S_rst_n_100m) begin
             S_sw4_sync_100m <= 3'd0;
             S_sw3_sync_100m <= 3'd0;
             S_cv_on_sync_100m <= 3'd0;
             S_cv_blob_cnt_s1 <= 6'd0; S_cv_blob_cnt_s2 <= 6'd0;
+            S_cv_bin_thr_s1 <= 8'd0;  S_cv_bin_thr_s2 <= 8'd0;
         end else begin
             S_sw4_sync_100m <= {S_sw4_sync_100m[1:0], I_sw4};
             S_sw3_sync_100m <= {S_sw3_sync_100m[1:0], I_sw3};
             S_cv_on_sync_100m <= {S_cv_on_sync_100m[1:0], r_cv_on};
-            S_cv_blob_cnt_s1 <= S_cv_blob_cnt;       // 6bit 慢变（帧级），2FF 同步足够
+            S_cv_blob_cnt_s1 <= S_cv_blob_cnt;
             S_cv_blob_cnt_s2 <= S_cv_blob_cnt_s1;
+            S_cv_bin_thr_s1  <= S_cv_bin_thr;        // 8bit 慢变（手动调），2FF 同步
+            S_cv_bin_thr_s2  <= S_cv_bin_thr_s1;
         end
     end
 
@@ -702,6 +743,7 @@ module design_top_wrapper (
         .I_sw3         ( S_sw3_sync_100m[2]  ),
         .I_cv_on       ( S_cv_on_sync_100m[2]),
         .I_blob_cnt    ( S_cv_blob_cnt_s2    ),
+        .I_bin_thr     ( S_cv_bin_thr_s2     ),
         .O_uart_tx     ( O_uart_tx           )
     );
 

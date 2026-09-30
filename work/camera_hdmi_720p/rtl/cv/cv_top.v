@@ -39,11 +39,15 @@ module cv_top #(
     parameter         MAX_RUNS  = 1024,   // run_mem 深度（溢出则饱和停写）
     parameter         MAX_RPR   = 32,     // 每行 run 缓存深度
     parameter         MAX_LABELS= 32,     // 临时标签上限（64 时 feature 读 mux 深度翻倍，暂 32）
-    parameter [11:0]  FBOX_W    = 12'd2   // 边框线宽（px，向内画）
+    parameter [11:0]  FBOX_W    = 12'd2,  // 边框线宽（px，向内画）
+    parameter         MASK_VIEW = 1       // 1=CV 模式显示二值掩膜(亮=白/暗=黑)+红框(诊断/调参)；
+                                         //   0=白框叠加在彩色画面上(原行为)
 )(
     input  wire        I_clk,
     input  wire        I_rst_n,
     input  wire        I_cv_on,
+    input  wire        I_thr_up,        // 运行期 BIN_THR +1（单拍脉冲，已去抖）
+    input  wire        I_thr_dn,        // 运行期 BIN_THR -1
     input  wire        I_de,
     input  wire        I_vs,
     input  wire [23:0] I_data,
@@ -53,7 +57,8 @@ module cv_top #(
     output wire [5:0]  O_blob_cnt,
     output wire [10:0] O_run_cnt,
     output wire        O_ccl_busy,
-    output wire        O_run_overflow
+    output wire        O_run_overflow,
+    output wire [7:0]  O_bin_thr        // 当前阈值（供串口 TH= 上报）
 );
     localparam FW  = 1 + 12 + 12 + 12 + 12 + 16; // 65  feature entry
     localparam RPW = (MAX_RPR == 32) ? 5 : 6;
@@ -80,11 +85,12 @@ module cv_top #(
     end
 
     // ======================================================================
-    // 亮度 + 阈值
+    // 亮度 + 阈值（运行期可调 r_bin_thr）
     // ======================================================================
+    reg [7:0] r_bin_thr;
     wire [7:0] w_y =
         {2'b0, I_data[23:18]} + {1'b0, I_data[15:9]} + {2'b0, I_data[7:2]};
-    wire       w_mask = (w_y > BIN_THR);
+    wire       w_mask = (w_y > r_bin_thr);
 
     // ======================================================================
     // 存储
@@ -179,8 +185,12 @@ module cv_top #(
         if (!I_rst_n) begin
             r_run_wr <= 11'd0; r_run_cnt <= 11'd0; r_run_act <= 1'b0;
             r_run_xs <= 12'd0; r_run_xe <= 12'd0; r_run_overflow <= 1'b0; r_de_d <= 1'b0;
+            r_bin_thr <= BIN_THR;
         end else begin
             r_de_d <= I_de;
+            // 运行期阈值调节（CV 调参：N2 减 / J14 加，顶层去抖后单拍脉冲）
+            if (I_thr_up && r_bin_thr != 8'hFF) r_bin_thr <= r_bin_thr + 8'd1;
+            else if (I_thr_dn && r_bin_thr != 8'h00) r_bin_thr <= r_bin_thr - 8'd1;
             if (vs_rise) begin
                 if (r_run_act && (r_run_wr < MAX_RUNS)) begin
                     run_mem[r_run_wr] <= {r_y[9:0], r_run_xs, r_run_xe};
@@ -330,14 +340,19 @@ module cv_top #(
     end
 
     // ======================================================================
-    // 输出
+    // 输出（组合直通；CV 开时显示机器视角）
+    //   MASK_VIEW=1：二值掩膜(亮=白/暗=黑) + 红框(bbox)——诊断/调参
+    //   MASK_VIEW=0：白框叠加在彩色画面上——原行为
     // ======================================================================
+    wire [23:0] cv_base = (MASK_VIEW != 0) ? (w_mask ? 24'hFFFFFF : 24'h000000) : I_data;
+    wire [23:0] cv_box  = (MASK_VIEW != 0) ? 24'hFF0000 : 24'hFFFFFF;
     assign O_de   = I_de;
     assign O_vs   = I_vs;
-    assign O_data = (I_cv_on && r_border && I_de) ? 24'hFFFFFF : I_data;
+    assign O_data = (I_cv_on && I_de) ? (r_border ? cv_box : cv_base) : I_data;
 
     assign O_blob_cnt     = r_collect;
     assign O_run_cnt      = r_run_cnt;
     assign O_run_overflow = r_run_overflow;
+    assign O_bin_thr      = r_bin_thr;
 
 endmodule
