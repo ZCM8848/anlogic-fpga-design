@@ -340,7 +340,7 @@ MIPI HS=1 F=000012 L=0720 W=01280 G=0320 ER=00 HW=2B0640xx PW=xxxx PL=0000 HC=0 
 - 顶层：KEY2 去抖（~14ms 计数采样）翻转 `r_cv_on` + 跨域同步（pixel/byte/100M）；`status_report` 加 `CV=/NB=`；`pin.adc` 加 `I_key2→A9`。
 
 **调参**（`rtl/cv/cv_top.v` 顶部 parameter，编译期，改完 run.bat 重建）：
-- `BIN_THR`(120)：亮度阈值。↑只留更亮核心噪声少但漏暗反光；↓检出多但噪声多。
+- `BIN_THR`(91)：亮度阈值。↑只留更亮核心噪声少但漏暗反光；↓检出多但噪声多。（固化值 91=当前光照实测最佳；环境变时先 K3/K4 运行期调，再填此处重建。）
 - `MIN_AREA`(8)/`MAX_AREA`(20000)：blob 像素数上下限。
 - `MIN_FILL`(15%)：area/box 填充率，去稀疏噪声。
 - `MIN_RATIO`(25%)：长短边比，圆球近 100，去细长条。

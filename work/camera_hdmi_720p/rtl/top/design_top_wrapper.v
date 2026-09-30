@@ -621,7 +621,7 @@ module design_top_wrapper (
     cv_top #(
         .IMG_W    ( 1280   ),
         .IMG_H    ( 720    ),
-        .BIN_THR  ( 8'd120 ),
+        .BIN_THR  ( 8'd91  ),
         .MIN_AREA ( 16'd8  ),
         .MAX_AREA ( 16'd20000 ),
         .MIN_FILL ( 6'd15  ),
