@@ -588,27 +588,35 @@ module design_top_wrapper (
     wire [7:0]  S_cv_bin_thr;
 
     // K3(B9)/K4(C7) 板载按键：CV 开时作阈值 ±1 调参（像素域去抖 → 单拍脉冲）
+    // 注：脉冲必须单拍——cv_top 每周期判 I_thr_up/dn，若发 14ms 电平会被加到饱和
+    //     （K4 一次冲到 255 全黑、K3 冲到 0 全白）。故只在「检测到按下的那个溢出周期」
+    //     置 1，下一周期清 0（与 KEY2 翻转同模式：在溢出分支内评估一次）。
     reg [20:0] r_btn_cnt;
     reg [2:0]  r_btn0_sync, r_btn1_sync;
     reg        r_btn0_d, r_btn1_d;
-    wire       btn0_fall = ~r_btn0_sync[2] & r_btn0_d;   // K3 按下（低有效）
-    wire       btn1_fall = ~r_btn1_sync[2] & r_btn1_d;   // K4 按下
+    reg        R_thr_dn, R_thr_up;
     always @(posedge S_pixel_clk or negedge S_rst_n_pix) begin
         if (!S_rst_n_pix) begin
             r_btn_cnt <= 21'd0; r_btn0_sync <= 3'd0; r_btn1_sync <= 3'd0;
             r_btn0_d <= 1'b0; r_btn1_d <= 1'b0;
+            R_thr_dn <= 1'b0; R_thr_up <= 1'b0;
         end else begin
             r_btn0_sync <= {r_btn0_sync[1:0], I_key3};   // K3=B9
             r_btn1_sync <= {r_btn1_sync[1:0], I_key4};   // K4=C7
             if (r_btn_cnt == 21'd1048575) begin
                 r_btn_cnt <= 21'd0;
-                r_btn0_d <= r_btn0_sync[2];
-                r_btn1_d <= r_btn1_sync[2];
-            end else r_btn_cnt <= r_btn_cnt + 21'd1;
+                // 用 OLD r_btn_d（按下前=1）与当前采样（按下=0）判下降沿，单拍置 1
+                R_thr_dn  <= r_cv_on & (~r_btn0_sync[2] & r_btn0_d);
+                R_thr_up  <= r_cv_on & (~r_btn1_sync[2] & r_btn1_d);
+                r_btn0_d  <= r_btn0_sync[2];
+                r_btn1_d  <= r_btn1_sync[2];
+            end else begin
+                r_btn_cnt <= r_btn_cnt + 21'd1;
+                R_thr_dn  <= 1'b0;   // 其余周期清 0 → 脉冲只有 1 拍
+                R_thr_up  <= 1'b0;
+            end
         end
     end
-    wire S_thr_dn = r_cv_on & btn0_fall;   // CV 开时 K3=阈值减
-    wire S_thr_up = r_cv_on & btn1_fall;   // CV 开时 K4=阈值加
 
     cv_top #(
         .IMG_W    ( 1280   ),
@@ -624,8 +632,8 @@ module design_top_wrapper (
         .I_clk          ( S_pixel_clk      ),
         .I_rst_n        ( S_rst_n_pix      ),
         .I_cv_on        ( r_cv_on          ),
-        .I_thr_up       ( S_thr_up         ),
-        .I_thr_dn       ( S_thr_dn         ),
+        .I_thr_up       ( R_thr_up         ),
+        .I_thr_dn       ( R_thr_dn         ),
         .I_de           ( S_hdmi_out_de    ),
         .I_vs           ( S_hdmi_out_vsync ),
         .I_data         ( S_hdmi_out_data  ),
