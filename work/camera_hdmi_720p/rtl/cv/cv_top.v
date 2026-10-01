@@ -18,18 +18,20 @@
 module cv_top #(
     parameter IMG_W            = 1280,
     parameter IMG_H            = 720,
-    parameter [7:0]  BIN_THR   = 8'd91,   // 初始/回退阈值（Otsu 失效或 OTSU_EN=0 时用）
-    parameter [15:0] MIN_AREA  = 16'd8,
-    parameter [15:0] MAX_AREA  = 16'd20000,
-    parameter [5:0]  MIN_FILL  = 6'd15,
-    parameter [5:0]  MIN_RATIO = 6'd25,
+    parameter [7:0]  BIN_THR   = 8'd91,   // 亮阈值回退值（MASK_SRC=0 时用）
+    parameter [15:0] MIN_AREA  = 16'd20,  // 圆环面积(周长)下限
+    parameter [15:0] MAX_AREA  = 16'd500,  // 圆环面积上限
+    parameter [5:0]  MIN_FILL  = 6'd5,    // 圆环空心→低填充率
+    parameter [5:0]  MIN_RATIO = 6'd60,   // 圆球 bbox 近正方形→高长短比
     parameter [11:0] EDGE_MG   = 12'd4,
-    parameter         MAX_BLOBS = 8,     // 叠加/track/det 比较+ID 字体实例数（16 时 slice 超 21216，暂 8）
+    parameter         MAX_BLOBS = 8,
     parameter         MAX_RUNS  = 1024,
     parameter         MAX_RPR   = 32,
     parameter         MAX_LABELS= 32,
     parameter [11:0]  FBOX_W    = 12'd2,
     parameter         MASK_VIEW = 1,
+    parameter         MASK_SRC  = 1,       // 1=Sobel 边缘圆环(默认); 0=亮阈值(回退对比)
+    parameter [10:0]  EDGE_THR  = 11'd80,  // Sobel 幅值阈值(同 edge_detect_96)；K3/K4 调偏置
     parameter [7:0]  ALPHA_Q   = 8'd160,  // a*256 ~=0.625（位置增益）
     parameter [7:0]  BETA_Q    = 8'd48,   // b*256 ~=0.1875（速度增益）
     parameter [11:0] GATE      = 12'd80,  // 配对最大 Manhattan 距离
@@ -77,9 +79,41 @@ module cv_top #(
     // ---------- 亮度 + 阈值 ----------
     wire [7:0] w_y = {2'b0,I_data[23:18]} + {1'b0,I_data[15:9]} + {2'b0,I_data[7:2]};
     reg  [7:0] r_otsu_thr, r_user_off, r_bin_thr;
-    wire [8:0] thr_plus = {1'b0,r_otsu_thr} + {1'b0,r_user_off};
+    // 当前生效阈值：MASK_SRC=1(边缘)用 EDGE_THR+偏置；=0(亮阈值)用 midpoint+偏置
+    wire [7:0] base_thr = MASK_SRC ? EDGE_THR[7:0] : r_otsu_thr;
+    wire [8:0] thr_plus = {1'b0,base_thr} + {1'b0,r_user_off};
     wire [7:0] eff_thr  = (thr_plus>9'd255) ? 8'd255 : (thr_plus[8] ? 8'd0 : thr_plus[7:0]);
-    wire       w_mask = (w_y > (OTSU_EN ? eff_thr : r_bin_thr));
+
+    // ---------- Sobel 边缘检测（3x3，2 行缓存，async-read BRAM，仿 edge_detect_96）----------
+    //  输出 w_sobel_mag 为像素 (r_x-1, r_y-1) 的幅值（1 列+1 行延迟，整体偏移 1px 不可见）。
+    (* ram_style="block" *) reg [7:0] sob_l1 [0:IMG_W-1];  // row y-1
+    (* ram_style="block" *) reg [7:0] sob_l2 [0:IMG_W-1];  // row y-2
+    wire [7:0] mid_word = sob_l1[r_x];   // row y-1 @ r_x（async read，旧值）
+    wire [7:0] top_word = sob_l2[r_x];   // row y-2 @ r_x
+    reg [7:0] top_p2, top_p1, mid_p2, mid_p1, bot_p2, bot_p1;
+    // Sobel Gx/Gy @ center (r_x-1, r_y-1)
+    //  窗口: top={top_p2,top_p1,top_word} mid={mid_p2,mid_p1,mid_word} bot={bot_p2,bot_p1,w_y}
+    wire signed [13:0] gx = $signed({5'b0,top_p2}) + ($signed({5'b0,top_p1})<<<1) + $signed({5'b0,top_word})
+                         - $signed({5'b0,bot_p2}) - ($signed({5'b0,bot_p1})<<<1) - $signed({5'b0,w_y});
+    wire signed [13:0] gy = $signed({5'b0,top_p2}) + ($signed({5'b0,mid_p2})<<<1) + $signed({5'b0,bot_p2})
+                         - $signed({5'b0,top_word}) - ($signed({5'b0,mid_word})<<<1) - $signed({5'b0,w_y});
+    wire [13:0] abs_gx = gx[13] ? (~gx + 1) : gx;
+    wire [13:0] abs_gy = gy[13] ? (~gy + 1) : gy;
+    wire [14:0] w_sobel_mag = {1'b0,abs_gx} + {1'b0,abs_gy};
+    wire        w_edge_mask = (r_y >= 12'd2) && (r_x >= 12'd2) && (w_sobel_mag > {4'b0, eff_thr});
+    // 行缓存写+列延迟（clocked）
+    always @(posedge I_clk) begin
+        if (I_de) begin
+            sob_l1[r_x] <= w_y;            // 当前行写 l1（下帧作 row y-1）
+            sob_l2[r_x] <= mid_word;       // l1 旧值写 l2（作 row y-2）
+            top_p2 <= top_p1; top_p1 <= top_word;
+            mid_p2 <= mid_p1; mid_p1 <= mid_word;
+            bot_p2 <= bot_p1; bot_p1 <= w_y;
+        end
+    end
+
+    // ---------- 检测掩膜：MASK_SRC=1 边缘圆环；=0 亮阈值 ----------
+    wire w_mask = MASK_SRC ? w_edge_mask : (w_y > eff_thr);
 
     // ---------- 存储 ----------
     (* ram_style="block" *) reg [33:0]  run_mem [0:MAX_RUNS-1];
