@@ -27,7 +27,8 @@ $files = foreach ($p in $Paths) {
             Where-Object {
                 $_.Name -notlike "*.enc.v" -and
                 $_.Name -notlike "*.enc.sv" -and
-                $_.FullName -notmatch "[\\/]ip[\\/]"
+                $_.FullName -notmatch "[\\/]ip[\\/]" -and
+                $_.FullName -notmatch "[\\/]retired[\\/]"
             }
     }
 }

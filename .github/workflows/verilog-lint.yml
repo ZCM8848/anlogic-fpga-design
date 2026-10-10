@@ -37,6 +37,7 @@ jobs:
             case "$f" in
               *.enc.v|*.enc.sv) continue;;
               */ip/*) continue;;
+              */retired/*) continue;;
             esac
             files+=("$f")
           done
