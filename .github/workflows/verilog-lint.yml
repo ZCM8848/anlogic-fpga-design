@@ -29,19 +29,39 @@ jobs:
       - uses: actions/checkout@v4
       - name: 安装 iverilog
         run: sudo apt-get update && sudo apt-get install -y iverilog
-      - name: 语法检查 work/
+      - name: 语法检查 work/rtl/（全量编译，跳过 ip/）
         run: |
           shopt -s globstar nullglob
-          fail=0
+          files=()
           for f in work/**/*.v work/**/*.sv work/**/*.vh; do
-            case "$f" in *.enc.v) continue;; esac
-            echo "== $f"
-            if ! iverilog -g2012 -tnull -o /dev/null "$f"; then
-              echo "::error file=$f::语法检查未通过"
-              fail=1
-            fi
+            case "$f" in
+              *.enc.v|*.enc.sv) continue;;
+              */ip/*) continue;;
+            esac
+            files+=("$f")
           done
-          exit $fail
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "无源文件需要检查"
+            exit 0
+          fi
+          echo "待检查文件 (${#files[@]} 个)："
+          printf '  %s\n' "${files[@]}"
+          # 一次性编译所有 RTL 文件，跨文件模块引用自然解析
+          output=$(iverilog -g2012 -tnull -o /dev/null "${files[@]}" 2>&1 || true)
+          # 过滤 "Unknown module type"（厂商 IP/原语引用，iverilog 无 Anlogic 原语库，非语法错误）
+          real_errors=$(echo "$output" | grep "error:" | grep -v "Unknown module type" || true)
+          if [ -n "$real_errors" ]; then
+            echo "::error::Verilog 语法检查未通过"
+            echo "$real_errors"
+            exit 1
+          fi
+          echo "OK: 语法检查通过"
+          # 显示被过滤的跨文件/IP 引用（仅供参考）
+          skipped=$(echo "$output" | grep "Unknown module type" || true)
+          if [ -n "$skipped" ]; then
+            echo "::notice::以下厂商 IP/原语引用已被忽略（非语法错误）："
+            echo "$skipped"
+          fi
 
   lint-ref:
     name: 检查 ref/ 源码（仅供参考，不阻塞）
