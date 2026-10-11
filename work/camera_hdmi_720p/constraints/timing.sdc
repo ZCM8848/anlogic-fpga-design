@@ -34,4 +34,4 @@ set_clock_groups -asynchronous \
     -group [get_clocks {mipi_rx_ck_pad MIPI_RX_BYTE_CLK}] \
     -group [get_clocks {sys_clk_50m pll_clk_100m pll_clk_24m HDMI_PIXEL_CLK HDMI_SERIAL_CLK}] \
     -group [get_clocks {u_ph1p35_324_ddr_wrapper/u_ddr2/ddr_clk u_ph1p35_324_ddr_wrapper/u_ddr2/usr_clk}] \
-    -group [get_clocks {pll_clk_300m u_ps/u_MCU/MCU_f9f874759a41_Inst/PH1P_PHY_MCU_Inst.core_clk}]
+    -group [get_clocks {pll_clk_300m u_ps/u_MCU/MCU_954571a4a1d3_Inst/PH1P_PHY_MCU_Inst.core_clk}]

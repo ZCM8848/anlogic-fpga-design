@@ -1,229 +1,41 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<ipxact:component xmlns:anlogic="http" xsi:schemaLocation="http://www.accellera.org/XMLSchema/IPXACT/1685-2014 http://www.accellera.org/XMLSchema/IPXACT/1685-2014/index.xsd" xmlns:ipxact="http://www.accellera.org/XMLSchema/IPXACT/1685-2014" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<ipxact:component xmlns:anlogic="http" xmlns:ipxact="http://www.accellera.org/XMLSchema/IPXACT/1685-2014" xsi:schemaLocation="http://www.accellera.org/XMLSchema/IPXACT/1685-2014 http://www.accellera.org/XMLSchema/IPXACT/1685-2014/index.xsd" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
     <ipxact:vendor>anlogic.com</ipxact:vendor>
     <ipxact:library>customized</ipxact:library>
-    <ipxact:name>MCU</ipxact:name>
+    <ipxact:name>mcu</ipxact:name>
+    <ipxact:displayName/>
     <ipxact:version>1.0</ipxact:version>
     <ipxact:model>
         <ipxact:views>
             <ipxact:view>
-                <ipxact:name>MCU_RTL</ipxact:name>
-                <ipxact:componentInstantiationRef>MCU</ipxact:componentInstantiationRef>
-                <ipxact:designInstantiationRef>design_MCU_Inst</ipxact:designInstantiationRef>
-                <ipxact:designConfigurationInstantiationRef>designConfig_MCU_Inst</ipxact:designConfigurationInstantiationRef>
+                <ipxact:name>mcu_RTL</ipxact:name>
+                <ipxact:componentInstantiationRef>mcu</ipxact:componentInstantiationRef>
+                <ipxact:designInstantiationRef>design_mcu_Inst</ipxact:designInstantiationRef>
+                <ipxact:designConfigurationInstantiationRef>designConfig_mcu_Inst</ipxact:designConfigurationInstantiationRef>
             </ipxact:view>
         </ipxact:views>
         <ipxact:instantiations>
             <ipxact:componentInstantiation>
-                <ipxact:name>MCU</ipxact:name>
+                <ipxact:name>mcu</ipxact:name>
                 <ipxact:language>verilog</ipxact:language>
-                <ipxact:moduleName>MCU</ipxact:moduleName>
+                <ipxact:moduleName>mcu</ipxact:moduleName>
                 <ipxact:fileSetRef>
-                    <ipxact:localName>fs-MCU</ipxact:localName>
+                    <ipxact:localName>fs-mcu</ipxact:localName>
                 </ipxact:fileSetRef>
             </ipxact:componentInstantiation>
             <ipxact:designInstantiation>
-                <ipxact:name>design_MCU_Inst</ipxact:name>
-                <ipxact:designRef name="design_MCU" vendor="anlogic.com" version="1.0" library="customized"/>
+                <ipxact:name>design_mcu_Inst</ipxact:name>
+                <ipxact:designRef vendor="anlogic.com" library="customized" name="design_mcu" version="1.0"/>
             </ipxact:designInstantiation>
             <ipxact:designConfigurationInstantiation>
-                <ipxact:name>designConfig_MCU_Inst</ipxact:name>
-                <ipxact:designConfigurationRef name="designConfig_MCU" vendor="anlogic.com" version="1.0" library="customized"/>
+                <ipxact:name>designConfig_mcu_Inst</ipxact:name>
+                <ipxact:designConfigurationRef vendor="anlogic.com" library="customized" name="designConfig_mcu" version="1.0"/>
             </ipxact:designConfigurationInstantiation>
         </ipxact:instantiations>
         <ipxact:ports>
             <ipxact:port>
-                <ipxact:name>jtag_tck</ipxact:name>
-                <ipxact:displayName>jtag_tck</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>in</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>jtag_tms</ipxact:name>
-                <ipxact:displayName>jtag_tms</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>in</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>jtag_tdi</ipxact:name>
-                <ipxact:displayName>jtag_tdi</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>in</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>jtag_tdo</ipxact:name>
-                <ipxact:displayName>jtag_tdo</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>out</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>gpio0_in</ipxact:name>
-                <ipxact:displayName>gpio0_in</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>in</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>gpio0_out</ipxact:name>
-                <ipxact:displayName>gpio0_out</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>out</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>gpio0_dir</ipxact:name>
-                <ipxact:displayName>gpio0_dir</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>out</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>gpio1_in</ipxact:name>
-                <ipxact:displayName>gpio1_in</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>in</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>gpio1_out</ipxact:name>
-                <ipxact:displayName>gpio1_out</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>out</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>gpio1_dir</ipxact:name>
-                <ipxact:displayName>gpio1_dir</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>out</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>gpio2_in</ipxact:name>
-                <ipxact:displayName>gpio2_in</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>in</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>gpio2_out</ipxact:name>
-                <ipxact:displayName>gpio2_out</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>out</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>gpio2_dir</ipxact:name>
-                <ipxact:displayName>gpio2_dir</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>out</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>gpio3_in</ipxact:name>
-                <ipxact:displayName>gpio3_in</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>in</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>gpio3_out</ipxact:name>
-                <ipxact:displayName>gpio3_out</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>out</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>gpio3_dir</ipxact:name>
-                <ipxact:displayName>gpio3_dir</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>out</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>gpio4_in</ipxact:name>
-                <ipxact:displayName>gpio4_in</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>in</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>gpio4_out</ipxact:name>
-                <ipxact:displayName>gpio4_out</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>out</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>gpio4_dir</ipxact:name>
-                <ipxact:displayName>gpio4_dir</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>out</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>gpio5_in</ipxact:name>
-                <ipxact:displayName>gpio5_in</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>in</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>gpio5_out</ipxact:name>
-                <ipxact:displayName>gpio5_out</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>out</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>gpio5_dir</ipxact:name>
-                <ipxact:displayName>gpio5_dir</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>out</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>gpio6_in</ipxact:name>
-                <ipxact:displayName>gpio6_in</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>in</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>gpio6_out</ipxact:name>
-                <ipxact:displayName>gpio6_out</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>out</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>gpio6_dir</ipxact:name>
-                <ipxact:displayName>gpio6_dir</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>out</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>gpio7_in</ipxact:name>
-                <ipxact:displayName>gpio7_in</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>in</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>gpio7_out</ipxact:name>
-                <ipxact:displayName>gpio7_out</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>out</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>gpio7_dir</ipxact:name>
-                <ipxact:displayName>gpio7_dir</ipxact:displayName>
+                <ipxact:name>core_sysrst</ipxact:name>
+                <ipxact:displayName>core_sysrst</ipxact:displayName>
                 <ipxact:wire>
                     <ipxact:direction>out</ipxact:direction>
                 </ipxact:wire>
@@ -240,103 +52,6 @@
                 <ipxact:displayName>uart0_rx</ipxact:displayName>
                 <ipxact:wire>
                     <ipxact:direction>in</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>uart1_tx</ipxact:name>
-                <ipxact:displayName>uart1_tx</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>out</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>uart1_rx</ipxact:name>
-                <ipxact:displayName>uart1_rx</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>in</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>qspi1_clk</ipxact:name>
-                <ipxact:displayName>qspi1_clk</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>out</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>qspi1_ss</ipxact:name>
-                <ipxact:displayName>qspi1_ss</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>out</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>qspi1_d0_in</ipxact:name>
-                <ipxact:displayName>qspi1_d0_in</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>in</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>qspi1_d1_in</ipxact:name>
-                <ipxact:displayName>qspi1_d1_in</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>in</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>qspi1_d2_in</ipxact:name>
-                <ipxact:displayName>qspi1_d2_in</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>in</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>qspi1_d3_in</ipxact:name>
-                <ipxact:displayName>qspi1_d3_in</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>in</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>qspi1_d0_out</ipxact:name>
-                <ipxact:displayName>qspi1_d0_out</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>out</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>qspi1_d1_out</ipxact:name>
-                <ipxact:displayName>qspi1_d1_out</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>out</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>qspi1_d2_out</ipxact:name>
-                <ipxact:displayName>qspi1_d2_out</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>out</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>qspi1_d3_out</ipxact:name>
-                <ipxact:displayName>qspi1_d3_out</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>out</ipxact:direction>
-                </ipxact:wire>
-            </ipxact:port>
-            <ipxact:port>
-                <ipxact:name>qspi1_dir</ipxact:name>
-                <ipxact:displayName>qspi1_dir</ipxact:displayName>
-                <ipxact:wire>
-                    <ipxact:direction>out</ipxact:direction>
-                    <ipxact:vectors>
-                        <ipxact:vector>
-                            <ipxact:left>3</ipxact:left>
-                            <ipxact:right>0</ipxact:right>
-                        </ipxact:vector>
-                    </ipxact:vectors>
                 </ipxact:wire>
             </ipxact:port>
             <ipxact:port>
@@ -639,10 +354,10 @@
         <ipxact:busInterface>
             <ipxact:name>APB</ipxact:name>
             <ipxact:displayName>APB</ipxact:displayName>
-            <ipxact:busType name="APB" vendor="anlogic.com" version="1.0" library="bus"/>
+            <ipxact:busType vendor="anlogic.com" library="bus" name="APB" version="1.0"/>
             <ipxact:abstractionTypes>
                 <ipxact:abstractionType>
-                    <ipxact:abstractionRef name="APB_rtl" vendor="anlogic.com" version="1.0" library="bus"/>
+                    <ipxact:abstractionRef vendor="anlogic.com" library="bus" name="APB_rtl" version="1.0"/>
                     <ipxact:portMaps>
                         <ipxact:portMap>
                             <ipxact:logicalPort>
@@ -734,10 +449,10 @@
         <ipxact:busInterface>
             <ipxact:name>AHB</ipxact:name>
             <ipxact:displayName>AHB</ipxact:displayName>
-            <ipxact:busType name="AHB" vendor="anlogic.com" version="1.0" library="bus"/>
+            <ipxact:busType vendor="anlogic.com" library="bus" name="AHB" version="1.0"/>
             <ipxact:abstractionTypes>
                 <ipxact:abstractionType>
-                    <ipxact:abstractionRef name="AHB_rtl" vendor="anlogic.com" version="1.0" library="bus"/>
+                    <ipxact:abstractionRef vendor="anlogic.com" library="bus" name="AHB_rtl" version="1.0"/>
                     <ipxact:portMaps>
                         <ipxact:portMap>
                             <ipxact:logicalPort>
@@ -837,10 +552,10 @@
         <ipxact:busInterface>
             <ipxact:name>APB_PCLK</ipxact:name>
             <ipxact:displayName>APB_PCLK</ipxact:displayName>
-            <ipxact:busType name="clock" vendor="anlogic.com" version="1.0" library="bus"/>
+            <ipxact:busType vendor="anlogic.com" library="bus" name="clock" version="1.0"/>
             <ipxact:abstractionTypes>
                 <ipxact:abstractionType>
-                    <ipxact:abstractionRef name="clock_rtl" vendor="anlogic.com" version="1.0" library="bus"/>
+                    <ipxact:abstractionRef vendor="anlogic.com" library="bus" name="clock_rtl" version="1.0"/>
                     <ipxact:portMaps>
                         <ipxact:portMap>
                             <ipxact:logicalPort>
@@ -858,10 +573,10 @@
         <ipxact:busInterface>
             <ipxact:name>AHB_HCLK</ipxact:name>
             <ipxact:displayName>AHB_HCLK</ipxact:displayName>
-            <ipxact:busType name="clock" vendor="anlogic.com" version="1.0" library="bus"/>
+            <ipxact:busType vendor="anlogic.com" library="bus" name="clock" version="1.0"/>
             <ipxact:abstractionTypes>
                 <ipxact:abstractionType>
-                    <ipxact:abstractionRef name="clock_rtl" vendor="anlogic.com" version="1.0" library="bus"/>
+                    <ipxact:abstractionRef vendor="anlogic.com" library="bus" name="clock_rtl" version="1.0"/>
                     <ipxact:portMaps>
                         <ipxact:portMap>
                             <ipxact:logicalPort>
@@ -879,10 +594,10 @@
         <ipxact:busInterface>
             <ipxact:name>core_clk</ipxact:name>
             <ipxact:displayName>core_clk</ipxact:displayName>
-            <ipxact:busType name="clock" vendor="anlogic.com" version="1.0" library="bus"/>
+            <ipxact:busType vendor="anlogic.com" library="bus" name="clock" version="1.0"/>
             <ipxact:abstractionTypes>
                 <ipxact:abstractionType>
-                    <ipxact:abstractionRef name="clock_rtl" vendor="anlogic.com" version="1.0" library="bus"/>
+                    <ipxact:abstractionRef vendor="anlogic.com" library="bus" name="clock_rtl" version="1.0"/>
                     <ipxact:portMaps>
                         <ipxact:portMap>
                             <ipxact:logicalPort>
@@ -900,10 +615,10 @@
         <ipxact:busInterface>
             <ipxact:name>timer_clk</ipxact:name>
             <ipxact:displayName>timer_clk</ipxact:displayName>
-            <ipxact:busType name="clock" vendor="anlogic.com" version="1.0" library="bus"/>
+            <ipxact:busType vendor="anlogic.com" library="bus" name="clock" version="1.0"/>
             <ipxact:abstractionTypes>
                 <ipxact:abstractionType>
-                    <ipxact:abstractionRef name="clock_rtl" vendor="anlogic.com" version="1.0" library="bus"/>
+                    <ipxact:abstractionRef vendor="anlogic.com" library="bus" name="clock_rtl" version="1.0"/>
                     <ipxact:portMaps>
                         <ipxact:portMap>
                             <ipxact:logicalPort>
@@ -921,10 +636,10 @@
         <ipxact:busInterface>
             <ipxact:name>core_reset</ipxact:name>
             <ipxact:displayName>core_reset</ipxact:displayName>
-            <ipxact:busType name="reset" vendor="anlogic.com" version="1.0" library="bus"/>
+            <ipxact:busType vendor="anlogic.com" library="bus" name="reset" version="1.0"/>
             <ipxact:abstractionTypes>
                 <ipxact:abstractionType>
-                    <ipxact:abstractionRef name="reset_rtl" vendor="anlogic.com" version="1.0" library="bus"/>
+                    <ipxact:abstractionRef vendor="anlogic.com" library="bus" name="reset_rtl" version="1.0"/>
                     <ipxact:portMaps>
                         <ipxact:portMap>
                             <ipxact:logicalPort>
@@ -942,10 +657,10 @@
         <ipxact:busInterface>
             <ipxact:name>por_reset</ipxact:name>
             <ipxact:displayName>por_reset</ipxact:displayName>
-            <ipxact:busType name="reset" vendor="anlogic.com" version="1.0" library="bus"/>
+            <ipxact:busType vendor="anlogic.com" library="bus" name="reset" version="1.0"/>
             <ipxact:abstractionTypes>
                 <ipxact:abstractionType>
-                    <ipxact:abstractionRef name="reset_rtl" vendor="anlogic.com" version="1.0" library="bus"/>
+                    <ipxact:abstractionRef vendor="anlogic.com" library="bus" name="reset_rtl" version="1.0"/>
                     <ipxact:portMaps>
                         <ipxact:portMap>
                             <ipxact:logicalPort>
@@ -963,10 +678,10 @@
         <ipxact:busInterface>
             <ipxact:name>APB_PRST</ipxact:name>
             <ipxact:displayName>APB_PRST</ipxact:displayName>
-            <ipxact:busType name="reset" vendor="anlogic.com" version="1.0" library="bus"/>
+            <ipxact:busType vendor="anlogic.com" library="bus" name="reset" version="1.0"/>
             <ipxact:abstractionTypes>
                 <ipxact:abstractionType>
-                    <ipxact:abstractionRef name="reset_rtl" vendor="anlogic.com" version="1.0" library="bus"/>
+                    <ipxact:abstractionRef vendor="anlogic.com" library="bus" name="reset_rtl" version="1.0"/>
                     <ipxact:portMaps>
                         <ipxact:portMap>
                             <ipxact:logicalPort>
@@ -1005,19 +720,26 @@
     </ipxact:cpus>
     <ipxact:fileSets>
         <ipxact:fileSet>
-            <ipxact:name>fs-MCU</ipxact:name>
+            <ipxact:name>fs-mcu</ipxact:name>
             <ipxact:file>
-                <ipxact:name>MCU.v</ipxact:name>
+                <ipxact:name>mcu.v</ipxact:name>
                 <ipxact:fileType>verilogSource</ipxact:fileType>
             </ipxact:file>
             <ipxact:file>
-                <ipxact:name>MCU_f9f874759a41.v</ipxact:name>
+                <ipxact:name>RTL/MCU_954571a4a1d3.v</ipxact:name>
                 <ipxact:fileType>verilogSource</ipxact:fileType>
+                <ipxact:vendorExtensions>
+                    <anlogic:coreRTL>yes</anlogic:coreRTL>
+                </ipxact:vendorExtensions>
+            </ipxact:file>
+            <ipxact:file>
+                <ipxact:name>mcu.tcl</ipxact:name>
+                <ipxact:fileType>SDC</ipxact:fileType>
             </ipxact:file>
         </ipxact:fileSet>
     </ipxact:fileSets>
     <ipxact:vendorExtensions>
         <anlogic:displayname>MCU</anlogic:displayname>
-        <anlogic:ipGenVersion>1.0</anlogic:ipGenVersion>
+        <anlogic:ipGenVersion value="168007 2025/07/10">1.0</anlogic:ipGenVersion>
     </ipxact:vendorExtensions>
 </ipxact:component>

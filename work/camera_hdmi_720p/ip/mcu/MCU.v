@@ -1,57 +1,17 @@
 /************************************************************\
-**	Copyright (c) 2012-2024 Anlogic Inc.
+**	Copyright (c) 2012-2025 Anlogic Inc.
 **	All Right Reserved.
 \************************************************************/
 /************************************************************\
-**	Build time: Jul 24 2024 17:43:05
-**	TD version	:	6.1.120544
+**	Build time: Oct 12 2026 00:42:14
+**	TD version	:	6.2.168116
 ************************************************************/
 `timescale 1ps/1ps 
-module MCU
+module mcu
 (
-  input                         jtag_tck,
-  input                         jtag_tms,
-  input                         jtag_tdi,
-  output                        jtag_tdo,
-  input                         gpio0_in,
-  output                        gpio0_out,
-  output                        gpio0_dir,
-  input                         gpio1_in,
-  output                        gpio1_out,
-  output                        gpio1_dir,
-  input                         gpio2_in,
-  output                        gpio2_out,
-  output                        gpio2_dir,
-  input                         gpio3_in,
-  output                        gpio3_out,
-  output                        gpio3_dir,
-  input                         gpio4_in,
-  output                        gpio4_out,
-  output                        gpio4_dir,
-  input                         gpio5_in,
-  output                        gpio5_out,
-  output                        gpio5_dir,
-  input                         gpio6_in,
-  output                        gpio6_out,
-  output                        gpio6_dir,
-  input                         gpio7_in,
-  output                        gpio7_out,
-  output                        gpio7_dir,
+  output                        core_sysrst,
   output                        uart0_tx,
   input                         uart0_rx,
-  output                        uart1_tx,
-  input                         uart1_rx,
-  output                        qspi1_clk,
-  output                        qspi1_ss,
-  input                         qspi1_d0_in,
-  input                         qspi1_d1_in,
-  input                         qspi1_d2_in,
-  input                         qspi1_d3_in,
-  output                        qspi1_d0_out,
-  output                        qspi1_d1_out,
-  output                        qspi1_d2_out,
-  output                        qspi1_d3_out,
-  output  [3:0]                 qspi1_dir,
   output                        ahb_clk,
   output  [1:0]                 htrans,
   output                        hwrite,
@@ -84,58 +44,18 @@ module MCU
   input   [22:0]                clic_irq
 );
 
-  MCU_f9f874759a41
+  MCU_954571a4a1d3
   #(
-      .MCU_JTAG_SEL("1"),
+      .MCU_JTAG_SEL("0"),
       .MCU_RESET_VECTOR('h20E00000),
       .AHB_FREQ("150.0"),
-      .QSPI_FREQ("50.0"),
-      .MCU_DPLL_POST_DIV(4)
-  )MCU_f9f874759a41_Inst
+      .MCU_DPLL_POST_DIV(4),
+      .MCU_DPLL_BYPASS("DISABLE")
+  )MCU_954571a4a1d3_Inst
   (
-      .jtag_tck(jtag_tck),
-      .jtag_tms(jtag_tms),
-      .jtag_tdi(jtag_tdi),
-      .jtag_tdo(jtag_tdo),
-      .gpio0_in(gpio0_in),
-      .gpio0_out(gpio0_out),
-      .gpio0_dir(gpio0_dir),
-      .gpio1_in(gpio1_in),
-      .gpio1_out(gpio1_out),
-      .gpio1_dir(gpio1_dir),
-      .gpio2_in(gpio2_in),
-      .gpio2_out(gpio2_out),
-      .gpio2_dir(gpio2_dir),
-      .gpio3_in(gpio3_in),
-      .gpio3_out(gpio3_out),
-      .gpio3_dir(gpio3_dir),
-      .gpio4_in(gpio4_in),
-      .gpio4_out(gpio4_out),
-      .gpio4_dir(gpio4_dir),
-      .gpio5_in(gpio5_in),
-      .gpio5_out(gpio5_out),
-      .gpio5_dir(gpio5_dir),
-      .gpio6_in(gpio6_in),
-      .gpio6_out(gpio6_out),
-      .gpio6_dir(gpio6_dir),
-      .gpio7_in(gpio7_in),
-      .gpio7_out(gpio7_out),
-      .gpio7_dir(gpio7_dir),
+      .core_sysrst(core_sysrst),
       .uart0_tx(uart0_tx),
       .uart0_rx(uart0_rx),
-      .uart1_tx(uart1_tx),
-      .uart1_rx(uart1_rx),
-      .qspi1_clk(qspi1_clk),
-      .qspi1_ss(qspi1_ss),
-      .qspi1_d0_in(qspi1_d0_in),
-      .qspi1_d1_in(qspi1_d1_in),
-      .qspi1_d2_in(qspi1_d2_in),
-      .qspi1_d3_in(qspi1_d3_in),
-      .qspi1_d0_out(qspi1_d0_out),
-      .qspi1_d1_out(qspi1_d1_out),
-      .qspi1_d2_out(qspi1_d2_out),
-      .qspi1_d3_out(qspi1_d3_out),
-      .qspi1_dir(qspi1_dir),
       .ahb_clk(ahb_clk),
       .htrans(htrans),
       .hwrite(hwrite),

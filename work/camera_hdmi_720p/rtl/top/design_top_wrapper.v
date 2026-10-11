@@ -869,17 +869,14 @@ module design_top_wrapper (
         .O_frame_cnt   ( S_mcu_frame_cnt )
     );
 
-    // ---- MCU（ps_wrapper）----
-    wire        S_mcu_uart0_tx, S_mcu_uart1_tx, S_mcu_jtag_tdo;  // 悬空输出
-    wire [7:0]  S_mcu_gpio_io;                                    // GPIO 悬空（无固件时不驱动）
+    // ---- MCU（ps_wrapper，B2：适配重生 mcu IP，无 jtag/gpio/uart1）----
+    wire        S_mcu_uart0_tx;          // 悬空（未接 H1，status_report 仍占）
+    wire        S_mcu_core_sysrst;       // MCU 主动复位输出，暂悬空
     ps_wrapper u_ps (
         .I_core_clk   ( S_clk_300m        ),
         .I_timer_clk  ( S_clk_100m        ),   // u_pll C0
         .I_rst        ( S_mcu_core_reset   ),   // 高有效
-        .I_jtag_tck   ( 1'b0              ),
-        .I_jtag_tms   ( 1'b0              ),
-        .I_jtag_tdi   ( 1'b0              ),
-        .O_jtag_tdo   ( S_mcu_jtag_tdo     ),
+        .O_core_sysrst( S_mcu_core_sysrst  ),   // 悬空，留扩展
         .I_apb_clk    ( I_sys_clk         ),   // 50M APB 域
         .I_apb_rst    ( ~S_rst_n_50m      ),   // MCU apb_rst 高有效
         .O_apb_paddr  ( S_apb_paddr       ),
@@ -893,17 +890,7 @@ module design_top_wrapper (
         .I_apb_pready ( S_apb_pready      ),
         .I_apb_pslverr( S_apb_pslverr     ),
         .O_uart0_tx   ( S_mcu_uart0_tx    ),   // 悬空：未接 H1（status_report 仍占）
-        .I_uart0_rx   ( 1'b1             ),   // UART idle
-        .O_uart1_tx   ( S_mcu_uart1_tx    ),
-        .I_uart1_rx   ( 1'b1             ),
-        .IO_gpio0     ( S_mcu_gpio_io[0]  ),
-        .IO_gpio1     ( S_mcu_gpio_io[1]  ),
-        .IO_gpio2     ( S_mcu_gpio_io[2]  ),
-        .IO_gpio3     ( S_mcu_gpio_io[3]  ),
-        .IO_gpio4     ( S_mcu_gpio_io[4]  ),
-        .IO_gpio5     ( S_mcu_gpio_io[5]  ),
-        .IO_gpio6     ( S_mcu_gpio_io[6]  ),
-        .IO_gpio7     ( S_mcu_gpio_io[7]  )
+        .I_uart0_rx   ( 1'b1             )    // UART idle
     );
 
 endmodule
