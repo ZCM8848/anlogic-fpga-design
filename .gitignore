@@ -5,6 +5,8 @@
 
 # ---- Anlogic TD 编译 / 综合 / 布局布线 / 烧录产物 ----
 *_Runs/
+# TD IP Catalog GUI 生成时自动落进 td_project/al_ip/ 的 IP 缓存（我们统一放 ip/，别让 al_ip 进 git）
+**/al_ip/
 **/log/
 **/impl/
 *.log

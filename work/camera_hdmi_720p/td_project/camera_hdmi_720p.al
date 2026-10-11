@@ -499,6 +499,15 @@
                     <Attr Name="CompileOrder" Val="15"/>
                 </FileInfo>
             </File>
+            <File Path="../ip/pll_mcu/pll_mcu.xml">
+                <FileInfo>
+                    <Attr Name="AutoExcluded" Val="true"/>
+                    <Attr Name="UsedInSyn" Val="true"/>
+                    <Attr Name="UsedInP&R" Val="true"/>
+                    <Attr Name="BelongTo" Val="design_1"/>
+                    <Attr Name="CompileOrder" Val="59"/>
+                </FileInfo>
+            </File>
         </IP_FILE>
     </Source_Files>
     <FileSets>
