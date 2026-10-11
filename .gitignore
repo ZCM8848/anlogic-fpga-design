@@ -71,3 +71,12 @@ Desktop.ini
 # ---- Python 工具（tools/ 下的验证脚本）----
 __pycache__/
 *.pyc
+
+# ---- iverilog 仿真产物 ----
+*.vvp
+*.vcd
+*.lxt
+*.lxt2
+*.fst
+*.fst.hier
+*.vzt
