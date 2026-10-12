@@ -734,21 +734,8 @@ module design_top_wrapper (
         end
     end
 
-    status_report u_status_report (
-        .clk           ( S_clk_100m          ),
-        .rst_n         ( S_rst_n_100m        ),
-        .I_cam_id      ( S_cam_sensor_id     ),
-        .I_cam_id_ok   ( S_cam_sensor_id_ok  ),
-        .I_cam_i2c_err ( S_cam_i2c_error     ),
-        .I_cam_cfg_done( S_cam_cfg_done      ),
-        .I_ddr_rdy     ( S_ddr_rdy_s[1]      ),
-        .I_sw4         ( S_sw4_sync_100m[2]  ),
-        .I_sw3         ( S_sw3_sync_100m[2]  ),
-        .I_cv_on       ( S_cv_on_sync_100m[2]),
-        .I_blob_cnt    ( S_cv_blob_cnt_s2    ),
-        .I_bin_thr     ( S_cv_bin_thr_s2     ),
-        .O_uart_tx     ( O_uart_tx           )
-    );
+    // B7: H1 切换给 MCU —— status_report 删除，O_uart_tx 由 MCU uart0_tx 驱动
+    assign O_uart_tx = S_mcu_uart0_tx;
 
     // ============================================================ LED 状态指示
     reg [23:0] S_hb_cnt;    // 100MHz 域心跳（约 0.17s 翻转）
@@ -765,7 +752,7 @@ module design_top_wrapper (
     // 故状态从口改走 AHB：MCU AHB master → ahb_status_slave；APB master 内部悬空（ps_wrapper 默认返回）。
     //   - core_clk ← pll_mcu 300MHz；timer_clk ← u_pll C0 100MHz
     //   - ahb_clk ← MCU 输出（~150MHz）→ 喂回 ahb_status_slave 作时钟
-    //   - uart0_tx 悬空（status_report 仍占 H1，B7 切换时接管）
+    //   - uart0_tx → H1（B7 切换：MCU 接管串口，status_report 已删）
     wire        S_clk_300m;        // pll_mcu -> MCU core_clk
     wire        S_pll_mcu_lock;
     pll_mcu u_pll_mcu (
@@ -830,7 +817,7 @@ module design_top_wrapper (
     );
 
     // ---- MCU（ps_wrapper，AHB master 暴露）----
-    wire        S_mcu_uart0_tx;       // 悬空（未接 H1，status_report 仍占）
+    wire        S_mcu_uart0_tx;       // → H1（B7：MCU 接管串口）
     wire        S_mcu_core_sysrst;    // MCU 主动复位，暂悬空
     ps_wrapper u_ps (
         .I_core_clk   ( S_clk_300m        ),
