@@ -19,7 +19,8 @@ if (-not (Get-Command iverilog -ErrorAction SilentlyContinue)) {
 # Map testbench name to the RTL file(s) under test.
 $rtlFiles = @()
 switch ($Tb) {
-    "tb_apb_status_slave" { $rtlFiles += "rtl\mcu\apb_status_slave.v" }
+    "tb_apb_status_slave"  { $rtlFiles += "rtl\mcu\apb_status_slave.v" }
+    "tb_ahb_status_slave"  { $rtlFiles += "rtl\mcu\ahb_status_slave.v" }
     default { Write-Error "Unknown testbench: $Tb (register its RTL in this script)"; exit 2 }
 }
 

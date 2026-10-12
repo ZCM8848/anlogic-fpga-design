@@ -19,7 +19,7 @@
                     <Attr Name="CompileOrder" Val="2"/>
                 </FileInfo>
             </File>
-            <File Path="../rtl/mcu/apb_status_slave.v">
+            <File Path="../rtl/mcu/ahb_status_slave.v">
                 <FileInfo>
                     <Attr Name="UsedInSyn" Val="true"/>
                     <Attr Name="UsedInP&R" Val="true"/>

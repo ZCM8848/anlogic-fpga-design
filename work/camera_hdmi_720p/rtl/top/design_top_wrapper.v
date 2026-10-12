@@ -760,17 +760,12 @@ module design_top_wrapper (
     // LED1=PLL 锁定  LED2=100M 心跳  LED3=摄像头配置完成  LED4=DDR 校准完成
     assign O_led = { S_ddr_rdy_s[1], S_cam_cfg_done, S_hb_cnt[23], S_pll_lock };
 
-    // ============================================================ MCU 子系统（Phase A：惰性）
-    // 目标：把内嵌 RISC-V 核接入 fabric，APB 主机口 → apb_status_slave（暴露板级
-    //   状态供 MCU 读）。本阶段 MCU 无固件、不抢串口（status_report 仍驱动 H1）、
-    //   不动任何现有信号——纯新增，M7 行为零回归。
-    //   - core_clk  ← pll_mcu 输出 300MHz（pll_mcu: 50MHz 板钟 -> 300MHz）
-    //   - timer_clk ← u_pll C0 100MHz
-    //   - apb_clk   ← I_sys_clk 板钟 50MHz 直供（数据手册 APB 规格 50MHz）
-    //   - AHB       ← ps_wrapper 内部默认返回 OKAY/ready=1（无 AHB 从设备）
-    //   - uart0_tx  ← 悬空（未接 H1，status_report 仍占）；uart0_rx=1(idle)
-    //   - JTAG/GPIO ← 悬空（当前 MCU IP=JTAG_SEL=1/GPIO 全开的 ref 副本；
-    //                  Phase B 前按《MCU 指南》重生为 JTAG off/GPIO off，届时 ps_wrapper 端口表微调）
+    // ============================================================ MCU 子系统（B6：状态走 AHB，窗口 0x80000000）
+    // fabric APB 窗口基址文档里找不到；fabric AHB 窗口 = 0x80000000（AHBDemo 验证）。
+    // 故状态从口改走 AHB：MCU AHB master → ahb_status_slave；APB master 内部悬空（ps_wrapper 默认返回）。
+    //   - core_clk ← pll_mcu 300MHz；timer_clk ← u_pll C0 100MHz
+    //   - ahb_clk ← MCU 输出（~150MHz）→ 喂回 ahb_status_slave 作时钟
+    //   - uart0_tx 悬空（status_report 仍占 H1，B7 切换时接管）
     wire        S_clk_300m;        // pll_mcu -> MCU core_clk
     wire        S_pll_mcu_lock;
     pll_mcu u_pll_mcu (
@@ -780,116 +775,81 @@ module design_top_wrapper (
         .lock     ( S_pll_mcu_lock )
     );
 
-    // 50MHz APB 域复位（apb_clk = I_sys_clk 板钟）
-    wire S_rst_n_50m;
-    reset_ctrl u_rst_50m (.clk(I_sys_clk), .pll_lock(S_pll_lock & S_pll_mcu_lock), .rst_n(S_rst_n_50m));
-
     // MCU 核复位（高有效；两 PLL 都锁定后释放）
     wire S_mcu_core_reset = ~(S_pll_lock & S_pll_mcu_lock);
 
-    // ---- 状态信号同步到 50M APB 域 ----
-    // 从 100M 域已同步版本（或慢变源信号）再 2FF 到 50M；均作 status 显示用，
-    // 多 bit 偶发毛刺可接受（与原 status_report 同一容忍级别）。
-    reg [15:0] S_cam_id_50a, S_cam_id_50;
-    reg        S_ddrrdy_50a, S_ddrrdy_50;
-    reg        S_sw4_50a, S_sw4_50, S_sw3_50a, S_sw3_50, S_cvon_50a, S_cvon_50;
-    reg        S_idok_50a, S_idok_50, S_i2cerr_50a, S_i2cerr_50, S_cfgdn_50a, S_cfgdn_50;
-    reg [5:0]  S_blob_50a, S_blob_50;
-    reg [7:0]  S_binthr_50a, S_binthr_50;
-    reg [10:0] S_runcnt_50a, S_runcnt_50;
-    reg        S_cclbsy_50a, S_cclbsy_50, S_runof_50a, S_runof_50;
-    always @(posedge I_sys_clk) begin
-        if (!S_rst_n_50m) begin
-            S_cam_id_50a <= 16'd0; S_cam_id_50 <= 16'd0;
-            S_ddrrdy_50a <= 1'b0;  S_ddrrdy_50 <= 1'b0;
-            S_sw4_50a <= 1'b0; S_sw4_50 <= 1'b0; S_sw3_50a <= 1'b0; S_sw3_50 <= 1'b0;
-            S_cvon_50a <= 1'b0; S_cvon_50 <= 1'b0;
-            S_idok_50a <= 1'b0; S_idok_50 <= 1'b0; S_i2cerr_50a <= 1'b0; S_i2cerr_50 <= 1'b0;
-            S_cfgdn_50a <= 1'b0; S_cfgdn_50 <= 1'b0;
-            S_blob_50a <= 6'd0; S_blob_50 <= 6'd0;
-            S_binthr_50a <= 8'd0; S_binthr_50 <= 8'd0;
-            S_runcnt_50a <= 11'd0; S_runcnt_50 <= 11'd0;
-            S_cclbsy_50a <= 1'b0; S_cclbsy_50 <= 1'b0; S_runof_50a <= 1'b0; S_runof_50 <= 1'b0;
-        end else begin
-            S_cam_id_50a  <= S_cam_sensor_id;       S_cam_id_50  <= S_cam_id_50a;
-            S_ddrrdy_50a  <= S_ddr_rdy_s[1];        S_ddrrdy_50  <= S_ddrrdy_50a;
-            S_sw4_50a     <= S_sw4_sync_100m[2];    S_sw4_50     <= S_sw4_50a;
-            S_sw3_50a     <= S_sw3_sync_100m[2];    S_sw3_50     <= S_sw3_50a;
-            S_cvon_50a    <= S_cv_on_sync_100m[2];  S_cvon_50    <= S_cvon_50a;
-            S_idok_50a    <= S_cam_sensor_id_ok;    S_idok_50    <= S_idok_50a;
-            S_i2cerr_50a  <= S_cam_i2c_error;       S_i2cerr_50  <= S_i2cerr_50a;
-            S_cfgdn_50a   <= S_cam_cfg_done;        S_cfgdn_50   <= S_cfgdn_50a;
-            S_blob_50a    <= S_cv_blob_cnt;         S_blob_50    <= S_blob_50a;
-            S_binthr_50a  <= S_cv_bin_thr;          S_binthr_50  <= S_binthr_50a;
-            S_runcnt_50a  <= S_cv_run_cnt;          S_runcnt_50  <= S_runcnt_50a;
-            S_cclbsy_50a  <= S_cv_ccl_busy;         S_cclbsy_50  <= S_cclbsy_50a;
-            S_runof_50a   <= S_cv_run_overflow;     S_runof_50   <= S_runof_50a;
-        end
-    end
+    // ---- AHB 互连 ----
+    wire        S_ahb_clk;
+    wire [1:0]  S_htrans;
+    wire        S_hwrite;
+    wire [30:0] S_haddr;
+    wire [2:0]  S_hsize, S_hburst;
+    wire [3:0]  S_hprot;
+    wire        S_hmastlock;
+    wire [31:0] S_hwdata, S_hrdata;
+    wire [1:0]  S_hresp;
+    wire        S_hready;
+    wire [31:0] S_mcu_heartbeat, S_mcu_scratch, S_mcu_frame_cnt;
 
-    // ---- APB 互连 ----
-    wire [19:0] S_apb_paddr;
-    wire        S_apb_psel, S_apb_penable, S_apb_pwrite;
-    wire [31:0] S_apb_pwdata;
-    wire [3:0]  S_apb_pstrobe;
-    wire [2:0]  S_apb_pprot;
-    wire [31:0] S_apb_prdata;
-    wire        S_apb_pready, S_apb_pslverr;
-    wire [31:0] S_mcu_heartbeat, S_mcu_scratch, S_mcu_frame_cnt;  // MCU 写回（固件就绪后用）
+    // ahb_clk 域复位（MCU 起来后 ahb_clk 才稳，reset_ctrl 在 ahb_clk 上同步释放）
+    wire S_rst_n_ahb;
+    reset_ctrl u_rst_ahb (.clk(S_ahb_clk), .pll_lock(S_pll_lock & S_pll_mcu_lock), .rst_n(S_rst_n_ahb));
 
-    apb_status_slave u_apb_status (
-        .I_apb_clk     ( I_sys_clk       ),   // 50M APB 域
-        .I_apb_rst_n   ( S_rst_n_50m     ),
-        .I_paddr       ( S_apb_paddr     ),
-        .I_psel        ( S_apb_psel      ),
-        .I_penable     ( S_apb_penable   ),
-        .I_pwrite      ( S_apb_pwrite    ),
-        .I_pwdata      ( S_apb_pwdata    ),
-        .I_pstrobe     ( S_apb_pstrobe   ),
-        .I_pprot       ( S_apb_pprot     ),
-        .O_prdata      ( S_apb_prdata    ),
-        .O_pready      ( S_apb_pready    ),
-        .O_pslverr     ( S_apb_pslverr   ),
-        .I_cam_id      ( S_cam_id_50     ),
-        .I_cam_id_ok   ( S_idok_50       ),
-        .I_cam_i2c_err ( S_i2cerr_50     ),
-        .I_cam_cfg_done( S_cfgdn_50      ),
-        .I_ddr_rdy     ( S_ddrrdy_50     ),
-        .I_sw4         ( S_sw4_50        ),
-        .I_sw3         ( S_sw3_50        ),
-        .I_cv_on       ( S_cvon_50       ),
-        .I_blob_cnt    ( S_blob_50       ),
-        .I_bin_thr     ( S_binthr_50     ),
-        .I_run_cnt     ( S_runcnt_50     ),
-        .I_ccl_busy    ( S_cclbsy_50     ),
-        .I_run_overflow( S_runof_50      ),
-        .I_vsync       ( S_hdmi_vsync     ),   // slave 内部 2FF 同步到 APB 域
-        .O_heartbeat   ( S_mcu_heartbeat ),
-        .O_scratch     ( S_mcu_scratch   ),
-        .O_frame_cnt   ( S_mcu_frame_cnt )
+    ahb_status_slave u_ahb_status (
+        .I_hclk        ( S_ahb_clk         ),
+        .I_hresetn     ( S_rst_n_ahb       ),
+        .I_htrans      ( S_htrans          ),
+        .I_hwrite      ( S_hwrite          ),
+        .I_haddr       ( S_haddr           ),
+        .I_hsize       ( S_hsize           ),
+        .I_hburst      ( S_hburst          ),
+        .I_hprot       ( S_hprot           ),
+        .I_hmastlock   ( S_hmastlock       ),
+        .I_hwdata      ( S_hwdata          ),
+        .O_hrdata      ( S_hrdata          ),
+        .O_hreadyout   ( S_hready          ),
+        .O_hresp       ( S_hresp           ),
+        // 状态输入（各域原信号；slave 内部 2FF 同步到 ahb_clk）
+        .I_cam_id      ( S_cam_sensor_id    ),
+        .I_cam_id_ok   ( S_cam_sensor_id_ok ),
+        .I_cam_i2c_err ( S_cam_i2c_error    ),
+        .I_cam_cfg_done( S_cam_cfg_done     ),
+        .I_ddr_rdy     ( S_ddr_rdy_s[1]     ),
+        .I_sw4         ( S_sw4_sync_100m[2]  ),
+        .I_sw3         ( S_sw3_sync_100m[2]  ),
+        .I_cv_on       ( S_cv_on_sync_100m[2]),
+        .I_blob_cnt    ( S_cv_blob_cnt_s2   ),
+        .I_bin_thr     ( S_cv_bin_thr_s2    ),
+        .I_run_cnt     ( S_cv_run_cnt       ),
+        .I_ccl_busy    ( S_cv_ccl_busy      ),
+        .I_run_overflow( S_cv_run_overflow  ),
+        .I_vsync       ( S_hdmi_vsync       ),
+        .O_heartbeat   ( S_mcu_heartbeat    ),
+        .O_scratch     ( S_mcu_scratch      ),
+        .O_frame_cnt   ( S_mcu_frame_cnt    )
     );
 
-    // ---- MCU（ps_wrapper，B2：适配重生 mcu IP，无 jtag/gpio/uart1）----
-    wire        S_mcu_uart0_tx;          // 悬空（未接 H1，status_report 仍占）
-    wire        S_mcu_core_sysrst;       // MCU 主动复位输出，暂悬空
+    // ---- MCU（ps_wrapper，AHB master 暴露）----
+    wire        S_mcu_uart0_tx;       // 悬空（未接 H1，status_report 仍占）
+    wire        S_mcu_core_sysrst;    // MCU 主动复位，暂悬空
     ps_wrapper u_ps (
         .I_core_clk   ( S_clk_300m        ),
-        .I_timer_clk  ( S_clk_100m        ),   // u_pll C0
-        .I_rst        ( S_mcu_core_reset   ),   // 高有效
-        .O_core_sysrst( S_mcu_core_sysrst  ),   // 悬空，留扩展
-        .I_apb_clk    ( I_sys_clk         ),   // 50M APB 域
-        .I_apb_rst    ( ~S_rst_n_50m      ),   // MCU apb_rst 高有效
-        .O_apb_paddr  ( S_apb_paddr       ),
-        .O_apb_psel   ( S_apb_psel        ),
-        .O_apb_penable( S_apb_penable     ),
-        .O_apb_pwrite ( S_apb_pwrite      ),
-        .O_apb_pwdata ( S_apb_pwdata      ),
-        .O_apb_pstrobe( S_apb_pstrobe     ),
-        .O_apb_pprot  ( S_apb_pprot       ),
-        .I_apb_prdata ( S_apb_prdata      ),
-        .I_apb_pready ( S_apb_pready      ),
-        .I_apb_pslverr( S_apb_pslverr     ),
-        .O_uart0_tx   ( S_mcu_uart0_tx    ),   // 悬空：未接 H1（status_report 仍占）
+        .I_timer_clk  ( S_clk_100m        ),
+        .I_rst        ( S_mcu_core_reset  ),
+        .O_core_sysrst( S_mcu_core_sysrst  ),
+        .O_ahb_clk    ( S_ahb_clk        ),
+        .O_htrans     ( S_htrans          ),
+        .O_hwrite     ( S_hwrite          ),
+        .O_haddr      ( S_haddr           ),
+        .O_hsize      ( S_hsize           ),
+        .O_hburst     ( S_hburst          ),
+        .O_hprot      ( S_hprot           ),
+        .O_hmastlock  ( S_hmastlock       ),
+        .O_hwdata     ( S_hwdata          ),
+        .I_hrdata     ( S_hrdata          ),
+        .I_hresp      ( S_hresp           ),
+        .I_hready     ( S_hready          ),
+        .O_uart0_tx   ( S_mcu_uart0_tx    ),
         .I_uart0_rx   ( 1'b1             )    // UART idle
     );
 
