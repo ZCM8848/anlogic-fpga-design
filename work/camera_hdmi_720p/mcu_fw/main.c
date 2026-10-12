@@ -1,8 +1,9 @@
 /*
  * ph1p35_status — MCU 接管状态上报（B6 固件，B8 修正 printf 链接）
  * ============================================================
- * 仓库版本控制快照。FD 编译的 live 版在 FD workspace：
- *   C:\Users\Z___C\FDWork\ph1p35_status\main.c
+ * 单一真相源：FD 工程经硬链接引用本文件
+ * （C:\Users\Z___C\FDWork\ph1p35_status\main.c → 本文件，同 inode）。
+ * 改这里 = FD 编译 + git 同时看到，零复制。
  *
  * AL_LOG 走 al_simp_printf（不是 anl_printf；anl_printf 不在链接 lib 里）。
  * al_simp_printf 支持 %d/%x（%x 输出大写 hex），但不支持 %0Nx 宽度限定符。
