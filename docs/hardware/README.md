@@ -8,6 +8,7 @@
 | 文件 | 内容 |
 |---|---|
 | [`HW_PH1P35.md`](HW_PH1P35.md) | FPGA 芯片：型号/封装/资源/电源/时钟资源/MIPI DPHY/MCU 核/配置 |
+| [`HW_MCU.md`](HW_MCU.md) | 内嵌 RISC-V MCU 实操细节：时钟要求/JTAG 模式/fabric AHB·APB 窗口/IP 配置/内部地址映射/FD 工具链/OpenOCD 排错/printf 坑 |
 | [`HW_HX1P35A_BOARD.md`](HW_HX1P35A_BOARD.md) | 开发板：电源/时钟源/各外设与**引脚分配表** |
 | [`HW_SC520CS.md`](HW_SC520CS.md) | 摄像头：传感器参数/工作模式/时序/I²C/MIPI + **寄存器表** + 镜头 |
 | [`HW_PINMAP.md`](HW_PINMAP.md) | 引脚总表：FPGA 引脚 ↔ 板网络 ↔ 外设 ↔ 本项目用法 |
