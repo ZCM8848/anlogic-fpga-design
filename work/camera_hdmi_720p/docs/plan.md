@@ -113,7 +113,7 @@ camera 控制(自研 M2): 上电时序 + I²C 主机 + 寄存器表加载 + 状�
   接口与 `test_pattern` 完全一致（`data/de_o/vs_o`），顶层例化位置不变。
 - 保留 M1/M2/M3 的一切调试通道（串口、LED、HDMI 测试图案），M4 失败时可直接切回图案定位。
 - 仿真：新增 `tools/sim/linebuf_sim.py`（写侧突发 vs 读侧 75MHz 取数、bank 切换、行首对齐、
-  漂移丢行）——本机无 iverilog，仍用逐拍 Python 行为级模型。
+  漂移丢行）——当时本机无 iverilog，用逐拍 Python 行为级模型（现 iverilog 已装，见 README「工具」段）。
 
 ### M5 实施要点与预期效果（DDR2 帧缓存）
 

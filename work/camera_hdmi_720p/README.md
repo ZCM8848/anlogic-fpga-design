@@ -16,6 +16,7 @@ PH1P35MDG324（HX1P35A 开发板 / TD 6.2.1）上，从零搭建的 **SC500CS / 
 | M5 | DDR2 帧缓存（自研读写控制器） | 🔨 **①空载校准版 ✅ 上板验收通过**（2026-09-27：串口第三行 `DDR RDY=1 ARDY=1 WRDY=1` 稳定（15/15、28/29）；MIPI 行照旧健康、59.67fps。构建方式与坑见 `tools/td_run/`，证据 `work/test/M5_00/`）；**②完整帧缓存版：实施计划已细化定稿**（`docs/plan.md`「M5-② 实施计划」，接口事实已按 IPUG035 + 厂商 lab + 构建报告三方核对），待开工 |
 | M6 | 三模式重构（彩条 / 边缘提取 / 彩色+OSD，SW4/SW3 切换） | ✅ **上板验收通过**（2026-09-28~29）。整棵搬入厂商 ISP + video_in/out/mc + DDR2 IP + hdmi_mixer/OSD 三件套；自研 hdmi_timing(复刻 uivtc)、test_pattern(2 级流水)、video_mux(帧边界门控)、status_report(握手修复)。经 4 轮调试修复：① status_report 发送 FSM 握手竞态→串口丢字 ② video_mux 两源 de 相位跳变→变量水平回绕 ③ hdmi_timing 与 uivtc 时序差→logo/画面静态偏移 ④ PROBE_PHASE 探针定位（后回滚）。check_rtl 0 错 0 警；bit md5 `B96CCE65`，时序 -1.7ns/9（ISP edge 域，OSD/彩条干净）。详见下「M6 构建记录」 |
 | M7 | 收尾 + 钢珠检测（CV） | 🔨 **①检测+框选（Phase A）编码完成，待上板**：自研 `rtl/cv/cv_top.v`（亮度阈值+run 提取+简化 CCL+bbox 叠加），`tools/sim/cv_sim.py` 7/7 通过；KEY2(A9) CV 开关、串口加 `CV=/NB=` 字段。bit md5 `6D1CC08E`，WNS -1.83ns（cv_top 组合路径，CV 关时干净=等价 M6）。**构建管线修复**：run.bat 改纯 ASCII+正斜杠（中文 rem 在 GBK cmd 失效；Tcl `\a` 吃反斜杠）；发现 TD 命令行开 `*.prj` 非 `.al`，新增源文件须 `tools/td_run/sync_prj.py` 同步否则 black box。详见下「M7 构建记录」。待办：上板验证 CV 框选、edge 模式 -1.7ns、OSD 左 5px 重复、Phase B 跟踪+计数 |
+| M8 | MCU 接管串口状态上报（B1–B8） | ✅ **上板验收通过**（2026-10-12）。内嵌 RISC-V 跑固件，经 AHB 从口（`0x80000000`）读板级状态、UART0 上报 H1，输出与原 status_report 逐字符一致。**status_report.v/uart_tx.v 已删**（移 retired/），串口改由 MCU 固件 `mcu_fw/main.c` 驱动。自研 `rtl/mcu/ahb_status_slave.v`（AHB-Lite，状态寄存器）+ `ps_wrapper.v`（MCU 例化）+ `pll_mcu`（50→300MHz core_clk）。iverilog 13/13；syn WNS -2.16ns / Hold +20ps（干净）。详见 `docs/hardware/HW_MCU.md`。待办：CV 动态验证（KEY2 开 CV + 钢珠看 NB/TH 变）、retired/ 清理 status_report.v/uart_tx.v 从 .al 移除 |
 
 详细计划与调研结论见 `docs/plan.md`。
 
@@ -54,10 +55,10 @@ camera_hdmi_720p/
 │  ├─ pll/            # 通用 PLL IP（IP 生成件）
 │  ├─ hdmi/           # HDMI 1.4b TX IP + 官方配套件
 │  └─ sc520reg/       # SC520CS 720p60 原厂寄存器表（数据件）
-├─ tools/             # 自研验证工具（无 iverilog 环境下的替代手段）
+├─ tools/             # 自研验证工具：静态自检 + iverilog RTL 仿真 + Python 行为级仿真
 │  ├─ check_rtl.py    # 静态自检：.al 清单 / 端口-网络-位宽交叉校验
-│  ├─ sim/            # 行为级仿真：i2c_sim.py（I²C 主机协议）、cam_sim.py（上电流程）
-│  └─ td_run/         # TD run 参数模板 + 自愈式 run.bat（命令行构建，说明见其中 README）
+│  ├─ sim/            # iverilog RTL testbench（tb_*.v + run_iverilog.ps1）+ Python 行为级仿真（*_sim.py）
+│  └─ td_run/         # TD run 参数模板 + 自愈式 run.bat + sync_prj.py（命令行构建）
 └─ td_project/        # TD 工程目录（camera_hdmi_720p.al + 自动生成的 *_Runs/）
 ```
 
@@ -119,7 +120,7 @@ camera_hdmi_720p/
 | `rtl/camera/cam_ctrl.v` | 上电时序 + ID 读取（地址自适应）+ 165 条寄存器表写入 + 复读校验，输出错误码 |
 | `rtl/camera/status_report.v` | 结果格式化 + 115200 串口输出（每 500ms 连发 CAM 与 MIPI 两行，取代 M2 的 `cam_report.v`） |
 | `rtl/common/uart_tx.v` | 简单 UART 发送器（8N1） |
-| `tools/check_rtl.py`、`tools/sim/*` | 静态自检 + 行为级仿真（本机无 iverilog，作为上板前的验证手段） |
+| `tools/check_rtl.py`、`tools/sim/*` | 静态自检 + iverilog RTL 仿真（tb_*.v，run_iverilog.ps1 一键跑）+ Python 行为级仿真（*_sim.py） |
 
 **引脚事实（原理图 sheet3 BANK21 / 开发板引脚表，BANK21 VCCIO=VCC_3V3 → LVCMOS33）**
 
@@ -168,7 +169,7 @@ HDMI 测试图案在 M2 仍然输出（屏幕可继续作为参考画面）。
 | `rtl/mipi/mipi_stats.v` | 字节域统计（帧/行/行像素/行组数，BCD）+ 错误位图 + req/ack 双相握手快照到 100MHz 域 |
 | `rtl/camera/status_report.v` | 每 500ms 连发两行（CAM 行与 M2 完全一致 + MIPI 行），取代 M2 的 `cam_report.v` |
 | `constraints/timing.sdc` | 新增 `mipi_rx_ck_pad`（2.415ns = 828Mbps/lane）、`MIPI_RX_BYTE_CLK`（重命名 IP 内部字节时钟）、两域 `set_clock_groups -asynchronous` |
-| `tools/sim/mipi_sim.py` | 逐拍行为级仿真（本机无 iverilog，作为上板前验证手段） |
+| `tools/sim/mipi_sim.py` | 逐拍行为级仿真（Python 模型；iverilog RTL 仿真见 tb_*.v） |
 
 **串口上报格式（115200 8N1，每 500ms 两行）**
 
@@ -375,8 +376,8 @@ MIPI HS=1 F=000012 L=0720 W=01280 G=0320 ER=00 HW=2B0640xx PW=xxxx PL=0000 HC=0 
    **MIPI 差分对（CK/D0/D1）是器件专用脚，不写进 `pin.adc`**（厂商 SC520 lab 的 `pin.adc` 里同样没有任何 MIPI 条目）——
    它们由顶层 `IO_rx_clk_pad_*` / `IO_rx_data_pad_*` 直连 D-PHY IP 的硬核 pad；
    引脚：CK_P=V16 / CK_N=U16、D0=V14,U14、D1=V15,U15，D2/D3 本设计不用（但顶层端口仍需声明全部 4 lane 的 pad 数组）。
-5. 本机无 iverilog；语法/时序验证靠 TD 编译（`td_command_prompt` 可做命令行构建，待验证），
-   上板前用 `tools/check_rtl.py`（静态自检）与 `tools/sim/*.py`（行为级仿真）替代。
+5. iverilog 已装（`D:\iverilog\bin`，0.9.7/-g2005）；RTL 仿真用 `tools/sim/tb_*.v` + `tools/sim/run_iverilog.ps1`（一键）。
+   静态自检 `tools/check_rtl.py`；Python 行为级仿真 `tools/sim/*_sim.py` 保留作参考。语法/时序最终验证靠 TD 命令行构建（`tools/td_run/run.bat`）。
 6. **目录命名坑**：约束目录必须用 `constraints/`，不能用 `con/`——`CON` 是 Windows 保留设备名，git 无法索引其下文件（TD 能正常用，但提交会报 "No such file or directory"）。
 7. `.al` 的 `Path` 属性是绝对路径（厂商同样如此），换机器/换路径后建议同步更新；TD 对不匹配的路径一般能自行重定位。
 8. **`.al` 不是严格 XML**：`<Attr Name="UsedInP&R" .../>` 里的 `&` 未转义，用标准 XML 解析器会报错；
