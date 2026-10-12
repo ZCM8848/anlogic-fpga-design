@@ -14,7 +14,11 @@
 #include <stdio.h>
 #include <stdint.h>
 #include "al_core.h"
-#include "anl_printf.h"
+
+/* BSP 的 anl_printf/anl_putchar 在 StdPeriphLib 里，但 anl_printf.h 不是公开头，
+   故用 extern 声明（链接时从 BSP lib 解析）。 */
+extern int  anl_printf(const char *format, ...);
+extern void anl_putchar(char c);
 
 #define AHB_STATUS_BASE  0x80000000UL
 #define CAM_REG     (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x00))
