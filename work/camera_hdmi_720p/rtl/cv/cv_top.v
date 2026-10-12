@@ -2,8 +2,11 @@
 //=============================================================================
 // cv_top.v — 钢珠亮斑检测 + 多目标跟踪(a-b+贪心NN) + 绿框/ID 叠加（M7 Phase B）
 //
-// 串在 hdmi_mixer -> video_mux 间，组合直通保相位。CV 开时显示机器视角
+// 串在 hdmi_mixer -> video_mux 间。CV 开时显示机器视角
 // （二值掩膜 + 绿色 tracked 框 + ID 数字）。
+// M7 收尾：叠加输出由"组合直通"改为"1 级流水"（data/de/vs 同拍寄存），
+// 打断 track dram 读+比较+字模 mux 的长组合路径（原 -1.83ns 违例）。
+// 配套 test_pattern 同步加 1 级（2->3）保持 video_mux 两路同相。
 //
 // 流水（75MHz；vblank ~49500 周期）：
 //   active: Y->阈值(上帧 Otsu+用户偏置)->mask->run 提取写 run_mem；同步累加 32-bin 直方图
@@ -446,8 +449,32 @@ module cv_top #(
     end
 
     wire [23:0] cv_base = (MASK_VIEW!=0) ? (w_mask ? 24'hFFFFFF : 24'h000000) : I_data;
-    assign O_de=I_de; assign O_vs=I_vs;
-    assign O_data = (I_cv_on && I_de) ? (r_digit ? 24'hFFFFFF : (r_border ? 24'h00FF00 : cv_base)) : I_data;
+    // 叠加选择（组合，第 0 拍）
+    wire [23:0] w_odata_pre = (I_cv_on && I_de) ? (r_digit ? 24'hFFFFFF : (r_border ? 24'h00FF00 : cv_base)) : I_data;
+
+    // ---------- 输出 1 级流水（收 M7 遗留：CV 叠加路径 -1.83ns）----------
+    // 原为组合直通：O_data 组合连到下游 video_mux 寄存器 D 端，
+    // 路径 = track dram 读 + 8 路比较 + 字模 case + mux，过长而违例。
+    // 现将 data/de/vs 同拍寄存 1 拍，把路径终点从 video_mux 提前到本寄存器，
+    // 打断长组合路径。配套：test_pattern 同步加 1 级（2->3）保持 video_mux 两路同相。
+    reg [23:0] r_odata;
+    reg        r_ode;
+    reg        r_ovs;
+    always @(posedge I_clk or negedge I_rst_n) begin
+        if (!I_rst_n) begin
+            r_odata <= 24'd0;
+            r_ode   <= 1'b0;
+            r_ovs   <= 1'b0;
+        end else begin
+            r_odata <= w_odata_pre;
+            r_ode   <= I_de;
+            r_ovs   <= I_vs;
+        end
+    end
+    assign O_data = r_odata;
+    assign O_de   = r_ode;
+    assign O_vs   = r_ovs;
+
     assign O_blob_cnt = r_collect;
     assign O_run_cnt = r_run_cnt;
     assign O_run_overflow = r_run_overflow;

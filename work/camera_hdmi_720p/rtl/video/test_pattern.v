@@ -89,27 +89,39 @@ module test_pattern (
                         S_grad   ? {x[7:0], x[7:0], x[7:0]} :
                                    S_bar_color;
 
-    // ---------------- 输出寄存（2 级流水：与 hdmi_mixer 输出同相，避免 video_mux 切换时 de/vs 相位跳变） ----------------
+    // ---------------- 输出寄存（3 级流水） ----------------
+    // M6 原为 2 级（= hdmi_mixer 输出同相，避免 video_mux 切换时 de/vs 相位跳变）；
+    // M7 收尾时 cv_top 叠加加了 1 级流水，故本模块同步加 1 级（2->3），
+    // 保持 video_mux 两路（摄像头 / 彩条）同相。
     reg [23:0] data_r;
     reg        de_r;
     reg        vs_r;
+    reg [23:0] data_r2;
+    reg        de_r2;
+    reg        vs_r2;
 
     always @(posedge clk) begin
         if (!rst_n) begin
-            de_r  <= 1'b0;
-            vs_r  <= 1'b0;
-            data_r<= 24'd0;
-            de_o  <= 1'b0;
-            vs_o  <= 1'b0;
-            data  <= 24'd0;
+            de_r   <= 1'b0;
+            vs_r   <= 1'b0;
+            data_r <= 24'd0;
+            de_r2  <= 1'b0;
+            vs_r2  <= 1'b0;
+            data_r2<= 24'd0;
+            de_o   <= 1'b0;
+            vs_o   <= 1'b0;
+            data   <= 24'd0;
         end
         else begin
-            de_r  <= de;
-            vs_r  <= vs;
-            data_r<= de ? S_pix : 24'h000000;
-            de_o  <= de_r;
-            vs_o  <= vs_r;
-            data  <= data_r;
+            de_r   <= de;
+            vs_r   <= vs;
+            data_r <= de ? S_pix : 24'h000000;
+            de_r2  <= de_r;
+            vs_r2  <= vs_r;
+            data_r2<= data_r;
+            de_o   <= de_r2;
+            vs_o   <= vs_r2;
+            data   <= data_r2;
         end
     end
 
