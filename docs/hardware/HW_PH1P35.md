@@ -96,6 +96,8 @@ I/O 供电可选标称（VCCIO）：
 - 生成关系（MCU 指南）：TD 生成 bit（硬件环境）与导出的 HPF（硬件平台描述）；FD 依 HPF 生成 BSP/平台；
   MCU 程序编译为 ELF；运行时 = bit（硬件）+ ELF（软件）。
 
+> **实操细节**（时钟要求/JTAG 模式/fabric AHB·APB 窗口地址/IP 配置/内部地址映射/FD 工具链/OpenOCD 排错/printf 坑）见 [`HW_MCU.md`](HW_MCU.md)。
+
 ## 6. MIPI D-PHY（PH1P35 集成 2 组）
 
 - 符合 MIPI D-PHY v2.0；每组可配为输入或输出，最大 4 lane。
