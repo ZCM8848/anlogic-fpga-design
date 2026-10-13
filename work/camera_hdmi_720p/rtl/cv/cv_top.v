@@ -53,8 +53,7 @@ module cv_top #(
     output wire [10:0] O_run_cnt,
     output wire        O_ccl_busy,
     output wire        O_run_overflow,
-    output wire [7:0]  O_bin_thr,
-    input  wire        I_mask_ext       // MASK_SRC=2 时的外部掩膜（来自 cv_front_top）
+    output wire [7:0]  O_bin_thr
 );
     localparam FW  = 65;
     localparam RPW = (MAX_RPR==32)?5:6;
@@ -85,46 +84,36 @@ module cv_top #(
     wire [8:0] thr_plus = {1'b0,base_thr} + {1'b0,r_user_off};
     wire [7:0] eff_thr  = (thr_plus>9'd255) ? 8'd255 : (thr_plus[8] ? 8'd0 : thr_plus[7:0]);
 
-    // ---------- 检测掩膜 ----------
-    //   MASK_SRC=2 : 外部掩膜（来自 cv_front_top），Sobel 级被 generate 剪掉（省资源）
-    //   MASK_SRC=1 : 内部 Sobel 边缘圆环
-    //   MASK_SRC=0 : 内部亮阈值
-    wire w_mask;
-    generate
-    if (MASK_SRC == 2) begin : g_mask_ext
-        assign w_mask = I_mask_ext;
-    end else begin : g_mask_int
-        // ---------- Sobel 边缘检测（3x3，2 行缓存，async-read BRAM，仿 edge_detect_96）----------
-        //  输出 w_sobel_mag 为像素 (r_x-1, r_y-1) 的幅值（1 列+1 行延迟，整体偏移 1px 不可见）。
-        (* ram_style="block" *) reg [7:0] sob_l1 [0:IMG_W-1];  // row y-1
-        (* ram_style="block" *) reg [7:0] sob_l2 [0:IMG_W-1];  // row y-2
-        wire [7:0] mid_word = sob_l1[r_x];   // row y-1 @ r_x（async read，旧值）
-        wire [7:0] top_word = sob_l2[r_x];   // row y-2 @ r_x
-        reg [7:0] top_p2, top_p1, mid_p2, mid_p1, bot_p2, bot_p1;
-        // Sobel Gx/Gy @ center (r_x-1, r_y-1)
-        //  窗口: top={top_p2,top_p1,top_word} mid={mid_p2,mid_p1,mid_word} bot={bot_p2,bot_p1,w_y}
-        wire signed [13:0] gx = $signed({5'b0,top_p2}) + ($signed({5'b0,top_p1})<<<1) + $signed({5'b0,top_word})
-                             - $signed({5'b0,bot_p2}) - ($signed({5'b0,bot_p1})<<<1) - $signed({5'b0,w_y});
-        wire signed [13:0] gy = $signed({5'b0,top_p2}) + ($signed({5'b0,mid_p2})<<<1) + $signed({5'b0,bot_p2})
-                             - $signed({5'b0,top_word}) - ($signed({5'b0,mid_word})<<<1) - $signed({5'b0,w_y});
-        wire [13:0] abs_gx = gx[13] ? (~gx + 1) : gx;
-        wire [13:0] abs_gy = gy[13] ? (~gy + 1) : gy;
-        wire [14:0] w_sobel_mag = {1'b0,abs_gx} + {1'b0,abs_gy};
-        wire        w_edge_mask = (r_y >= 12'd2) && (r_x >= 12'd2) && (w_sobel_mag > {4'b0, eff_thr});
-        // 行缓存写+列延迟（clocked）
-        always @(posedge I_clk) begin
-            if (I_de) begin
-                sob_l1[r_x] <= w_y;            // 当前行写 l1（下帧作 row y-1）
-                sob_l2[r_x] <= mid_word;       // l1 旧值写 l2（作 row y-2）
-                top_p2 <= top_p1; top_p1 <= top_word;
-                mid_p2 <= mid_p1; mid_p1 <= mid_word;
-                bot_p2 <= bot_p1; bot_p1 <= w_y;
-            end
+    // ---------- Sobel 边缘检测（3x3，2 行缓存，async-read BRAM，仿 edge_detect_96）----------
+    //  输出 w_sobel_mag 为像素 (r_x-1, r_y-1) 的幅值（1 列+1 行延迟，整体偏移 1px 不可见）。
+    (* ram_style="block" *) reg [7:0] sob_l1 [0:IMG_W-1];  // row y-1
+    (* ram_style="block" *) reg [7:0] sob_l2 [0:IMG_W-1];  // row y-2
+    wire [7:0] mid_word = sob_l1[r_x];   // row y-1 @ r_x（async read，旧值）
+    wire [7:0] top_word = sob_l2[r_x];   // row y-2 @ r_x
+    reg [7:0] top_p2, top_p1, mid_p2, mid_p1, bot_p2, bot_p1;
+    // Sobel Gx/Gy @ center (r_x-1, r_y-1)
+    //  窗口: top={top_p2,top_p1,top_word} mid={mid_p2,mid_p1,mid_word} bot={bot_p2,bot_p1,w_y}
+    wire signed [13:0] gx = $signed({5'b0,top_p2}) + ($signed({5'b0,top_p1})<<<1) + $signed({5'b0,top_word})
+                         - $signed({5'b0,bot_p2}) - ($signed({5'b0,bot_p1})<<<1) - $signed({5'b0,w_y});
+    wire signed [13:0] gy = $signed({5'b0,top_p2}) + ($signed({5'b0,mid_p2})<<<1) + $signed({5'b0,bot_p2})
+                         - $signed({5'b0,top_word}) - ($signed({5'b0,mid_word})<<<1) - $signed({5'b0,w_y});
+    wire [13:0] abs_gx = gx[13] ? (~gx + 1) : gx;
+    wire [13:0] abs_gy = gy[13] ? (~gy + 1) : gy;
+    wire [14:0] w_sobel_mag = {1'b0,abs_gx} + {1'b0,abs_gy};
+    wire        w_edge_mask = (r_y >= 12'd2) && (r_x >= 12'd2) && (w_sobel_mag > {4'b0, eff_thr});
+    // 行缓存写+列延迟（clocked）
+    always @(posedge I_clk) begin
+        if (I_de) begin
+            sob_l1[r_x] <= w_y;            // 当前行写 l1（下帧作 row y-1）
+            sob_l2[r_x] <= mid_word;       // l1 旧值写 l2（作 row y-2）
+            top_p2 <= top_p1; top_p1 <= top_word;
+            mid_p2 <= mid_p1; mid_p1 <= mid_word;
+            bot_p2 <= bot_p1; bot_p1 <= w_y;
         end
-        // ---------- 检测掩膜：MASK_SRC=1 边缘圆环；=0 亮阈值 ----------
-        assign w_mask = MASK_SRC ? w_edge_mask : (w_y > eff_thr);
     end
-    endgenerate
+
+    // ---------- 检测掩膜：MASK_SRC=1 边缘圆环；=0 亮阈值 ----------
+    wire w_mask = MASK_SRC ? w_edge_mask : (w_y > eff_thr);
 
     // ---------- 存储 ----------
     (* ram_style="block" *) reg [33:0]  run_mem [0:MAX_RUNS-1];

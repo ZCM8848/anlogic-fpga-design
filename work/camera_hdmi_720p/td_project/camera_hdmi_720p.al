@@ -19,46 +19,6 @@
                     <Attr Name="CompileOrder" Val="90"/>
                 </FileInfo>
             </File>
-            <File Path="../rtl/cv/cv_gray.v">
-                <FileInfo>
-                    <Attr Name="UsedInSyn" Val="true"/>
-                    <Attr Name="UsedInP&R" Val="true"/>
-                    <Attr Name="BelongTo" Val="design_1"/>
-                    <Attr Name="CompileOrder" Val="91"/>
-                </FileInfo>
-            </File>
-            <File Path="../rtl/cv/cv_norm_bg.v">
-                <FileInfo>
-                    <Attr Name="UsedInSyn" Val="true"/>
-                    <Attr Name="UsedInP&R" Val="true"/>
-                    <Attr Name="BelongTo" Val="design_1"/>
-                    <Attr Name="CompileOrder" Val="92"/>
-                </FileInfo>
-            </File>
-            <File Path="../rtl/cv/cv_morph3x3.v">
-                <FileInfo>
-                    <Attr Name="UsedInSyn" Val="true"/>
-                    <Attr Name="UsedInP&R" Val="true"/>
-                    <Attr Name="BelongTo" Val="design_1"/>
-                    <Attr Name="CompileOrder" Val="93"/>
-                </FileInfo>
-            </File>
-            <File Path="../rtl/cv/cv_count_line.v">
-                <FileInfo>
-                    <Attr Name="UsedInSyn" Val="true"/>
-                    <Attr Name="UsedInP&R" Val="true"/>
-                    <Attr Name="BelongTo" Val="design_1"/>
-                    <Attr Name="CompileOrder" Val="94"/>
-                </FileInfo>
-            </File>
-            <File Path="../rtl/cv/cv_front_top.v">
-                <FileInfo>
-                    <Attr Name="UsedInSyn" Val="true"/>
-                    <Attr Name="UsedInP&R" Val="true"/>
-                    <Attr Name="BelongTo" Val="design_1"/>
-                    <Attr Name="CompileOrder" Val="95"/>
-                </FileInfo>
-            </File>
             <File Path="../rtl/top/design_top_wrapper.v">
                 <FileInfo>
                     <Attr Name="UsedInSyn" Val="true"/>
