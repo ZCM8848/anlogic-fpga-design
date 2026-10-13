@@ -126,18 +126,11 @@ module cv_top #(
     end
     endgenerate
 
-    // ---------- 块域检测子模块（MASK_SRC=3；其它模式未用 -> 综合会自动裁掉）----------
+    // ---------- 块域检测子模块信号（实例在 FSM 寄存器之后）----------
     wire        blk_ready;
     wire [5:0]  blk_count;
-    wire [47:0] blk_box [0:MAX_BLOBS-1];
-    cv_blkdet #(
-        .IMG_W(IMG_W), .IMG_H(IMG_H), .DARK_THR(DARK_THR),
-        .MIN_BLKN(16'd8), .MAX_BLKN(16'd400),   // 单位=块(钢珠约 7x7=49 块)
-        .MIN_FILL(MIN_FILL), .MIN_RATIO(MIN_RATIO), .MAX_BLOBS(MAX_BLOBS)
-    ) u_blkdet (
-        .clk(I_clk), .rst_n(I_rst_n), .de(I_de), .vs(I_vs), .rgb(I_data),
-        .o_ready(blk_ready), .o_count(blk_count), .o_box(blk_box)
-    );
+    wire [47:0] blk_det_box;
+    wire [2:0]  blk_det_sel;
 
     // ---------- 存储 ----------
     (* ram_style="block" *) reg [33:0]  run_mem [0:MAX_RUNS-1];
@@ -289,6 +282,17 @@ module cv_top #(
     // ======================================================================
     // 主 FSM
     // ======================================================================
+    // ---------- 块域检测子模块实例（MASK_SRC=3；其它模式未用 -> 综合裁掉）----------
+    assign blk_det_sel = r_ti[2:0];
+    cv_blkdet #(
+        .IMG_W(IMG_W), .IMG_H(IMG_H), .DARK_THR(DARK_THR),
+        .MIN_BLKN(16'd8), .MAX_BLKN(16'd400),   // 单位=块(钢珠约 7x7=49 块)
+        .MIN_FILL(MIN_FILL), .MIN_RATIO(MIN_RATIO), .MAX_BLOBS(MAX_BLOBS)
+    ) u_blkdet (
+        .clk(I_clk), .rst_n(I_rst_n), .de(I_de), .vs(I_vs), .rgb(I_data),
+        .i_sel(blk_det_sel), .o_ready(blk_ready), .o_count(blk_count), .o_det_box(blk_det_box)
+    );
+
     integer k;
     always @(posedge I_clk or negedge I_rst_n) begin
         if (!I_rst_n) begin
@@ -327,10 +331,10 @@ module cv_top #(
                 S_BW: if (blk_ready) begin r_ti<=0; r_st<=S_BC; end
                 S_BC: begin
                     det[r_ti] <= (r_ti<blk_count)
-                        ? {1'b1, (blk_box[r_ti][47:36]+blk_box[r_ti][35:24])>>1,
-                                  (blk_box[r_ti][23:12]+blk_box[r_ti][11:0])>>1,
-                                  blk_box[r_ti][47:36], blk_box[r_ti][35:24],
-                                  blk_box[r_ti][23:12], blk_box[r_ti][11:0]}
+                        ? {1'b1, (blk_det_box[47:36]+blk_det_box[35:24])>>1,
+                                  (blk_det_box[23:12]+blk_det_box[11:0])>>1,
+                                  blk_det_box[47:36], blk_det_box[35:24],
+                                  blk_det_box[23:12], blk_det_box[11:0]}
                         : {1'b0,72'd0};
                     if (r_ti==MAX_BLOBS-1) begin
                         r_ndet<=blk_count; r_ti<=0; r_dj<=0; r_free<=0; r_st<=S_TK_START;

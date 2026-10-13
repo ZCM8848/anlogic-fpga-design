@@ -26,10 +26,14 @@ module cv_blkdet #(
     input             de,
     input             vs,
     input      [23:0] rgb,
-    output reg        o_ready,
+    input      [2:0]  i_sel,                 // 选择输出第几个检测框
+    output reg        o_ready,               // 检测表就绪(保持到下次 vs)
     output reg [5:0]  o_count,
-    output reg [47:0] o_box [0:MAX_BLOBS-1] // {minx,maxx,miny,maxy} 像素坐标
+    output     [47:0] o_det_box              // 第 i_sel 个框 {minx,maxx,miny,maxy} 像素坐标
 );
+    // TD 不允许数组端口/端口直访数组 -> 内部存储 + 选择线读出
+    reg [47:0] box_mem [0:MAX_BLOBS-1];
+    assign o_det_box = box_mem[i_sel];
     localparam FW = 1 + 4*12 + 16;          // valid + minx/maxx/miny/maxy(像素,12b) + area(块数)
 
     // ---------------- 灰度 + 坐标 ----------------
@@ -46,19 +50,18 @@ module cv_blkdet #(
     end
 
     // ---------------- 16x16 块均值（两级累加）----------------
+    reg [15:0] acc_row;
+    reg [15:0] col_acc [0:BW-1];
+    reg        col_we; reg [6:0] col_wa; reg [15:0] col_wd;
     wire        rowblk_end = de && (r_x[3:0]==4'hF);
     wire        blkrow_end = (r_y[3:0]==4'hF);
     wire [15:0] row_sum    = acc_row + {8'b0, w_y};
     wire [15:0] col_cur    = col_acc[r_x[11:4]];
     wire [15:0] blk_total  = col_cur + row_sum;
-
-    reg [15:0] acc_row;
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) acc_row <= 16'd0;
         else if (de) acc_row <= rowblk_end ? 16'd0 : (acc_row + {8'b0, w_y});
     end
-    reg [15:0] col_acc [0:BW-1];
-    reg        col_we; reg [6:0] col_wa; reg [15:0] col_wd;
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) col_we <= 1'b0;
         else begin
@@ -87,7 +90,15 @@ module cv_blkdet #(
     // ---------------- 特征表 + 行缓冲(ping-pong) ----------------
     // feat 字段: [FW-1]=valid [42:31]=minx [30:19]=maxx [18:7]=miny [6:0] 不够 -> 用 12b*4
     // 布局: valid(1) | minx(12) | maxx(12) | miny(12) | maxy(12) | area(16)
+    // 单写口/单读口，否则 TD 不推断 RAM（会变成寄存器+大 mux -> 面积爆炸）
     (* ram_style="distributed" *) reg [FW-1:0] feat [0:(1<<LABW)-1];
+    wire [LABW-1:0]  ft_ra = (t_st==T_FILT) ? t_lv : t_lbl;   // 读地址
+    wire [FW-1:0]    ft_rd = feat[ft_ra];                     // 组合读
+    wire             ft_we = (t_st==T_CLR) | ((t_st==T_WR) & t_dark);
+    wire [LABW-1:0]  ft_wa = (t_st==T_CLR) ? t_lv : t_lbl;
+    wire [FW-1:0]    ft_wd = (t_st==T_CLR) ? {FW{1'b0}}
+                           : {1'b1, nf_minx, nf_maxx, nf_miny, nf_maxy, nf_area};
+    always @(posedge clk) if (ft_we) feat[ft_wa] <= ft_wd;
     reg [LABW-1:0] rbuf [0:255];            // index = {sel, bx}
 
     // FW=65: valid[64] minx[63:52] maxx[51:40] miny[39:28] maxy[27:16] area[15:0]
@@ -108,7 +119,7 @@ module cv_blkdet #(
     wire [LABW-1:0] s_up    = (t_by==0) ? {LABW{1'b0}} : rbuf[{~t_sel, t_bx}];
     wire [LABW-1:0] s_lbl   = (s_left!=0) ? s_left : ((s_up!=0) ? s_up : t_next);
     wire            s_isnew = s_dark && (s_left==0) && (s_up==0);
-    wire [FW-1:0]   s_fval  = feat[t_lbl];
+    wire [FW-1:0]   s_fval  = ft_rd;
 
     // 特征更新（块坐标 -> 直接存像素 = 块<<4）
     wire [11:0] bx_px = {5'b0, t_bx, 4'b0};
@@ -119,7 +130,7 @@ module cv_blkdet #(
     wire [11:0] nf_maxy = (t_frd[64] && t_frd[27:16]>by_px) ? t_frd[27:16] : by_px;
     wire [15:0] nf_area = t_frd[64] ? (t_frd[15:0] + 16'd1) : 16'd1;
 
-    wire [FW-1:0] s_ff = feat[t_lv];        // T_FILT 组合读特征
+    wire [FW-1:0] s_ff = ft_rd;             // T_FILT 组合读特征(ft_ra 选通为 t_lv)
     // ---- T_FILT 形状筛选（块单位）----
     wire [6:0] fn_mnx = s_ff[63:52]>>4, fn_mxx = s_ff[51:40]>>4;
     wire [6:0] fn_mny = s_ff[39:28]>>4, fn_mxy = s_ff[27:16]>>4;
@@ -146,7 +157,6 @@ module cv_blkdet #(
                     if (vs_rise) begin t_lv<=0; o_ready<=1'b0; t_st<=T_CLR; end
                 end
                 T_CLR: begin
-                    feat[t_lv] <= {FW{1'b0}};
                     if (t_lv==(1<<LABW)-1) begin t_lv<=0; t_bx<=0; t_by<=0; t_next<=1; t_sel<=0; t_st<=T_READ; end
                     else t_lv<=t_lv+1'b1;
                 end
@@ -159,8 +169,6 @@ module cv_blkdet #(
                     t_st <= T_WR;
                 end
                 T_WR: begin
-                    if (t_dark)
-                        feat[t_lbl] <= {1'b1, nf_minx, nf_maxx, nf_miny, nf_maxy, nf_area};
                     if (t_new) t_next <= t_next + 1'b1;
                     if (t_bx==BW-1) begin
                         t_bx <= 0;
@@ -170,7 +178,7 @@ module cv_blkdet #(
                 end
                 T_FILT: begin
                     if (f_pass && (t_col<MAX_BLOBS)) begin
-                        o_box[t_col] <= {s_ff[63:52], s_ff[51:40], s_ff[39:28], s_ff[27:16]};
+                        box_mem[t_col] <= {s_ff[63:52], s_ff[51:40], s_ff[39:28], s_ff[27:16]};
                         t_col <= t_col + 1'b1;
                     end
                     if (t_lv==(1<<LABW)-1) begin
