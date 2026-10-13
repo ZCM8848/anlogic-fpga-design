@@ -11,7 +11,7 @@
     </HardWare>
     <Source_Files>
         <Verilog>
-            <File Path="../rtl/isp/divider.v">
+            <File Path="../ip/divider/divider_gate.v">
                 <FileInfo>
                     <Attr Name="UsedInSyn" Val="true"/>
                     <Attr Name="UsedInP&R" Val="true"/>
