@@ -54,7 +54,8 @@ module cv_top #(
     output wire [10:0] O_run_cnt,
     output wire        O_ccl_busy,
     output wire        O_run_overflow,
-    output wire [7:0]  O_bin_thr
+    output wire [7:0]  O_bin_thr,
+    output wire [15:0] O_count          // 累计计数：确认过的轨迹消亡(离开视野)时 +1
 );
     localparam FW  = 65;
     localparam RPW = (MAX_RPR==32)?5:6;
@@ -166,6 +167,7 @@ module cv_top #(
     reg        r_det_taken [0:MAX_BLOBS-1];
     reg [5:0]  r_assign [0:MAX_BLOBS-1];
     reg [3:0]  r_next_id;
+    reg [15:0] r_count;
 
     assign O_ccl_busy = (r_st != S_IDLE);
 
@@ -301,7 +303,7 @@ module cv_top #(
             r_found_any<=0; r_lv<=0; r_collect<=0; r_ti<=0; r_dj<=0; r_free<=0;
             r_otsu_thr<=BIN_THR; r_bin_thr<=BIN_THR;   // 阈值归主 FSM 管（S_ADAPTIVE + reset）
             r_trk_i<=0; r_det_j<=0; r_asg<=NONE_ASG; r_min_cost<=0; r_min_j<=0; r_min_valid<=0;
-            r_ndet<=0; r_next_id<=0;
+            r_ndet<=0; r_next_id<=0; r_count<=16'd0;
             // track 表原来从不复位 -> 依赖上电 FF 初值（仿真为 x 会导致不建轨迹）；
             // 这里显式清零 valid（否则 !track[..].valid 判定为 x，新建轨迹分支走不进）。
             for (k=0;k<MAX_BLOBS;k=k+1) begin r_det_taken[k]<=0; r_assign[k]<=NONE_ASG; track[k]<={TW{1'b0}}; end
@@ -404,6 +406,7 @@ module cv_top #(
                                           t_min_x,t_max_x,t_min_y,t_max_y};
                         end
                     end
+                    if (t_valid && !t_alive) r_count<=r_count+16'd1;   // 轨迹消亡(离开视野) -> 计数+1
                     if (r_ti==MAX_BLOBS-1) begin r_ti<=0; r_dj<=0; r_free<=0; r_st<=S_TU_NEW; end
                     else begin r_ti<=r_ti+1; r_st<=S_TU_START; end
                 end
@@ -498,5 +501,6 @@ module cv_top #(
     assign O_run_cnt = r_run_cnt;
     assign O_run_overflow = r_run_overflow;
     assign O_bin_thr = OTSU_EN ? eff_thr[7:0] : r_bin_thr;
+    assign O_count   = r_count;
 
 endmodule

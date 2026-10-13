@@ -586,6 +586,7 @@ module design_top_wrapper (
     wire        S_cv_ccl_busy;
     wire        S_cv_run_overflow;
     wire [7:0]  S_cv_bin_thr;
+    wire [15:0] S_cv_count;      // cv_top 累计计数
 
     // K3(B9)/K4(C7) 板载按键：CV 开时作阈值 ±1 调参（像素域去抖 → 单拍脉冲）
     // 注：脉冲必须单拍——cv_top 每周期判 I_thr_up/dn，若发 14ms 电平会被加到饱和
@@ -628,9 +629,11 @@ module design_top_wrapper (
         .MIN_RATIO( 6'd50  ),
         .EDGE_MG  ( 12'd4  ),
         .EDGE_THR ( 11'd300 ),
-        .DARK_THR ( 11'd110 ),   // 暗区阈值：w_y<110 视为钢珠(深色实心)
+        .DARK_THR ( 11'd100 ),   // 暗区阈值：w_y<100 视为钢珠(深色实心)
         .MASK_SRC ( 3      ),    // 3=暗区检测（替代 Sobel 边缘；钢珠是深色实心圆盘）
-        .MASK_VIEW( 1      )
+        .MASK_VIEW( 1      ),
+        .GATE     ( 12'd240),    // 配对门限(放宽 -> 吸收抖动，避免重复建轨)
+        .MISS_K   ( 4'd20 )      // 丢失多少帧后删轨(=判定"离开视野")
     ) u_cv_top (
         .I_clk          ( S_pixel_clk      ),
         .I_rst_n        ( S_rst_n_pix      ),
@@ -647,7 +650,8 @@ module design_top_wrapper (
         .O_run_cnt      ( S_cv_run_cnt     ),
         .O_ccl_busy     ( S_cv_ccl_busy    ),
         .O_run_overflow ( S_cv_run_overflow),
-        .O_bin_thr      ( S_cv_bin_thr     )
+        .O_bin_thr      ( S_cv_bin_thr     ),
+        .O_count        ( S_cv_count       )
     );
 
     // ============================================================ video_mux（自研，彩条 vs 摄像头二选一）
@@ -719,6 +723,7 @@ module design_top_wrapper (
     reg [2:0] S_cv_on_sync_100m;
     reg [5:0] S_cv_blob_cnt_s1, S_cv_blob_cnt_s2;
     reg [7:0] S_cv_bin_thr_s1, S_cv_bin_thr_s2;
+    reg [15:0] S_cv_count_s1, S_cv_count_s2;
     always @(posedge S_clk_100m) begin
         if (!S_rst_n_100m) begin
             S_sw4_sync_100m <= 3'd0;
@@ -726,6 +731,7 @@ module design_top_wrapper (
             S_cv_on_sync_100m <= 3'd0;
             S_cv_blob_cnt_s1 <= 6'd0; S_cv_blob_cnt_s2 <= 6'd0;
             S_cv_bin_thr_s1 <= 8'd0;  S_cv_bin_thr_s2 <= 8'd0;
+            S_cv_count_s1 <= 16'd0;   S_cv_count_s2 <= 16'd0;
         end else begin
             S_sw4_sync_100m <= {S_sw4_sync_100m[1:0], I_sw4};
             S_sw3_sync_100m <= {S_sw3_sync_100m[1:0], I_sw3};
@@ -734,6 +740,8 @@ module design_top_wrapper (
             S_cv_blob_cnt_s2 <= S_cv_blob_cnt_s1;
             S_cv_bin_thr_s1  <= S_cv_bin_thr;        // 8bit 慢变（手动调），2FF 同步
             S_cv_bin_thr_s2  <= S_cv_bin_thr_s1;
+            S_cv_count_s1    <= S_cv_count;          // 计数慢变，2FF 同步
+            S_cv_count_s2    <= S_cv_count_s1;
         end
     end
 
@@ -750,6 +758,7 @@ module design_top_wrapper (
         .I_cv_on       ( S_cv_on_sync_100m[2]),
         .I_blob_cnt    ( S_cv_blob_cnt_s2    ),
         .I_bin_thr     ( S_cv_bin_thr_s2     ),
+        .I_count       ( S_cv_count_s2       ),
         .O_uart_tx     ( O_uart_tx           )
     );
 

@@ -33,19 +33,20 @@ module status_report #(
     input  wire        I_cv_on,
     input  wire [5:0]  I_blob_cnt,
     input  wire [7:0]  I_bin_thr,
+    input  wire [15:0] I_count,             // 累计钢珠计数(cv_top.O_count)
 
     output wire        O_uart_tx
 );
 
     localparam integer REPEAT_CYC = (CLK_FREQ / 1000) * REPEAT_MS;
-    localparam [7:0]   LAST       = 8'd62;   // 字符表末索引（0..62 = 63 字节）
+    localparam [7:0]   LAST       = 8'd67;   // 字符表末索引（0..67 = 68 字节）
 
     function [7:0] hx(input [3:0] v);
         hx = (v < 4'd10) ? (8'h30 + {4'b0, v}) : (8'h37 + {4'b0, v});
     endfunction
 
     // ---- 字符表（63 字节）----
-    wire [7:0] ln [0:62];
+    wire [7:0] ln [0:67];
 
     assign ln[0]  = "C";
     assign ln[1]  = "A";
@@ -108,8 +109,13 @@ module status_report #(
     assign ln[58] = "=";
     assign ln[59] = hx(I_bin_thr[7:4]);
     assign ln[60] = hx(I_bin_thr[3:0]);
-    assign ln[61] = 8'h0D;         // \r
-    assign ln[62] = 8'h0A;         // \n
+    assign ln[61] = " ";
+    assign ln[62] = "C";
+    assign ln[63] = "=";
+    assign ln[64] = hx(I_count[7:4]);   // 累计计数(2 hex)
+    assign ln[65] = hx(I_count[3:0]);
+    assign ln[66] = 8'h0D;         // \r
+    assign ln[67] = 8'h0A;         // \n
 
     // ---- 发送 FSM ----
     reg [31:0] S_wait_cnt;
