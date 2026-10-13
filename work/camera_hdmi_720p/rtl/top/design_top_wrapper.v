@@ -627,6 +627,7 @@ module design_top_wrapper (
         .MIN_FILL ( 6'd15  ),
         .MIN_RATIO( 6'd25  ),
         .EDGE_MG  ( 12'd4  ),
+        .EDGE_THR ( 11'd300),   // Sobel 阈值：80 对"浅背景/木纹"内容过检，按钢珠5实测调到 300
         .MASK_VIEW( 1      )
     ) u_cv_top (
         .I_clk          ( S_pixel_clk      ),
