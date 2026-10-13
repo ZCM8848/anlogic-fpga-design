@@ -80,9 +80,11 @@ module cv_top #(
     wire [7:0] w_y = {2'b0,I_data[23:18]} + {1'b0,I_data[15:9]} + {2'b0,I_data[7:2]};
     reg  [7:0] r_otsu_thr, r_user_off, r_bin_thr;
     // 当前生效阈值：MASK_SRC=1(边缘)用 EDGE_THR+偏置；=0(亮阈值)用 midpoint+偏置
-    wire [7:0] base_thr = MASK_SRC ? EDGE_THR[7:0] : r_otsu_thr;
-    wire [8:0] thr_plus = {1'b0,base_thr} + {1'b0,r_user_off};
-    wire [7:0] eff_thr  = (thr_plus>9'd255) ? 8'd255 : (thr_plus[8] ? 8'd0 : thr_plus[7:0]);
+    // 注意：EDGE_THR 为 11bit（Sobel 幅值 0..~2040）；阈值链路必须够宽，
+    // 否则 >255 的 EDGE_THR 会被静默截断（曾把 300 截成 44 -> 掩膜爆量 + run 溢出）。
+    wire [10:0] base_thr = MASK_SRC ? EDGE_THR : {3'b0, r_otsu_thr};
+    wire [11:0] thr_plus = {1'b0,base_thr} + {5'b0,r_user_off};
+    wire [10:0] eff_thr  = thr_plus[11] ? 11'h7FF : thr_plus[10:0];
 
     // ---------- Sobel 边缘检测（3x3，2 行缓存，async-read BRAM，仿 edge_detect_96）----------
     //  输出 w_sobel_mag 为像素 (r_x-1, r_y-1) 的幅值（1 列+1 行延迟，整体偏移 1px 不可见）。
@@ -272,7 +274,9 @@ module cv_top #(
             r_otsu_thr<=BIN_THR; r_bin_thr<=BIN_THR;   // 阈值归主 FSM 管（S_ADAPTIVE + reset）
             r_trk_i<=0; r_det_j<=0; r_asg<=NONE_ASG; r_min_cost<=0; r_min_j<=0; r_min_valid<=0;
             r_ndet<=0; r_next_id<=0;
-            for (k=0;k<MAX_BLOBS;k=k+1) begin r_det_taken[k]<=0; r_assign[k]<=NONE_ASG; end
+            // track 表原来从不复位 -> 依赖上电 FF 初值（仿真为 x 会导致不建轨迹）；
+            // 这里显式清零 valid（否则 !track[..].valid 判定为 x，新建轨迹分支走不进）。
+            for (k=0;k<MAX_BLOBS;k=k+1) begin r_det_taken[k]<=0; r_assign[k]<=NONE_ASG; track[k]<={TW{1'b0}}; end
         end else begin
             case (r_st)
                 S_IDLE: if (vs_rise) r_st<=S_ADAPTIVE;
@@ -451,6 +455,6 @@ module cv_top #(
     assign O_blob_cnt = r_collect;
     assign O_run_cnt = r_run_cnt;
     assign O_run_overflow = r_run_overflow;
-    assign O_bin_thr = OTSU_EN ? eff_thr : r_bin_thr;
+    assign O_bin_thr = OTSU_EN ? eff_thr[7:0] : r_bin_thr;
 
 endmodule
