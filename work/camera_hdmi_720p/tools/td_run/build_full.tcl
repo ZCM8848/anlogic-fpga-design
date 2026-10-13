@@ -37,6 +37,7 @@ flow_status -file syn_flow.status
 place
 update_timing -mode manhattan
 report_area -io_info -file camera_hdmi_720p_phy.area
+report_clock_utilization -file place_clock_utilization.txt
 flow_status -file place_flow.status
 
 # ---- route ----
@@ -45,6 +46,7 @@ update_timing -mode final
 report_timing_status   -file camera_hdmi_720p_phy.ts
 report_timing_summary  -file camera_hdmi_720p_pr.timing
 report_timing_exception -file camera_hdmi_720p_exception.timing
+report_clock_utilization -file route_clock_utilization.txt
 flow_status -file route_flow.status
 
 # ---- bitgen ----
