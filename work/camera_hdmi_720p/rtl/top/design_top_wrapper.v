@@ -618,6 +618,22 @@ module design_top_wrapper (
         end
     end
 
+    // ============================================================ CV 前端（灰度+光照归一化+IIR背景+形态学开）
+    //   对应 Python/impl_hw：给 cv_top 供外部掩膜（MASK_SRC=2）
+    wire        S_fe_de, S_fe_vs, S_fe_mask;
+    wire [7:0]  S_fe_norm;
+    cv_front_top #( .IMG_W ( 1280 ) ) u_cv_front (
+        .I_clk   ( S_pixel_clk      ),
+        .I_rst_n ( S_rst_n_pix      ),
+        .I_de    ( S_hdmi_out_de    ),
+        .I_vs    ( S_hdmi_out_vsync ),
+        .I_rgb   ( S_hdmi_out_data  ),
+        .O_de    ( S_fe_de          ),
+        .O_vs    ( S_fe_vs          ),
+        .O_mask  ( S_fe_mask        ),
+        .O_norm  ( S_fe_norm        )
+    );
+
     cv_top #(
         .IMG_W    ( 1280   ),
         .IMG_H    ( 720    ),
@@ -627,6 +643,7 @@ module design_top_wrapper (
         .MIN_FILL ( 6'd15  ),
         .MIN_RATIO( 6'd25  ),
         .EDGE_MG  ( 12'd4  ),
+        .MASK_SRC ( 2      ),
         .MASK_VIEW( 1      )
     ) u_cv_top (
         .I_clk          ( S_pixel_clk      ),
@@ -644,7 +661,8 @@ module design_top_wrapper (
         .O_run_cnt      ( S_cv_run_cnt     ),
         .O_ccl_busy     ( S_cv_ccl_busy    ),
         .O_run_overflow ( S_cv_run_overflow),
-        .O_bin_thr      ( S_cv_bin_thr     )
+        .O_bin_thr      ( S_cv_bin_thr     ),
+        .I_mask_ext     ( S_fe_mask        )
     );
 
     // ============================================================ video_mux（自研，彩条 vs 摄像头二选一）
