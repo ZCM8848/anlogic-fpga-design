@@ -1,0 +1,116 @@
+# -*- coding: utf-8 -*-
+"""
+cv_pipeline_sim.py — 当前 FPGA 检测/跟踪/计数管线的离线视频仿真（与 RTL 同参）
+================================================================================
+复刻当前 bit 的 CV 逻辑，用于在没有摄像头时对**录像**做验证：
+  * 检测：块域(16x16)暗块  —— 对应 rtl/cv/cv_blkdet.v（DARK_THR 阈值 + 形状筛选）
+  * 跟踪：cv_top 的 a-b 预测 + 贪心最近邻(GATE) + 丢失删轨(MISS_K)
+  * 计数：轨迹消亡 +1 —— 对应 cv_top.O_count（可换成"出画面即计数"，见 --count-rule）
+
+用法:
+  python cv_pipeline_sim.py <video> <out.mp4> [GATE MISS_K DARK MIN_HITS] [--count-rule death|exit]
+
+注意:
+  * DARK_THR 与场景强相关（较亮场景要用更大的 DARK_THR）；上板可用 K3/K4 调偏置。
+  * 块域判别与 RTL 用 4 连通近似；结果与 iverilog 集成仿真一致（钢珠5 frame200 检出 3 球）。
+"""
+import argparse
+import cv2
+import numpy as np
+
+ALPHA = 0.625      # a-b 位置增益(≈cv_top ALPHA_Q/256)
+BETA = 0.1875      # a-b 速度增益
+MARGIN = 20        # exit 计数：预测位置超出画面 + MARGIN 视为"离开"
+
+
+def detect(frame, dark):
+    """块域暗块检测 -> 检测框[像素(x,y,w,h)]列表（与 cv_blkdet 同参）。"""
+    B = frame[:, :, 0].astype(np.uint16)
+    G = frame[:, :, 1].astype(np.uint16)
+    R = frame[:, :, 2].astype(np.uint16)
+    wy = ((R >> 2) + (G >> 1) + (B >> 2)).astype(np.float32)
+    bm = cv2.resize(wy, (80, 45), interpolation=cv2.INTER_AREA)  # 16x16 块均值
+    m = (bm < dark).astype(np.uint8)
+    n, lab, stats, cent = cv2.connectedComponentsWithStats(m, 4)
+    out = []
+    for i in range(1, n):
+        x, y, w, h, a = stats[i]
+        if a < 8 or a > 400: continue
+        if a * 100 < 40 * w * h: continue            # 填充率 >= 40%
+        if min(w, h) * 100 < 50 * max(w, h): continue # 长短比 >= 50%
+        if x == 0 or y == 0: continue                 # 贴边剔除
+        out.append((cent[i][0] * 16, cent[i][1] * 16, x * 16, y * 16, (x + w) * 16, (y + h) * 16))
+    return out
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("video")
+    ap.add_argument("out")
+    ap.add_argument("gate", type=int, nargs="?", default=240)
+    ap.add_argument("miss_k", type=int, nargs="?", default=20)
+    ap.add_argument("dark", type=int, nargs="?", default=100)
+    ap.add_argument("min_hits", type=int, nargs="?", default=3)
+    ap.add_argument("--count-rule", choices=["death", "exit"], default="death")
+    args = ap.parse_args()
+
+    cap = cv2.VideoCapture(args.video)
+    W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)); H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = cap.get(cv2.CAP_PROP_FPS) or 60
+    vw = cv2.VideoWriter(args.out, cv2.VideoWriter_fourcc(*"mp4v"), fps, (W, H))
+
+    tracks = []   # [cx,cy,vx,vy,missed,hits,box,counted]
+    next_id = 0; count = 0; nf = 0; events = []
+    while True:
+        ok, fr = cap.read()
+        if not ok: break
+        nf += 1
+        dets = detect(fr, args.dark)
+        taken = [False] * len(dets); assigns = [-1] * len(tracks)
+        for ti, t in enumerate(tracks):
+            px, py = t[0] + t[2], t[1] + t[3]
+            best = -1; bd = args.gate
+            for j, d in enumerate(dets):
+                if taken[j]: continue
+                dd = abs(d[0] - px) + abs(d[1] - py)
+                if dd < bd: bd = dd; best = j
+            if best >= 0: taken[best] = True; assigns[ti] = best
+        for ti, t in enumerate(tracks):
+            if assigns[ti] >= 0:
+                d = dets[assigns[ti]]; dx = d[0] - t[0]; dy = d[1] - t[1]
+                t[2] += BETA * dx; t[3] += BETA * dy
+                t[0] += t[2] + ALPHA * dx; t[1] += t[3] + ALPHA * dy
+                t[4] = 0; t[5] += 1; t[6] = d[2:6]
+            else:
+                t[0] += t[2]; t[1] += t[3]; t[4] += 1
+        for j, d in enumerate(dets):
+            if not taken[j]:
+                tracks.append([d[0], d[1], 0, 0, 0, 1, d[2:6], False]); next_id += 1
+        for t in tracks:                              # exit 计数
+            if args.count_rule == "exit" and (not t[7]) and t[5] >= args.min_hits and \
+               (t[0] < -MARGIN or t[0] > W + MARGIN or t[1] < -MARGIN or t[1] > H + MARGIN):
+                t[7] = True; count += 1; events.append((nf, count))
+        alive = []
+        for t in tracks:
+            if t[4] > args.miss_k:
+                if args.count_rule == "death":
+                    count += 1; events.append((nf, count))
+            else:
+                alive.append(t)
+        tracks = alive
+        for t in tracks:
+            b = t[6]
+            cv2.rectangle(fr, (int(b[0]), int(b[1])), (int(b[2]), int(b[3])), (0, 255, 0), 2)
+            cv2.putText(fr, "ID%d" % next_id, (int(b[0]), max(12, int(b[1]) - 4)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+        cv2.putText(fr, "COUNT=%d frames=%d" % (count, nf), (10, 32),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 128, 255), 2)
+        vw.write(fr)
+    vw.release()
+    print("video=%s frames=%d GATE=%d MISS_K=%d DARK=%d MIN_HITS=%d rule=%s -> COUNT=%d ids=%d"
+          % (args.video, nf, args.gate, args.miss_k, args.dark, args.min_hits, args.count_rule, count, next_id))
+    print("COUNT increments at frames:", [e[0] for e in events])
+
+
+if __name__ == "__main__":
+    main()
