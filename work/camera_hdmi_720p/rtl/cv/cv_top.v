@@ -32,6 +32,7 @@ module cv_top #(
     parameter         MASK_VIEW = 1,
     parameter         MASK_SRC  = 1,       // 1=Sobel 边缘圆环(默认); 0=亮阈值(回退对比)
     parameter [10:0]  EDGE_THR  = 11'd80,  // Sobel 幅值阈值(同 edge_detect_96)；K3/K4 调偏置
+    parameter [10:0]  DARK_THR  = 11'd110, // 暗区阈值(MASK_SRC=3)：w_y < DARK_THR 视为前景(如深色钢珠)
     parameter [7:0]  ALPHA_Q   = 8'd160,  // a*256 ~=0.625（位置增益）
     parameter [7:0]  BETA_Q    = 8'd48,   // b*256 ~=0.1875（速度增益）
     parameter [11:0] GATE      = 12'd80,  // 配对最大 Manhattan 距离
@@ -82,40 +83,61 @@ module cv_top #(
     // 当前生效阈值：MASK_SRC=1(边缘)用 EDGE_THR+偏置；=0(亮阈值)用 midpoint+偏置
     // 注意：EDGE_THR 为 11bit（Sobel 幅值 0..~2040）；阈值链路必须够宽，
     // 否则 >255 的 EDGE_THR 会被静默截断（曾把 300 截成 44 -> 掩膜爆量 + run 溢出）。
-    wire [10:0] base_thr = MASK_SRC ? EDGE_THR : {3'b0, r_otsu_thr};
+    wire [10:0] base_thr = (MASK_SRC==3) ? DARK_THR : (MASK_SRC ? EDGE_THR : {3'b0, r_otsu_thr});
     wire [11:0] thr_plus = {1'b0,base_thr} + {5'b0,r_user_off};
     wire [10:0] eff_thr  = thr_plus[11] ? 11'h7FF : thr_plus[10:0];
 
-    // ---------- Sobel 边缘检测（3x3，2 行缓存，async-read BRAM，仿 edge_detect_96）----------
-    //  输出 w_sobel_mag 为像素 (r_x-1, r_y-1) 的幅值（1 列+1 行延迟，整体偏移 1px 不可见）。
-    (* ram_style="block" *) reg [7:0] sob_l1 [0:IMG_W-1];  // row y-1
-    (* ram_style="block" *) reg [7:0] sob_l2 [0:IMG_W-1];  // row y-2
-    wire [7:0] mid_word = sob_l1[r_x];   // row y-1 @ r_x（async read，旧值）
-    wire [7:0] top_word = sob_l2[r_x];   // row y-2 @ r_x
-    reg [7:0] top_p2, top_p1, mid_p2, mid_p1, bot_p2, bot_p1;
-    // Sobel Gx/Gy @ center (r_x-1, r_y-1)
-    //  窗口: top={top_p2,top_p1,top_word} mid={mid_p2,mid_p1,mid_word} bot={bot_p2,bot_p1,w_y}
-    wire signed [13:0] gx = $signed({5'b0,top_p2}) + ($signed({5'b0,top_p1})<<<1) + $signed({5'b0,top_word})
-                         - $signed({5'b0,bot_p2}) - ($signed({5'b0,bot_p1})<<<1) - $signed({5'b0,w_y});
-    wire signed [13:0] gy = $signed({5'b0,top_p2}) + ($signed({5'b0,mid_p2})<<<1) + $signed({5'b0,bot_p2})
-                         - $signed({5'b0,top_word}) - ($signed({5'b0,mid_word})<<<1) - $signed({5'b0,w_y});
-    wire [13:0] abs_gx = gx[13] ? (~gx + 1) : gx;
-    wire [13:0] abs_gy = gy[13] ? (~gy + 1) : gy;
-    wire [14:0] w_sobel_mag = {1'b0,abs_gx} + {1'b0,abs_gy};
-    wire        w_edge_mask = (r_y >= 12'd2) && (r_x >= 12'd2) && (w_sobel_mag > {4'b0, eff_thr});
-    // 行缓存写+列延迟（clocked）
-    always @(posedge I_clk) begin
-        if (I_de) begin
-            sob_l1[r_x] <= w_y;            // 当前行写 l1（下帧作 row y-1）
-            sob_l2[r_x] <= mid_word;       // l1 旧值写 l2（作 row y-2）
-            top_p2 <= top_p1; top_p1 <= top_word;
-            mid_p2 <= mid_p1; mid_p1 <= mid_word;
-            bot_p2 <= bot_p1; bot_p1 <= w_y;
+    // ---------- 检测掩膜 ----------
+    //   MASK_SRC=1 : Sobel 边缘圆环（原 M7）
+    //   MASK_SRC=0 : 亮阈值（w_y > eff_thr）
+    //   MASK_SRC=3 : 暗区阈值（w_y < eff_thr；深色实心目标，如钢珠）。此模式下 Sobel 级被剪掉。
+    wire w_mask;
+    generate
+    if (MASK_SRC == 3) begin : g_mask_blk
+        // MASK_SRC=3 的检测由 cv_blkdet 子模块完成（块域暗块 + 块级标记），run 提取不参与
+        assign w_mask = 1'b0;
+    end else begin : g_mask_sob
+        // ---------- Sobel 边缘检测（3x3，2 行缓存，async-read BRAM，仿 edge_detect_96）----------
+        //  输出 w_sobel_mag 为像素 (r_x-1, r_y-1) 的幅值（1 列+1 行延迟，整体偏移 1px 不可见）。
+        (* ram_style="block" *) reg [7:0] sob_l1 [0:IMG_W-1];  // row y-1
+        (* ram_style="block" *) reg [7:0] sob_l2 [0:IMG_W-1];  // row y-2
+        wire [7:0] mid_word = sob_l1[r_x];   // row y-1 @ r_x（async read，旧值）
+        wire [7:0] top_word = sob_l2[r_x];   // row y-2 @ r_x
+        reg [7:0] top_p2, top_p1, mid_p2, mid_p1, bot_p2, bot_p1;
+        wire signed [13:0] gx = $signed({5'b0,top_p2}) + ($signed({5'b0,top_p1})<<<1) + $signed({5'b0,top_word})
+                             - $signed({5'b0,bot_p2}) - ($signed({5'b0,bot_p1})<<<1) - $signed({5'b0,w_y});
+        wire signed [13:0] gy = $signed({5'b0,top_p2}) + ($signed({5'b0,mid_p2})<<<1) + $signed({5'b0,bot_p2})
+                             - $signed({5'b0,top_word}) - ($signed({5'b0,mid_word})<<<1) - $signed({5'b0,w_y});
+        wire [13:0] abs_gx = gx[13] ? (~gx + 1) : gx;
+        wire [13:0] abs_gy = gy[13] ? (~gy + 1) : gy;
+        wire [14:0] w_sobel_mag = {1'b0,abs_gx} + {1'b0,abs_gy};
+        wire        w_edge_mask = (r_y >= 12'd2) && (r_x >= 12'd2) && (w_sobel_mag > {4'b0, eff_thr});
+        // 行缓存写+列延迟（clocked）
+        always @(posedge I_clk) begin
+            if (I_de) begin
+                sob_l1[r_x] <= w_y;            // 当前行写 l1（下帧作 row y-1）
+                sob_l2[r_x] <= mid_word;       // l1 旧值写 l2（作 row y-2）
+                top_p2 <= top_p1; top_p1 <= top_word;
+                mid_p2 <= mid_p1; mid_p1 <= mid_word;
+                bot_p2 <= bot_p1; bot_p1 <= w_y;
+            end
         end
+        assign w_mask = MASK_SRC ? w_edge_mask : (w_y > eff_thr);
     end
+    endgenerate
 
-    // ---------- 检测掩膜：MASK_SRC=1 边缘圆环；=0 亮阈值 ----------
-    wire w_mask = MASK_SRC ? w_edge_mask : (w_y > eff_thr);
+    // ---------- 块域检测子模块（MASK_SRC=3；其它模式未用 -> 综合会自动裁掉）----------
+    wire        blk_ready;
+    wire [5:0]  blk_count;
+    wire [47:0] blk_box [0:MAX_BLOBS-1];
+    cv_blkdet #(
+        .IMG_W(IMG_W), .IMG_H(IMG_H), .DARK_THR(DARK_THR),
+        .MIN_BLKN(16'd8), .MAX_BLKN(16'd400),   // 单位=块(钢珠约 7x7=49 块)
+        .MIN_FILL(MIN_FILL), .MIN_RATIO(MIN_RATIO), .MAX_BLOBS(MAX_BLOBS)
+    ) u_blkdet (
+        .clk(I_clk), .rst_n(I_rst_n), .de(I_de), .vs(I_vs), .rgb(I_data),
+        .o_ready(blk_ready), .o_count(blk_count), .o_box(blk_box)
+    );
 
     // ---------- 存储 ----------
     (* ram_style="block" *) reg [33:0]  run_mem [0:MAX_RUNS-1];
@@ -134,10 +156,12 @@ module cv_top #(
     // ---------- FSM 状态 ----------
     localparam S_IDLE=4'd0, S_ADAPTIVE=4'd1, S_CLR=4'd2, S_RD=4'd3, S_SCAN=4'd4,
                S_DCOLLECT=4'd5, S_TK_START=4'd6, S_TK_SCAN=4'd7, S_TK_ASSIGN=4'd8,
-               S_TU_START=4'd9, S_TU_W=4'd10, S_TU_NEW=4'd11, S_DONE=4'd12;
+               S_TU_START=4'd9, S_TU_W=4'd10, S_TU_NEW=4'd11, S_DONE=4'd12,
+               S_BW=4'd13, S_BC=4'd14;   // MASK_SRC=3：等待 cv_blkdet / 灌入检测框
     reg [3:0] r_st;
     reg [10:0] r_i;
-    reg [5:0]  r_next_label, r_j, r_cur_lbl, r_lv, r_collect, r_ti, r_dj, r_free;
+    reg [6:0]  r_next_label, r_lv;   // 7bit：支持 MAX_LABELS 到 64（含循环哨兵 r_lv==MAX_LABELS）
+    reg [5:0]  r_j, r_cur_lbl, r_collect, r_ti, r_dj, r_free;
     reg        r_found_any;
     reg        r_prev_sel; reg [5:0] r_prev_len, r_cur_len; reg [11:0] r_cur_row_y;
     // 跟踪工作寄存器
@@ -295,8 +319,22 @@ module cv_top #(
                     if (r_lv==MAX_LABELS-1) begin
                         r_lv<=0; r_i<=0; r_next_label<=0; r_prev_sel<=0;
                         r_prev_len<=0; r_cur_len<=0; r_cur_row_y<=12'h7FF; r_collect<=0; r_ndet<=0;
-                        r_st<=S_RD;
+                        r_st<=(MASK_SRC==3)?S_BW:S_RD;
                     end else r_lv<=r_lv+1;
+                end
+
+                // ---- MASK_SRC=3：等 cv_blkdet 完成 -> 逐拍把检测框灌入 det[] ----
+                S_BW: if (blk_ready) begin r_ti<=0; r_st<=S_BC; end
+                S_BC: begin
+                    det[r_ti] <= (r_ti<blk_count)
+                        ? {1'b1, (blk_box[r_ti][47:36]+blk_box[r_ti][35:24])>>1,
+                                  (blk_box[r_ti][23:12]+blk_box[r_ti][11:0])>>1,
+                                  blk_box[r_ti][47:36], blk_box[r_ti][35:24],
+                                  blk_box[r_ti][23:12], blk_box[r_ti][11:0]}
+                        : {1'b0,72'd0};
+                    if (r_ti==MAX_BLOBS-1) begin
+                        r_ndet<=blk_count; r_ti<=0; r_dj<=0; r_free<=0; r_st<=S_TK_START;
+                    end else r_ti<=r_ti+1;
                 end
 
                 S_RD: if (r_i>=r_run_cnt) begin r_lv<=0; r_collect<=0; r_st<=S_DCOLLECT; end

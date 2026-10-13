@@ -622,12 +622,14 @@ module design_top_wrapper (
         .IMG_W    ( 1280   ),
         .IMG_H    ( 720    ),
         .BIN_THR  ( 8'd91  ),
-        .MIN_AREA ( 16'd8  ),
+        .MIN_AREA ( 16'd200 ),   // 钢珠5实测：暗块形状筛选(面积≥200、填充≥40%、长短比≥50%)
         .MAX_AREA ( 16'd20000 ),
-        .MIN_FILL ( 6'd15  ),
-        .MIN_RATIO( 6'd25  ),
+        .MIN_FILL ( 6'd40  ),
+        .MIN_RATIO( 6'd50  ),
         .EDGE_MG  ( 12'd4  ),
-        .EDGE_THR ( 11'd300),   // Sobel 阈值：80 对"浅背景/木纹"内容过检，按钢珠5实测调到 300
+        .EDGE_THR ( 11'd300 ),
+        .DARK_THR ( 11'd110 ),   // 暗区阈值：w_y<110 视为钢珠(深色实心)
+        .MASK_SRC ( 3      ),    // 3=暗区检测（替代 Sobel 边缘；钢珠是深色实心圆盘）
         .MASK_VIEW( 1      )
     ) u_cv_top (
         .I_clk          ( S_pixel_clk      ),
