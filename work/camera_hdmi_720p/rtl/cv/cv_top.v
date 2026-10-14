@@ -23,7 +23,7 @@ module cv_top #(
     parameter [15:0] MAX_AREA  = 16'd500,  // 圆环面积上限
     parameter [5:0]  MIN_FILL  = 6'd5,    // 圆环空心→低填充率
     parameter [5:0]  MIN_RATIO = 6'd60,   // 圆球 bbox 近正方形→高长短比
-    parameter [15:0] MIN_BLKN  = 16'd4,   // 暗块连通域最小面积(块数)：局部对比下球块数量变少, 放宽到 4
+    parameter [15:0] MIN_BLKN  = 16'd8,   // 暗块连通域最小面积(块数)：球约 7x7=49 块
     parameter [11:0] EDGE_MG   = 12'd4,
     parameter         MAX_BLOBS = 8,
     parameter         MAX_RUNS  = 1024,
@@ -38,7 +38,7 @@ module cv_top #(
     parameter [7:0]  BETA_Q    = 8'd48,   // b*256 ~=0.1875（速度增益）
     parameter [11:0] GATE      = 12'd80,  // 配对最大 Manhattan 距离
     parameter [3:0]  MISS_K    = 4'd8,    // 丢失几帧删轨迹
-    parameter [3:0]  MIN_HITS  = 4'd3,    // 至少被连续检出这么多帧的轨迹才允许"计数"
+    parameter [3:0]  MIN_HITS  = 4'd4,    // 至少被连续检出这么多帧的轨迹才允许"计数"
     parameter         OTSU_EN   = 1
 )(
     input  wire        I_clk,
