@@ -21,6 +21,7 @@ import numpy as np
 ALPHA = 0.625      # a-b 位置增益(≈cv_top ALPHA_Q/256)
 BETA = 0.1875      # a-b 速度增益
 MARGIN = 20        # exit 计数：预测位置超出画面 + MARGIN 视为"离开"
+REC    = 2         # 只有"丢失 <= REC"帧的轨迹才画/才按 exit 计数(滑行幻影不画不计)
 
 
 def detect(frame, dark):
@@ -36,9 +37,9 @@ def detect(frame, dark):
     for i in range(1, n):
         x, y, w, h, a = stats[i]
         if a < 8 or a > 400: continue
-        if a * 100 < 40 * w * h: continue            # 填充率 >= 40%
-        if min(w, h) * 100 < 50 * max(w, h): continue # 长短比 >= 50%
-        if x == 0 or y == 0: continue                 # 贴边剔除
+        if a * 100 < 30 * w * h: continue            # 填充率 >= 30%(容许运动模糊)
+        if min(w, h) * 100 < 30 * max(w, h): continue # 长短比 >= 30%
+        if x == 0 or y == 0: continue                 # 只剔左/上边(与 cv_blkdet 一致)
         out.append((cent[i][0] * 16, cent[i][1] * 16, x * 16, y * 16, (x + w) * 16, (y + h) * 16))
     return out
 
@@ -85,10 +86,11 @@ def main():
                 t[0] += t[2]; t[1] += t[3]; t[4] += 1
         for j, d in enumerate(dets):
             if not taken[j]:
-                tracks.append([d[0], d[1], 0, 0, 0, 1, d[2:6], False]); next_id += 1
+                tracks.append([d[0], d[1], 0, 0, 0, 1, d[2:6], False, next_id]); next_id += 1
         # 出画面即时计数（exit / combined）
         for t in tracks:
             if args.count_rule in ("exit", "combined") and (not t[7]) and t[5] >= args.min_hits and \
+               t[4] <= REC and \
                (t[0] < -MARGIN or t[0] > W + MARGIN or t[1] < -MARGIN or t[1] > H + MARGIN):
                 t[7] = True; count += 1; events.append((nf, count))
         alive = []
@@ -101,9 +103,10 @@ def main():
                 alive.append(t)
         tracks = alive
         for t in tracks:
+            if t[4] > REC: continue          # 纯预测滑行的不画
             b = t[6]
             cv2.rectangle(fr, (int(b[0]), int(b[1])), (int(b[2]), int(b[3])), (0, 255, 0), 2)
-            cv2.putText(fr, "ID%d" % next_id, (int(b[0]), max(12, int(b[1]) - 4)),
+            cv2.putText(fr, "ID%d" % t[8], (int(b[0]), max(12, int(b[1]) - 4)),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
         cv2.putText(fr, "COUNT=%d frames=%d" % (count, nf), (10, 32),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 128, 255), 2)

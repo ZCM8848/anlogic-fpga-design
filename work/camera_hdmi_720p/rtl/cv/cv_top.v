@@ -410,8 +410,8 @@ module cv_top #(
                                           t_min_x,t_max_x,t_min_y,t_max_y};
                         end
                     end
-                    // 计数：出画面即时计数；未出画面的在消亡时补计（r_cnt_mask 去重）
-                    if (t_valid && !r_cnt_mask[r_ti[2:0]] && (t_out || !t_alive)) begin
+                    // 计数：出画面即时计数(要求最近有检测, 避免滑行幻影被计)；未出画面的在消亡时补计。
+                    if (t_valid && !r_cnt_mask[r_ti[2:0]] && ((t_out && (t_miss<=4'd2)) || !t_alive)) begin
                         r_cnt_mask[r_ti[2:0]] <= 1'b1;
                         r_count <= r_count + 16'd1;
                     end
@@ -484,7 +484,8 @@ module cv_top #(
     always @(*) begin
         r_border=1'b0; r_digit=1'b0;
         for (oi=0; oi<MAX_BLOBS; oi=oi+1) begin
-            if (track[oi][104]) begin
+            // 只画"最近有真实检测"的轨迹(丢失<=2)；纯预测滑行的不画(否则边缘出幻影框)
+            if (track[oi][104] && (track[oi][51:48] <= 4'd2)) begin
                 if ((((r_x>=track[oi][47:36])&&(r_x<track[oi][47:36]+FBOX_W)) ||
                      ((r_x<=track[oi][35:24])&&(r_x>track[oi][35:24]-FBOX_W))) &&
                     (r_y>=track[oi][23:12])&&(r_y<=track[oi][11:0])) r_border=1;

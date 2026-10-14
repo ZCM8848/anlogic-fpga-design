@@ -625,8 +625,8 @@ module design_top_wrapper (
         .BIN_THR  ( 8'd91  ),
         .MIN_AREA ( 16'd200 ),   // 钢珠5实测：暗块形状筛选(面积≥200、填充≥40%、长短比≥50%)
         .MAX_AREA ( 16'd20000 ),
-        .MIN_FILL ( 6'd40  ),
-        .MIN_RATIO( 6'd50  ),
+        .MIN_FILL ( 6'd30  ),    // 放宽：容许运动模糊的球块
+        .MIN_RATIO( 6'd30  ),
         .EDGE_MG  ( 12'd4  ),
         .EDGE_THR ( 11'd300 ),
         .DARK_THR ( 11'd100 ),   // 暗区阈值：w_y<100 视为钢珠(深色实心)
