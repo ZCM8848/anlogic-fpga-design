@@ -627,13 +627,14 @@ module design_top_wrapper (
         .MAX_AREA ( 16'd20000 ),
         .MIN_FILL ( 6'd30  ),    // 放宽：容许运动模糊的球块
         .MIN_RATIO( 6'd30  ),
+        .MIN_BLKN ( 16'd4  ),    // 暗块最小面积：局部对比后球块变少, 4 才不漏(钢珠4/5 各=10)
         .EDGE_MG  ( 12'd4  ),
         .EDGE_THR ( 11'd300 ),
         .DARK_THR ( 11'd100 ),   // 暗区阈值：w_y<100 视为钢珠(深色实心)
         .MASK_SRC ( 3      ),    // 3=暗区检测（替代 Sobel 边缘；钢珠是深色实心圆盘）
         .MASK_VIEW( 1      ),
         .GATE     ( 12'd240),    // 配对门限(放宽 -> 吸收抖动，避免重复建轨)
-        .MISS_K   ( 4'd20 )      // 丢失多少帧后删轨(=判定"离开视野")
+        .MISS_K   ( 12'd20 )     // 丢失多少帧后删轨(=判定"离开视野")
     ) u_cv_top (
         .I_clk          ( S_pixel_clk      ),
         .I_rst_n        ( S_rst_n_pix      ),

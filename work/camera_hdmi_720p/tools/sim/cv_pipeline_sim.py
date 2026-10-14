@@ -25,6 +25,7 @@ REC    = 2         # 只有"丢失 <= REC"帧的轨迹才画/才按 exit 计数(
 
 
 CB_DELTA = 20      # 局部对比：块均值须低于其大格背景这么多
+AMIN = 8           # 连通域最小面积(块数)；与 cv_blkdet 的 MIN_BLKN 对应
 
 
 def detect(frame, dark, bg=None):
@@ -43,7 +44,7 @@ def detect(frame, dark, bg=None):
     out = []
     for i in range(1, n):
         x, y, w, h, a = stats[i]
-        if a < 8 or a > 400: continue
+        if a < AMIN or a > 400: continue
         if w > 16 or h > 16: continue                  # 剔除过宽/过高块(球~7块; 桌沿/长条几十块)
         if a * 100 < 30 * w * h: continue            # 填充率 >= 30%(容许运动模糊)
         if min(w, h) * 100 < 30 * max(w, h): continue # 长短比 >= 30%
@@ -63,7 +64,10 @@ def main():
     ap.add_argument("dark", type=int, nargs="?", default=100)
     ap.add_argument("min_hits", type=int, nargs="?", default=1)
     ap.add_argument("--count-rule", choices=["death", "exit", "combined"], default="combined")
+    ap.add_argument("--amin", type=int, default=8)
     args = ap.parse_args()
+    global AMIN
+    AMIN = args.amin
 
     cap = cv2.VideoCapture(args.video)
     W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)); H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))

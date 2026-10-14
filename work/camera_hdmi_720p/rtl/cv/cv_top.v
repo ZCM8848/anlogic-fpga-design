@@ -23,6 +23,7 @@ module cv_top #(
     parameter [15:0] MAX_AREA  = 16'd500,  // 圆环面积上限
     parameter [5:0]  MIN_FILL  = 6'd5,    // 圆环空心→低填充率
     parameter [5:0]  MIN_RATIO = 6'd60,   // 圆球 bbox 近正方形→高长短比
+    parameter [15:0] MIN_BLKN  = 16'd4,   // 暗块连通域最小面积(块数)：局部对比下球块数量变少, 放宽到 4
     parameter [11:0] EDGE_MG   = 12'd4,
     parameter         MAX_BLOBS = 8,
     parameter         MAX_RUNS  = 1024,
@@ -294,7 +295,7 @@ module cv_top #(
     assign blk_det_sel = r_ti[2:0];
     cv_blkdet #(
         .IMG_W(IMG_W), .IMG_H(IMG_H), .DARK_THR(DARK_THR),
-        .MIN_BLKN(16'd8), .MAX_BLKN(16'd400),   // 单位=块(钢珠约 7x7=49 块)
+        .MIN_BLKN(MIN_BLKN), .MAX_BLKN(16'd400),   // 单位=块(钢珠约 7x7=49 块；局部对比后放宽下限)
         .MIN_FILL(MIN_FILL), .MIN_RATIO(MIN_RATIO), .MAX_BLOBS(MAX_BLOBS)
     ) u_blkdet (
         .clk(I_clk), .rst_n(I_rst_n), .de(I_de), .vs(I_vs), .rgb(I_data),
