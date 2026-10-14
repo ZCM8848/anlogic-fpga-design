@@ -637,7 +637,8 @@ module design_top_wrapper (
         .MASK_SRC ( 3      ),    // 3=暗区检测（替代 Sobel 边缘；钢珠是深色实心圆盘）
         .MASK_VIEW( 1      ),
         .GATE     ( 12'd240),    // 配对门限(放宽 -> 吸收抖动，避免重复建轨)
-        .MISS_K   ( 6'd35  )     // 丢失多少帧后删轨(6位字段); 35 可跨断帧重新接上同一颗球
+        .MISS_K   ( 6'd35  ),    // 丢失多少帧后删轨(6位字段); 35 可跨断帧重新接上同一颗球
+        .EXIT_MISS( 6'd10  )     // 出画面即时计数允许的丢失帧数(计时更贴合球离开画面)
     ) u_cv_top (
         .I_clk          ( S_pixel_clk      ),
         .I_rst_n        ( S_rst_n_pix      ),

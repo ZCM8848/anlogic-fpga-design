@@ -21,13 +21,14 @@ import numpy as np
 ALPHA = 0.5        # a-b 位置增益(≈cv_top ALPHA_Q/256)
 BETA = 0.0625      # a-b 速度增益；原 0.1875 在 30fps(帧间位移大)下会让轨迹"跑飞"->重建轨->多计
 MARGIN = 20        # exit 计数：预测位置超出画面 + MARGIN 视为"离开"
-REC    = 2         # 只有"丢失 <= REC"帧的轨迹才画/才按 exit 计数(滑行幻影不画不计)
+REC    = 2         # 只有"丢失 <= REC"帧的轨迹才画(滑行幻影不画)
 
 
 CB_DELTA = 20      # 局部对比：块均值须低于其大格背景这么多
 AMIN = 8           # 连通域最小面积(块数)；与 cv_blkdet 的 MIN_BLKN 对应
 PAIR_ASPECT = 150  # 长/短边比 >= 150% 判为"两颗贴在一起"
 PAIR_MINAREA = 24  # 且面积 >= 这么多块
+EXIT_MISS = 10     # "出画面即计数"允许的丢失帧数(与 cv_top EXIT_MISS 对应)
 
 
 def detect(frame, dark, bg=None):
@@ -125,7 +126,7 @@ def main():
         # 出画面即时计数（exit / combined）
         for t in tracks:
             if args.count_rule in ("exit", "combined") and (not t[7]) and t[5] >= args.min_hits and \
-               t[4] <= REC and \
+               t[4] <= EXIT_MISS and \
                (t[0] < -MARGIN or t[0] > W + MARGIN or t[1] < -MARGIN or t[1] > H + MARGIN):
                 t[7] = True; count += 1; events.append((nf, count))
         alive = []
