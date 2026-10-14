@@ -23,7 +23,7 @@ module cv_top #(
     parameter [15:0] MAX_AREA  = 16'd500,  // 圆环面积上限
     parameter [5:0]  MIN_FILL  = 6'd5,    // 圆环空心→低填充率
     parameter [5:0]  MIN_RATIO = 6'd60,   // 圆球 bbox 近正方形→高长短比
-    parameter [15:0] MIN_BLKN  = 16'd8,   // 暗块连通域最小面积(块数)：球约 7x7=49 块
+    parameter [15:0] MIN_BLKN  = 16'd8,   // 暗块连通域最小面积(块数)：真球 17~38 块; 贴边滚的球被遮只剩 8~12 块, 也必须是球
     parameter [11:0] EDGE_MG   = 12'd4,
     parameter         MAX_BLOBS = 8,
     parameter         MAX_RUNS  = 1024,

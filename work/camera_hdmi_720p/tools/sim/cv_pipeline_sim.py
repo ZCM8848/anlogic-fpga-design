@@ -25,7 +25,7 @@ REC    = 2         # 只有"丢失 <= REC"帧的轨迹才画(滑行幻影不画)
 
 
 CB_DELTA = 20      # 局部对比：块均值须低于其大格背景这么多
-AMIN = 8           # 连通域最小面积(块数)；与 cv_blkdet 的 MIN_BLKN 对应
+AMIN = 8           # 连通域最小面积(块数)；与 cv_blkdet 的 MIN_BLKN 对应（贴边被遮的真球只剩8~12块, 不能滤）
 PAIR_ASPECT = 150  # 长/短边比 >= 150% 判为"两颗贴在一起"
 PAIR_MINAREA = 24  # 且面积 >= 这么多块
 EXIT_MISS = 10     # "出画面即计数"允许的丢失帧数(与 cv_top EXIT_MISS 对应)
