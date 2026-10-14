@@ -50,8 +50,8 @@ def main():
     ap.add_argument("gate", type=int, nargs="?", default=240)
     ap.add_argument("miss_k", type=int, nargs="?", default=20)
     ap.add_argument("dark", type=int, nargs="?", default=100)
-    ap.add_argument("min_hits", type=int, nargs="?", default=3)
-    ap.add_argument("--count-rule", choices=["death", "exit"], default="death")
+    ap.add_argument("min_hits", type=int, nargs="?", default=1)
+    ap.add_argument("--count-rule", choices=["death", "exit", "combined"], default="combined")
     args = ap.parse_args()
 
     cap = cv2.VideoCapture(args.video)
@@ -86,15 +86,17 @@ def main():
         for j, d in enumerate(dets):
             if not taken[j]:
                 tracks.append([d[0], d[1], 0, 0, 0, 1, d[2:6], False]); next_id += 1
-        for t in tracks:                              # exit 计数
-            if args.count_rule == "exit" and (not t[7]) and t[5] >= args.min_hits and \
+        # 出画面即时计数（exit / combined）
+        for t in tracks:
+            if args.count_rule in ("exit", "combined") and (not t[7]) and t[5] >= args.min_hits and \
                (t[0] < -MARGIN or t[0] > W + MARGIN or t[1] < -MARGIN or t[1] > H + MARGIN):
                 t[7] = True; count += 1; events.append((nf, count))
         alive = []
         for t in tracks:
             if t[4] > args.miss_k:
-                if args.count_rule == "death":
-                    count += 1; events.append((nf, count))
+                if args.count_rule == "death" or \
+                   (args.count_rule == "combined" and (not t[7]) and t[5] >= args.min_hits):
+                    t[7] = True; count += 1; events.append((nf, count))   # 消亡补计(去重)
             else:
                 alive.append(t)
         tracks = alive

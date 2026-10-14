@@ -168,6 +168,7 @@ module cv_top #(
     reg [5:0]  r_assign [0:MAX_BLOBS-1];
     reg [3:0]  r_next_id;
     reg [15:0] r_count;
+    reg [7:0]  r_cnt_mask;      // 每位=该 track 槽是否已计过数(去重)
 
     assign O_ccl_busy = (r_st != S_IDLE);
 
@@ -242,6 +243,9 @@ module cv_top #(
     wire [11:0] n_vx=n_vx_s[11:0], n_vy=n_vy_s[11:0];
     wire [3:0] n_miss = t_miss + 4'd1;
     wire       t_alive = t_valid && (n_miss <= MISS_K);
+    // 预测位置已出画面 -> 该轨迹离开视野（即时计数）
+    wire       t_out = (px_s >= $signed(13'd1280)) || (px_s < $signed(13'd0)) ||
+                       (py_s >= $signed(13'd720))  || (py_s < $signed(13'd0));
 
     // ======================================================================
     // run 提取 + 直方图（active）
@@ -303,7 +307,7 @@ module cv_top #(
             r_found_any<=0; r_lv<=0; r_collect<=0; r_ti<=0; r_dj<=0; r_free<=0;
             r_otsu_thr<=BIN_THR; r_bin_thr<=BIN_THR;   // 阈值归主 FSM 管（S_ADAPTIVE + reset）
             r_trk_i<=0; r_det_j<=0; r_asg<=NONE_ASG; r_min_cost<=0; r_min_j<=0; r_min_valid<=0;
-            r_ndet<=0; r_next_id<=0; r_count<=16'd0;
+            r_ndet<=0; r_next_id<=0; r_count<=16'd0; r_cnt_mask<=8'd0;
             // track 表原来从不复位 -> 依赖上电 FF 初值（仿真为 x 会导致不建轨迹）；
             // 这里显式清零 valid（否则 !track[..].valid 判定为 x，新建轨迹分支走不进）。
             for (k=0;k<MAX_BLOBS;k=k+1) begin r_det_taken[k]<=0; r_assign[k]<=NONE_ASG; track[k]<={TW{1'b0}}; end
@@ -406,7 +410,11 @@ module cv_top #(
                                           t_min_x,t_max_x,t_min_y,t_max_y};
                         end
                     end
-                    if (t_valid && !t_alive) r_count<=r_count+16'd1;   // 轨迹消亡(离开视野) -> 计数+1
+                    // 计数：出画面即时计数；未出画面的在消亡时补计（r_cnt_mask 去重）
+                    if (t_valid && !r_cnt_mask[r_ti[2:0]] && (t_out || !t_alive)) begin
+                        r_cnt_mask[r_ti[2:0]] <= 1'b1;
+                        r_count <= r_count + 16'd1;
+                    end
                     if (r_ti==MAX_BLOBS-1) begin r_ti<=0; r_dj<=0; r_free<=0; r_st<=S_TU_NEW; end
                     else begin r_ti<=r_ti+1; r_st<=S_TU_START; end
                 end
@@ -424,6 +432,7 @@ module cv_top #(
                                                 12'd0, 12'd0, 4'd0,
                                                 det[r_dj][47:36], det[r_dj][35:24], det[r_dj][23:12], det[r_dj][11:0]};
                                 r_next_id<=r_next_id+1;
+                                r_cnt_mask[r_free[2:0]]<=1'b0;   // 新轨迹 -> 计数去重标志复位
                                 r_dj<=r_dj+1; r_free<=r_free+1;
                             end else r_free<=r_free+1;
                         end else r_dj<=r_dj+1;
