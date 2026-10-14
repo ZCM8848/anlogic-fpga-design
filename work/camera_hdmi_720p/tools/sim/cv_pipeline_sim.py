@@ -24,14 +24,21 @@ MARGIN = 20        # exit 计数：预测位置超出画面 + MARGIN 视为"离�
 REC    = 2         # 只有"丢失 <= REC"帧的轨迹才画/才按 exit 计数(滑行幻影不画不计)
 
 
-def detect(frame, dark):
-    """块域暗块检测 -> 检测框[像素(x,y,w,h)]列表（与 cv_blkdet 同参）。"""
+CB_DELTA = 20      # 局部对比：块均值须低于其大格背景这么多
+
+
+def detect(frame, dark, bg=None):
+    """块域暗块检测 -> 检测框[像素(x,y,w,h)]列表（与 cv_blkdet 同参）。
+    bg!=None 时用局部对比（块均值 < 大格背景 - CB_DELTA）。"""
     B = frame[:, :, 0].astype(np.uint16)
     G = frame[:, :, 1].astype(np.uint16)
     R = frame[:, :, 2].astype(np.uint16)
     wy = ((R >> 2) + (G >> 1) + (B >> 2)).astype(np.float32)
     bm = cv2.resize(wy, (80, 45), interpolation=cv2.INTER_AREA)  # 16x16 块均值
-    m = (bm < dark).astype(np.uint8)
+    if bg is None:
+        m = (bm < dark).astype(np.uint8)
+    else:
+        m = ((bm < dark) & (bm < bg - CB_DELTA)).astype(np.uint8)
     n, lab, stats, cent = cv2.connectedComponentsWithStats(m, 4)
     out = []
     for i in range(1, n):
@@ -65,11 +72,19 @@ def main():
 
     tracks = []   # [cx,cy,vx,vy,missed,hits,box,counted]
     next_id = 0; count = 0; nf = 0; events = []
+    prev_cells = None
     while True:
         ok, fr = cap.read()
         if not ok: break
         nf += 1
-        dets = detect(fr, args.dark)
+        # 上一帧大格(10x6, 每格 8x8 块)均值当局部背景
+        Bf = fr[:, :, 0].astype(np.uint16); Gf = fr[:, :, 1].astype(np.uint16); Rf = fr[:, :, 2].astype(np.uint16)
+        bmf = cv2.resize(((Rf >> 2) + (Gf >> 1) + (Bf >> 2)).astype(np.float32), (80, 45), interpolation=cv2.INTER_AREA)
+        cells = cv2.resize(bmf, (10, 6), interpolation=cv2.INTER_AREA)
+        if prev_cells is None: prev_cells = cells
+        bg = cv2.resize(prev_cells, (80, 45), interpolation=cv2.INTER_NEAREST)
+        dets = detect(fr, args.dark, bg)
+        prev_cells = cells
         taken = [False] * len(dets); assigns = [-1] * len(tracks)
         for ti, t in enumerate(tracks):
             px, py = t[0] + t[2], t[1] + t[3]

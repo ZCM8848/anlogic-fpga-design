@@ -15,6 +15,7 @@ module cv_blkdet #(
     parameter BH    = 45,
     parameter LABW  = 7,                    // 标签位宽
     parameter [10:0] DARK_THR = 11'd100,
+    parameter [7:0]  CB_DELTA = 8'd20,      // 局部对比：块均值须低于大格背景这么多
     parameter [15:0] MIN_BLKN = 16'd8,      // 块数下限
     parameter [15:0] MAX_BLKN = 16'd400,    // 块数上限
     parameter [5:0]  MIN_FILL = 6'd40,      // 填充率下限 %
@@ -71,18 +72,38 @@ module cv_blkdet #(
     end
     always @(posedge clk) if (col_we) col_acc[col_wa] <= col_wd;
 
-    // ---------------- 80x45 块掩膜 ----------------
+    // ---------------- 80x45 块掩膜（局部对比阈值）----------------
+    //   块均值须低于"上一帧大格(8x8 块 -> 10x6 格)均值" CB_DELTA 才判暗：
+    //   静态的桌沿/木纹/边角在"上一帧"里也暗 -> 不构成对比 -> 抑制；
+    //   运动中的球在其大格背景里明显偏暗 -> 检出。
+    wire [7:0]  blk_bm   = blk_total[15:8];
+    wire [4:0]  cell_row = r_y[11:7];
+    wire [4:0]  cell_col = r_x[11:7];
+    wire [6:0]  cell_idx = {2'b0,cell_row}*7'd10 + {2'b0,cell_col};   // 0..59
+    reg  [7:0]  cell_prev [0:59];
+    reg  [7:0]  cell_cur  [0:59];
+    reg  [15:0] cell_acc  [0:59];
+    wire [15:0] cell_sum  = cell_acc[cell_idx] + {8'b0, blk_bm};
+    wire        cell_end  = (r_x[6:4]==3'd7) && (r_y[6:4]==3'd7);     // 每 8x8 块
+    wire        blk_dark  = (blk_bm < DARK_THR) && ((blk_bm + CB_DELTA) < cell_prev[cell_idx]);
+
     (* ram_style="distributed" *) reg blk_mask [0:BW*BH-1];
     reg        bm_we; reg [12:0] bm_wa; reg bm_wd;
     wire [12:0] cur_bm_addr = {1'b0, r_y[11:4]}*7'd80 + {8'b0, r_x[11:4]};
+    integer ci;
     always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) bm_we <= 1'b0;
-        else begin
+        if (!rst_n) begin
+            bm_we <= 1'b0;
+            for (ci=0; ci<60; ci=ci+1) begin cell_prev[ci]<=8'd0; cell_cur[ci]<=8'd0; cell_acc[ci]<=16'd0; end
+        end else begin
             bm_we <= rowblk_end & blkrow_end;
             if (rowblk_end & blkrow_end) begin
                 bm_wa <= cur_bm_addr;
-                bm_wd <= ({3'b0, blk_total[15:8]} < DARK_THR);
+                bm_wd <= blk_dark;
+                cell_acc[cell_idx] <= cell_end ? 16'd0 : cell_sum;
+                if (cell_end) cell_cur[cell_idx] <= cell_sum[13:6];   // 64 块均值
             end
+            if (vs_rise) for (ci=0; ci<60; ci=ci+1) cell_prev[ci] <= cell_cur[ci];
         end
     end
     always @(posedge clk) if (bm_we) blk_mask[bm_wa] <= bm_wd;
