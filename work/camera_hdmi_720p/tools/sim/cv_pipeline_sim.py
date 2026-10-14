@@ -25,7 +25,9 @@ REC    = 2         # 只有"丢失 <= REC"帧的轨迹才画(滑行幻影不画)
 
 
 CB_DELTA = 20      # 局部对比：块均值须低于其大格背景这么多
-AMIN = 8           # 连通域最小面积(块数)；与 cv_blkdet 的 MIN_BLKN 对应（贴边被遮的真球只剩8~12块, 不能滤）
+AMIN = 14          # 连通域最小面积(块数)；与 cv_blkdet 的 MIN_BLKN 对应（真球17~38块; 桌沿假块8~13块）
+MIN_HITS_EX = 4    # 出画面即时计数门限
+MIN_HITS_DT = 5    # 消亡补计门限
 PAIR_ASPECT = 150  # 长/短边比 >= 150% 判为"两颗贴在一起"
 PAIR_MINAREA = 24  # 且面积 >= 这么多块
 EXIT_MISS = 10     # "出画面即计数"允许的丢失帧数(与 cv_top EXIT_MISS 对应)
@@ -78,7 +80,7 @@ def main():
     ap.add_argument("dark", type=int, nargs="?", default=100)
     ap.add_argument("min_hits", type=int, nargs="?", default=1)
     ap.add_argument("--count-rule", choices=["death", "exit", "combined"], default="combined")
-    ap.add_argument("--amin", type=int, default=8)
+    ap.add_argument("--amin", type=int, default=14)
     args = ap.parse_args()
     global AMIN
     AMIN = args.amin
@@ -125,7 +127,7 @@ def main():
                 tracks.append([d[0], d[1], 0, 0, 0, 1, d[2:6], False, next_id]); next_id += 1
         # 出画面即时计数（exit / combined）
         for t in tracks:
-            if args.count_rule in ("exit", "combined") and (not t[7]) and t[5] >= args.min_hits and \
+            if args.count_rule in ("exit", "combined") and (not t[7]) and t[5] >= MIN_HITS_EX and \
                t[4] <= EXIT_MISS and \
                (t[0] < -MARGIN or t[0] > W + MARGIN or t[1] < -MARGIN or t[1] > H + MARGIN):
                 t[7] = True; count += 1; events.append((nf, count))
@@ -133,7 +135,7 @@ def main():
         for t in tracks:
             if t[4] > args.miss_k:
                 if args.count_rule == "death" or \
-                   (args.count_rule == "combined" and (not t[7]) and t[5] >= args.min_hits):
+                   (args.count_rule == "combined" and (not t[7]) and t[5] >= MIN_HITS_DT):
                     t[7] = True; count += 1; events.append((nf, count))   # 消亡补计(去重)
             else:
                 alive.append(t)

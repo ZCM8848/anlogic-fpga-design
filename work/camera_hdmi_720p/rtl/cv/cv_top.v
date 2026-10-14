@@ -23,7 +23,7 @@ module cv_top #(
     parameter [15:0] MAX_AREA  = 16'd500,  // 圆环面积上限
     parameter [5:0]  MIN_FILL  = 6'd5,    // 圆环空心→低填充率
     parameter [5:0]  MIN_RATIO = 6'd60,   // 圆球 bbox 近正方形→高长短比
-    parameter [15:0] MIN_BLKN  = 16'd8,   // 暗块连通域最小面积(块数)：真球 17~38 块; 贴边滚的球被遮只剩 8~12 块, 也必须是球
+    parameter [15:0] MIN_BLKN  = 16'd14,  // 暗块连通域最小面积(块数)：真球 17~38 块; 桌沿假块 8~13 块
     parameter [11:0] EDGE_MG   = 12'd4,
     parameter         MAX_BLOBS = 8,
     parameter         MAX_RUNS  = 1024,
@@ -39,7 +39,9 @@ module cv_top #(
     parameter [11:0] GATE      = 12'd80,  // 配对最大 Manhattan 距离
     parameter [5:0]  MISS_K    = 6'd35,   // 丢失几帧删轨迹(6位: 0..63)
     parameter [5:0]  EXIT_MISS = 6'd10,   // "出画面即计数"允许的丢失帧数(放宽: 球刚出画面就丢检也能即时计数)
-    parameter [3:0]  MIN_HITS  = 4'd5,    // 至少被连续检出这么多帧的轨迹才允许"计数"
+    parameter [3:0]  MIN_HITS  = 4'd5,    // (旧)保留兼容; 新逻辑用下面两个
+    parameter [3:0]  MIN_HITS_EX = 4'd4,  // 出画面即时计数: 轨迹确证出画面, 命中>=4 即可
+    parameter [3:0]  MIN_HITS_DT = 4'd5,  // 消亡补计: 仅"消失", 可信度低, 命中>=5 才计
     parameter         OTSU_EN   = 1
 )(
     input  wire        I_clk,
@@ -416,7 +418,9 @@ module cv_top #(
                         end
                     end
                     // 计数：出画面即时计数(要求最近有检测, 避免滑行幻影被计)；未出画面的在消亡时补计。
-                    if (t_valid && (r_hits[r_ti] >= MIN_HITS) && !r_cnt_mask[r_ti[2:0]] && ((t_out && (t_miss<=EXIT_MISS)) || !t_alive)) begin
+                    if (t_valid && !r_cnt_mask[r_ti[2:0]] &&
+                        ((t_out && (t_miss<=EXIT_MISS) && (r_hits[r_ti] >= MIN_HITS_EX)) ||
+                         (!t_alive && (r_hits[r_ti] >= MIN_HITS_DT)))) begin
                         r_cnt_mask[r_ti[2:0]] <= 1'b1;
                         r_count <= r_count + 16'd1;
                     end
