@@ -38,7 +38,7 @@ module cv_top #(
     parameter [7:0]  BETA_Q    = 8'd48,   // b*256 ~=0.1875（速度增益）
     parameter [11:0] GATE      = 12'd80,  // 配对最大 Manhattan 距离
     parameter [3:0]  MISS_K    = 4'd8,    // 丢失几帧删轨迹
-    parameter [3:0]  MIN_HITS  = 4'd4,    // 至少被连续检出这么多帧的轨迹才允许"计数"
+    parameter [3:0]  MIN_HITS  = 4'd5,    // 至少被连续检出这么多帧的轨迹才允许"计数"
     parameter         OTSU_EN   = 1
 )(
     input  wire        I_clk,

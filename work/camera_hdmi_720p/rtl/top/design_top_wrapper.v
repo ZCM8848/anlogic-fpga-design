@@ -627,7 +627,7 @@ module design_top_wrapper (
         .MAX_AREA ( 16'd20000 ),
         .MIN_FILL ( 6'd30  ),    // 放宽：容许运动模糊的球块
         .MIN_RATIO( 6'd30  ),
-        .MIN_HITS ( 4'd4  ),     // 确认门限：≥4 帧才计数(滤掉 3 帧假轨迹)
+        .MIN_HITS ( 4'd5  ),     // 确认门限：≥5 帧才计数(滤掉 4 帧的底边假轨迹；真球均≥8帧)
         .MIN_BLKN ( 16'd8  ),    // 暗块最小面积(块数)：原始录像 8 最稳(钢珠4/5 各=10)
         .EDGE_MG  ( 12'd4  ),
         .EDGE_THR ( 11'd300 ),
