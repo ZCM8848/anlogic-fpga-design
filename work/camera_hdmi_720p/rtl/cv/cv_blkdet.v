@@ -149,6 +149,7 @@ module cv_blkdet #(
                && (fn_fill >= MIN_FILL*fn_box)
                && ({fn_mn,7'b0} >= MIN_RATIO*fn_mx)
                && (fn_mnx!=0) && (fn_mny!=0)     // 不贴左/上边（剔除底面长条）
+               && (fn_wb<=8'd16) && (fn_hb<=8'd16)  // 剔除过宽/过高块(球~7块; 桌沿长条几十块)
                && !fn_corner;                    // 不贴角（剔除角上的假块）
 
     always @(posedge clk or negedge rst_n) begin

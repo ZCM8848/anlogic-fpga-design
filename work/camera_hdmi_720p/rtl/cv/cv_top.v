@@ -37,6 +37,7 @@ module cv_top #(
     parameter [7:0]  BETA_Q    = 8'd48,   // b*256 ~=0.1875（速度增益）
     parameter [11:0] GATE      = 12'd80,  // 配对最大 Manhattan 距离
     parameter [3:0]  MISS_K    = 4'd8,    // 丢失几帧删轨迹
+    parameter [3:0]  MIN_HITS  = 4'd3,    // 至少被连续检出这么多帧的轨迹才允许"计数"
     parameter         OTSU_EN   = 1
 )(
     input  wire        I_clk,
@@ -169,6 +170,7 @@ module cv_top #(
     reg [3:0]  r_next_id;
     reg [15:0] r_count;
     reg [7:0]  r_cnt_mask;      // 每位=该 track 槽是否已计过数(去重)
+    reg [3:0]  r_hits [0:MAX_BLOBS-1];   // 每个 track 槽被检出的帧数(饱和)
 
     assign O_ccl_busy = (r_st != S_IDLE);
 
@@ -310,7 +312,7 @@ module cv_top #(
             r_ndet<=0; r_next_id<=0; r_count<=16'd0; r_cnt_mask<=8'd0;
             // track 表原来从不复位 -> 依赖上电 FF 初值（仿真为 x 会导致不建轨迹）；
             // 这里显式清零 valid（否则 !track[..].valid 判定为 x，新建轨迹分支走不进）。
-            for (k=0;k<MAX_BLOBS;k=k+1) begin r_det_taken[k]<=0; r_assign[k]<=NONE_ASG; track[k]<={TW{1'b0}}; end
+            for (k=0;k<MAX_BLOBS;k=k+1) begin r_det_taken[k]<=0; r_assign[k]<=NONE_ASG; track[k]<={TW{1'b0}}; r_hits[k]<=4'd0; end
         end else begin
             case (r_st)
                 S_IDLE: if (vs_rise) r_st<=S_ADAPTIVE;
@@ -404,6 +406,7 @@ module cv_top #(
                         if (r_asg!=NONE_ASG) begin
                             // matched：a-b 更新 + 新 bbox
                             track[r_ti]<={1'b1,t_id,n_cx,n_cy,n_vx,n_vy,4'd0,a_min_x,a_max_x,a_min_y,a_max_y};
+                            r_hits[r_ti] <= (r_hits[r_ti]==4'hF) ? 4'hF : (r_hits[r_ti] + 4'd1);
                         end else begin
                             // coast：预测推进 + 老化
                             track[r_ti]<={t_alive, t_id, px, py, t_vx[11:0], t_vy[11:0], n_miss,
@@ -411,7 +414,7 @@ module cv_top #(
                         end
                     end
                     // 计数：出画面即时计数(要求最近有检测, 避免滑行幻影被计)；未出画面的在消亡时补计。
-                    if (t_valid && !r_cnt_mask[r_ti[2:0]] && ((t_out && (t_miss<=4'd2)) || !t_alive)) begin
+                    if (t_valid && (r_hits[r_ti] >= MIN_HITS) && !r_cnt_mask[r_ti[2:0]] && ((t_out && (t_miss<=4'd2)) || !t_alive)) begin
                         r_cnt_mask[r_ti[2:0]] <= 1'b1;
                         r_count <= r_count + 16'd1;
                     end
@@ -433,6 +436,7 @@ module cv_top #(
                                                 det[r_dj][47:36], det[r_dj][35:24], det[r_dj][23:12], det[r_dj][11:0]};
                                 r_next_id<=r_next_id+1;
                                 r_cnt_mask[r_free[2:0]]<=1'b0;   // 新轨迹 -> 计数去重标志复位
+                                r_hits[r_free]<=4'd0;            // 新轨迹 -> 命中计数清零
                                 r_dj<=r_dj+1; r_free<=r_free+1;
                             end else r_free<=r_free+1;
                         end else r_dj<=r_dj+1;

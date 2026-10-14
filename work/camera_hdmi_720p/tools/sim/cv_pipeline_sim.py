@@ -37,6 +37,7 @@ def detect(frame, dark):
     for i in range(1, n):
         x, y, w, h, a = stats[i]
         if a < 8 or a > 400: continue
+        if w > 16 or h > 16: continue                  # 剔除过宽/过高块(球~7块; 桌沿/长条几十块)
         if a * 100 < 30 * w * h: continue            # 填充率 >= 30%(容许运动模糊)
         if min(w, h) * 100 < 30 * max(w, h): continue # 长短比 >= 30%
         xl, xr, yt, yb = (x == 0), ((x + w) >= 80), (y == 0), ((y + h) >= 45)
