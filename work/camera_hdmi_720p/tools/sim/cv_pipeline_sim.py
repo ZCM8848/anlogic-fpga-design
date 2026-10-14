@@ -39,7 +39,9 @@ def detect(frame, dark):
         if a < 8 or a > 400: continue
         if a * 100 < 30 * w * h: continue            # 填充率 >= 30%(容许运动模糊)
         if min(w, h) * 100 < 30 * max(w, h): continue # 长短比 >= 30%
-        if x == 0 or y == 0: continue                 # 只剔左/上边(与 cv_blkdet 一致)
+        xl, xr, yt, yb = (x == 0), ((x + w) >= 80), (y == 0), ((y + h) >= 45)
+        if xl or yt: continue                         # 左/上边(与 cv_blkdet 一致)
+        if (xl and yt) or (xr and yt) or (xl and yb) or (xr and yb): continue  # 贴角
         out.append((cent[i][0] * 16, cent[i][1] * 16, x * 16, y * 16, (x + w) * 16, (y + h) * 16))
     return out
 

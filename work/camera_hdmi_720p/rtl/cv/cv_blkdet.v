@@ -141,10 +141,15 @@ module cv_blkdet #(
     wire [23:0] fn_fill = fn_ab * 8'd100;
     wire [7:0]  fn_mn = (fn_wb<fn_hb)? fn_wb : fn_hb;
     wire [7:0]  fn_mx = (fn_wb<fn_hb)? fn_hb : fn_wb;
+    // 贴角剔除：假块多出现在"角"上(x、y 同时贴边)；靠边滚过的球只贴一个边 -> 保住
+    wire fn_lft = (fn_mnx==7'd0), fn_rgt = (fn_mxx==7'd79);
+    wire fn_top = (fn_mny==7'd0), fn_bot = (fn_mxy==7'd44);
+    wire fn_corner = (fn_lft&fn_top)|(fn_rgt&fn_top)|(fn_lft&fn_bot)|(fn_rgt&fn_bot);
     wire f_pass = s_ff[64] && (fn_ab>=MIN_BLKN) && (fn_ab<=MAX_BLKN)
                && (fn_fill >= MIN_FILL*fn_box)
                && ({fn_mn,7'b0} >= MIN_RATIO*fn_mx)
-               && (fn_mnx!=0) && (fn_mny!=0);   // 不贴左/上边（剔除底面长条）
+               && (fn_mnx!=0) && (fn_mny!=0)     // 不贴左/上边（剔除底面长条）
+               && !fn_corner;                    // 不贴角（剔除角上的假块）
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
