@@ -26,6 +26,8 @@ REC    = 2         # 只有"丢失 <= REC"帧的轨迹才画/才按 exit 计数(
 
 CB_DELTA = 20      # 局部对比：块均值须低于其大格背景这么多
 AMIN = 8           # 连通域最小面积(块数)；与 cv_blkdet 的 MIN_BLKN 对应
+PAIR_ASPECT = 150  # 长/短边比 >= 150% 判为"两颗贴在一起"
+PAIR_MINAREA = 24  # 且面积 >= 这么多块
 
 
 def detect(frame, dark, bg=None):
@@ -51,7 +53,18 @@ def detect(frame, dark, bg=None):
         xl, xr, yt, yb = (x == 0), ((x + w) >= 80), (y == 0), ((y + h) >= 45)
         if xl or yt: continue                         # 左/上边(与 cv_blkdet 一致)
         if (xl and yt) or (xr and yt) or (xl and yb) or (xr and yb): continue  # 贴角
-        out.append((cent[i][0] * 16, cent[i][1] * 16, x * 16, y * 16, (x + w) * 16, (y + h) * 16))
+        if PAIR_MINAREA and a >= PAIR_MINAREA and max(w, h) * 100 >= PAIR_ASPECT * min(w, h):
+            # 两颗贴在一起(细长团块) -> 沿长边拆成两个检测
+            if h >= w:
+                my = (y + (y + h)) // 2
+                out.append((x * 16 + w * 8, y * 16 + h * 4, x * 16, y * 16, (x + w) * 16, my * 16))
+                out.append((x * 16 + w * 8, my * 16 + h * 4, x * 16, my * 16, (x + w) * 16, (y + h) * 16))
+            else:
+                mx = (x + (x + w)) // 2
+                out.append((x * 16 + w * 4, y * 16 + h * 8, x * 16, y * 16, mx * 16, (y + h) * 16))
+                out.append((mx * 16 + w * 4, y * 16 + h * 8, mx * 16, y * 16, (x + w) * 16, (y + h) * 16))
+        else:
+            out.append((cent[i][0] * 16, cent[i][1] * 16, x * 16, y * 16, (x + w) * 16, (y + h) * 16))
     return out
 
 

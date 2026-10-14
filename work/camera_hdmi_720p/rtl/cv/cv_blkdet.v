@@ -20,6 +20,8 @@ module cv_blkdet #(
     parameter [15:0] MAX_BLKN = 16'd400,    // 块数上限
     parameter [5:0]  MIN_FILL = 6'd40,      // 填充率下限 %
     parameter [5:0]  MIN_RATIO= 6'd50,      // 长短边比下限 %
+    parameter [7:0]  PAIR_ASPECT = 8'd150,  // 长/短边比 >= 150% 判为"两颗贴在一起"
+    parameter [15:0] PAIR_MINAREA= 16'd24,  // 且面积 >= 这么多块(滤噪声)
     parameter        MAX_BLOBS= 8
 )(
     input             clk,
@@ -172,6 +174,12 @@ module cv_blkdet #(
                && (fn_mnx!=0) && (fn_mny!=0)     // 不贴左/上边（剔除底面长条）
                && (fn_wb<=8'd16) && (fn_hb<=8'd16)  // 剔除过宽/过高块(球~7块; 桌沿长条几十块)
                && !fn_corner;                    // 不贴角（剔除角上的假块）
+    // 贴球对：细长团块(长边/短边 >= PAIR_ASPECT%) = 两颗球贴在一起 -> 拆成两个检测
+    wire [15:0] fn_asp   = fn_mx * 8'd100;
+    wire [15:0] fn_asp_t = PAIR_ASPECT * fn_mn;
+    wire        fn_pair  = (fn_ab >= PAIR_MINAREA) && (fn_asp >= fn_asp_t);
+    wire [11:0] fn_mdx   = (s_ff[63:52] + s_ff[51:40]) >> 1;   // bbox 横向中点(px)
+    wire [11:0] fn_mdy   = (s_ff[39:28] + s_ff[27:16]) >> 1;   // bbox 纵向中点(px)
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -204,12 +212,23 @@ module cv_blkdet #(
                     end else begin t_bx<=t_bx+1'b1; t_st<=T_READ; end
                 end
                 T_FILT: begin
-                    if (f_pass && (t_col<MAX_BLOBS)) begin
+                    if (f_pass && fn_pair && ((t_col+6'd1)<MAX_BLOBS)) begin
+                        // 两颗贴在一起 -> 沿长边拆成上/下(或左/右)两个框, 计 2
+                        if (fn_hb >= fn_wb) begin
+                            box_mem[t_col]        <= {s_ff[63:52], s_ff[51:40], s_ff[39:28], fn_mdy};
+                            box_mem[t_col+6'd1]   <= {s_ff[63:52], s_ff[51:40], fn_mdy, s_ff[27:16]};
+                        end else begin
+                            box_mem[t_col]        <= {s_ff[63:52], fn_mdx, s_ff[39:28], s_ff[27:16]};
+                            box_mem[t_col+6'd1]   <= {fn_mdx, s_ff[51:40], s_ff[39:28], s_ff[27:16]};
+                        end
+                        t_col <= t_col + 6'd2;
+                    end else if (f_pass && (t_col<MAX_BLOBS)) begin
                         box_mem[t_col] <= {s_ff[63:52], s_ff[51:40], s_ff[39:28], s_ff[27:16]};
-                        t_col <= t_col + 1'b1;
+                        t_col <= t_col + 6'd1;
                     end
                     if (t_lv==(1<<LABW)-1) begin
-                        o_count <= t_col + ((f_pass && (t_col<MAX_BLOBS)) ? 1'b1 : 1'b0);
+                        o_count <= t_col + ((f_pass && (t_col<MAX_BLOBS))
+                                            ? ((fn_pair && ((t_col+6'd1)<MAX_BLOBS)) ? 6'd2 : 6'd1) : 6'd0);
                         o_ready <= 1'b1; t_st <= T_IDLE;
                     end else t_lv <= t_lv + 1'b1;
                 end
