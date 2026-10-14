@@ -37,7 +37,7 @@ module cv_top #(
     parameter [7:0]  ALPHA_Q   = 8'd128,  // a*256 =0.5（位置增益）
     parameter [7:0]  BETA_Q    = 8'd16,   // b*256 =0.0625（速度增益）；原 48/256=0.1875 在帧间位移大时会让轨迹跑飞
     parameter [11:0] GATE      = 12'd80,  // 配对最大 Manhattan 距离
-    parameter [3:0]  MISS_K    = 4'd8,    // 丢失几帧删轨迹
+    parameter [5:0]  MISS_K    = 6'd35,   // 丢失几帧删轨迹(6位: 0..63)
     parameter [3:0]  MIN_HITS  = 4'd5,    // 至少被连续检出这么多帧的轨迹才允许"计数"
     parameter         OTSU_EN   = 1
 )(
@@ -62,8 +62,8 @@ module cv_top #(
     localparam FW  = 65;
     localparam RPW = (MAX_RPR==32)?5:6;
     localparam DW  = 73;   // det: valid[72] cx[71:60] cy[59:48] minx[47:36] maxx[35:24] miny[23:12] maxy[11:0]
-    localparam TW  = 105;  // track: valid[104] id[103:100] cx[99:88] cy[87:76] vx[75:64] vy[63:52]
-                           //       missed[51:48] minx[47:36] maxx[35:24] miny[23:12] maxy[11:0]
+    localparam TW  = 107;  // track: valid[106] id[105:102] cx[101:90] cy[89:78] vx[77:66] vy[65:54]
+                           //        missed[53:48](6位) minx[47:36] maxx[35:24] miny[23:12] maxy[11:0]
     localparam NONE_ASG = 6'h3F;
 
     // ---------- x/y ----------
@@ -208,10 +208,10 @@ module cv_top #(
     wire w_pass=f_valid&&(f_area>=MIN_AREA)&&(f_area<=MAX_AREA)&&({9'd0,area100}>=fill_thr)&&(ratio_num>=ratio_den)&&(!cf_edge);
 
     // ---------- 跟踪算术（基于 latched r_trk_i / det[r_dj] async）----------
-    wire        t_valid=r_trk_i[104]; wire [3:0] t_id=r_trk_i[103:100];
-    wire [11:0] t_cx=r_trk_i[99:88], t_cy=r_trk_i[87:76];
-    wire signed [11:0] t_vx=r_trk_i[75:64], t_vy=r_trk_i[63:52];
-    wire [3:0]  t_miss=r_trk_i[51:48];
+    wire        t_valid=r_trk_i[106]; wire [3:0] t_id=r_trk_i[105:102];
+    wire [11:0] t_cx=r_trk_i[101:90], t_cy=r_trk_i[89:78];
+    wire signed [11:0] t_vx=r_trk_i[77:66], t_vy=r_trk_i[65:54];
+    wire [5:0]  t_miss=r_trk_i[53:48];
     wire [11:0] t_min_x=r_trk_i[47:36], t_max_x=r_trk_i[35:24], t_min_y=r_trk_i[23:12], t_max_y=r_trk_i[11:0];
     // 预测
     wire signed [12:0] px_s = $signed({1'b0,t_cx}) + t_vx;
@@ -244,7 +244,7 @@ module cv_top #(
     wire [11:0] n_cx=n_cx_s[11:0];
     wire [11:0] n_cy=n_cy_s[11:0];
     wire [11:0] n_vx=n_vx_s[11:0], n_vy=n_vy_s[11:0];
-    wire [3:0] n_miss = t_miss + 4'd1;
+    wire [5:0] n_miss = t_miss + 6'd1;
     wire       t_alive = t_valid && (n_miss <= MISS_K);
     // 预测位置已出画面 -> 该轨迹离开视野（即时计数）
     wire       t_out = (px_s >= $signed(13'd1280)) || (px_s < $signed(13'd0)) ||
@@ -406,7 +406,7 @@ module cv_top #(
                     if (t_valid) begin
                         if (r_asg!=NONE_ASG) begin
                             // matched：a-b 更新 + 新 bbox
-                            track[r_ti]<={1'b1,t_id,n_cx,n_cy,n_vx,n_vy,4'd0,a_min_x,a_max_x,a_min_y,a_max_y};
+                            track[r_ti]<={1'b1,t_id,n_cx,n_cy,n_vx,n_vy,6'd0,a_min_x,a_max_x,a_min_y,a_max_y};
                             r_hits[r_ti] <= (r_hits[r_ti]==4'hF) ? 4'hF : (r_hits[r_ti] + 4'd1);
                         end else begin
                             // coast：预测推进 + 老化
@@ -415,7 +415,7 @@ module cv_top #(
                         end
                     end
                     // 计数：出画面即时计数(要求最近有检测, 避免滑行幻影被计)；未出画面的在消亡时补计。
-                    if (t_valid && (r_hits[r_ti] >= MIN_HITS) && !r_cnt_mask[r_ti[2:0]] && ((t_out && (t_miss<=4'd2)) || !t_alive)) begin
+                    if (t_valid && (r_hits[r_ti] >= MIN_HITS) && !r_cnt_mask[r_ti[2:0]] && ((t_out && (t_miss<=6'd2)) || !t_alive)) begin
                         r_cnt_mask[r_ti[2:0]] <= 1'b1;
                         r_count <= r_count + 16'd1;
                     end
@@ -430,10 +430,10 @@ module cv_top #(
                     end else begin
                         // 取 det[r_dj]（async），若有效且未占 -> 找 free 槽
                         if (det[r_dj][72] && !r_det_taken[r_dj]) begin
-                            if (!track[r_free][104]) begin
+                            if (!track[r_free][106]) begin
                                 // 写新轨迹
                                 track[r_free]<={1'b1, r_next_id, det[r_dj][71:60], det[r_dj][59:48],
-                                                12'd0, 12'd0, 4'd0,
+                                                12'd0, 12'd0, 6'd0,
                                                 det[r_dj][47:36], det[r_dj][35:24], det[r_dj][23:12], det[r_dj][11:0]};
                                 r_next_id<=r_next_id+1;
                                 r_cnt_mask[r_free[2:0]]<=1'b0;   // 新轨迹 -> 计数去重标志复位
@@ -490,7 +490,7 @@ module cv_top #(
         r_border=1'b0; r_digit=1'b0;
         for (oi=0; oi<MAX_BLOBS; oi=oi+1) begin
             // 只画"最近有真实检测"的轨迹(丢失<=2)；纯预测滑行的不画(否则边缘出幻影框)
-            if (track[oi][104] && (track[oi][51:48] <= 4'd2)) begin
+            if (track[oi][106] && (track[oi][53:48] <= 6'd2)) begin
                 if ((((r_x>=track[oi][47:36])&&(r_x<track[oi][47:36]+FBOX_W)) ||
                      ((r_x<=track[oi][35:24])&&(r_x>track[oi][35:24]-FBOX_W))) &&
                     (r_y>=track[oi][23:12])&&(r_y<=track[oi][11:0])) r_border=1;
@@ -502,7 +502,7 @@ module cv_top #(
                     r_y>=track[oi][23:12] && r_y<track[oi][23:12]+7) begin
                     dg_row  = r_y - track[oi][23:12];
                     dg_col  = r_x - track[oi][47:36];
-                    dg_bits = f_digit(track[oi][103:100], dg_row[2:0]);
+                    dg_bits = f_digit(track[oi][105:102], dg_row[2:0]);
                     if (dg_bits[4 - dg_col[2:0]]) r_digit=1;
                 end
             end
