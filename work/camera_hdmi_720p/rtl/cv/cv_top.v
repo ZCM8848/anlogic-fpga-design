@@ -34,8 +34,8 @@ module cv_top #(
     parameter         MASK_SRC  = 1,       // 1=Sobel 边缘圆环(默认); 0=亮阈值(回退对比)
     parameter [10:0]  EDGE_THR  = 11'd80,  // Sobel 幅值阈值(同 edge_detect_96)；K3/K4 调偏置
     parameter [10:0]  DARK_THR  = 11'd110, // 暗区阈值(MASK_SRC=3)：w_y < DARK_THR 视为前景(如深色钢珠)
-    parameter [7:0]  ALPHA_Q   = 8'd160,  // a*256 ~=0.625（位置增益）
-    parameter [7:0]  BETA_Q    = 8'd48,   // b*256 ~=0.1875（速度增益）
+    parameter [7:0]  ALPHA_Q   = 8'd128,  // a*256 =0.5（位置增益）
+    parameter [7:0]  BETA_Q    = 8'd16,   // b*256 =0.0625（速度增益）；原 48/256=0.1875 在帧间位移大时会让轨迹跑飞
     parameter [11:0] GATE      = 12'd80,  // 配对最大 Manhattan 距离
     parameter [3:0]  MISS_K    = 4'd8,    // 丢失几帧删轨迹
     parameter [3:0]  MIN_HITS  = 4'd5,    // 至少被连续检出这么多帧的轨迹才允许"计数"

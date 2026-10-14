@@ -18,8 +18,8 @@ import argparse
 import cv2
 import numpy as np
 
-ALPHA = 0.625      # a-b 位置增益(≈cv_top ALPHA_Q/256)
-BETA = 0.1875      # a-b 速度增益
+ALPHA = 0.5        # a-b 位置增益(≈cv_top ALPHA_Q/256)
+BETA = 0.0625      # a-b 速度增益；原 0.1875 在 30fps(帧间位移大)下会让轨迹"跑飞"->重建轨->多计
 MARGIN = 20        # exit 计数：预测位置超出画面 + MARGIN 视为"离开"
 REC    = 2         # 只有"丢失 <= REC"帧的轨迹才画/才按 exit 计数(滑行幻影不画不计)
 

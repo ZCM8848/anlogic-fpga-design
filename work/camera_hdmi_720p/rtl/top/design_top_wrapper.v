@@ -632,6 +632,8 @@ module design_top_wrapper (
         .EDGE_MG  ( 12'd4  ),
         .EDGE_THR ( 11'd300 ),
         .DARK_THR ( 11'd100 ),   // 暗区阈值：w_y<100 视为钢珠(深色实心)
+        .ALPHA_Q  ( 8'd128  ),   // 位置增益 0.5
+        .BETA_Q   ( 8'd16   ),   // 速度增益 0.0625（降低：30fps 帧间位移大时避免轨迹跑飞重建）
         .MASK_SRC ( 3      ),    // 3=暗区检测（替代 Sobel 边缘；钢珠是深色实心圆盘）
         .MASK_VIEW( 1      ),
         .GATE     ( 12'd240),    // 配对门限(放宽 -> 吸收抖动，避免重复建轨)
