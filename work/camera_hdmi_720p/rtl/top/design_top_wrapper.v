@@ -79,6 +79,7 @@ module design_top_wrapper (
     wire S_pixel_clk;    // C4 75MHz
     wire S_serial_clk;   // C5 375MHz
     wire S_pll_lock;
+    wire S_ahb_clk;      // 前向声明：MCU AHB 总线时钟（ps_wrapper 输出，cv_top/ahb_slave 用）
 
     PLL u_pll (
         .refclk   ( I_sys_clk    ),
@@ -576,16 +577,20 @@ module design_top_wrapper (
         .O_hdmi_data     ( S_hdmi_out_data     )
     );
 
-    // ============================================================ CV 叠加（M7 钢珠检测）
-    // 串在 hdmi_mixer → video_mux 之间。组合直通保相位；I_cv_on=1 时叠加白框。
+    // ============================================================ CV 叠加 + 数据通路（v2）
+    // cv_top 只留像素级前端（Sobel/run 写）+ 叠加；CCL/跟踪/计数转 MCU。
+    // run_mem B 口：cv_top 写(pixel) / ahb slave 读(ahb_clk)；overlay/count：slave 写 / cv_top 读。
     wire [23:0] S_cv_data;
     wire        S_cv_de;
     wire        S_cv_vs;
-    wire [5:0]  S_cv_blob_cnt;
     wire [10:0] S_cv_run_cnt;
-    wire        S_cv_ccl_busy;
     wire        S_cv_run_overflow;
     wire [7:0]  S_cv_bin_thr;
+    wire [7:0]  S_cv_min_y, S_cv_max_y;
+    wire [9:0]  S_run_rd_addr;     // slave → cv_top（run_mem B 口地址）
+    wire [31:0] S_run_rd_data;    // cv_top → slave（run_mem B 口数据）
+    wire [511:0] S_overlay;        // slave → cv_top（叠加 bbox+ID）
+    wire [15:0]  S_count;          // slave → cv_top（exit 计数显示）
 
     // K3(B9)/K4(C7) 板载按键：CV 开时作阈值 ±1 调参（像素域去抖 → 单拍脉冲）
     // 注：脉冲必须单拍——cv_top 每周期判 I_thr_up/dn，若发 14ms 电平会被加到饱和
@@ -622,12 +627,12 @@ module design_top_wrapper (
         .IMG_W    ( 1280   ),
         .IMG_H    ( 720    ),
         .BIN_THR  ( 8'd91  ),
-        .MIN_AREA ( 16'd8  ),
-        .MAX_AREA ( 16'd20000 ),
-        .MIN_FILL ( 6'd15  ),
-        .MIN_RATIO( 6'd25  ),
-        .EDGE_MG  ( 12'd4  ),
-        .MASK_VIEW( 1      )
+        .EDGE_THR ( 11'd80 ),
+        .MASK_SRC ( 1      ),
+        .MAX_RUNS ( 1024   ),
+        .MASK_VIEW( 1      ),
+        .FBOX_W   ( 12'd2  ),
+        .MAX_OV   ( 8      )
     ) u_cv_top (
         .I_clk          ( S_pixel_clk      ),
         .I_rst_n        ( S_rst_n_pix      ),
@@ -637,12 +642,17 @@ module design_top_wrapper (
         .I_de           ( S_hdmi_out_de    ),
         .I_vs           ( S_hdmi_out_vsync ),
         .I_data         ( S_hdmi_out_data  ),
+        .I_ahb_clk      ( S_ahb_clk        ),
+        .I_run_rd_addr  ( S_run_rd_addr    ),
+        .O_run_rd_data  ( S_run_rd_data    ),
+        .I_overlay      ( S_overlay        ),
+        .I_count        ( S_count          ),
         .O_de           ( S_cv_de          ),
         .O_vs           ( S_cv_vs          ),
         .O_data         ( S_cv_data        ),
-        .O_blob_cnt     ( S_cv_blob_cnt    ),
         .O_run_cnt      ( S_cv_run_cnt     ),
-        .O_ccl_busy     ( S_cv_ccl_busy    ),
+        .O_min_y        ( S_cv_min_y       ),
+        .O_max_y        ( S_cv_max_y       ),
         .O_run_overflow ( S_cv_run_overflow),
         .O_bin_thr      ( S_cv_bin_thr     )
     );
@@ -714,27 +724,24 @@ module design_top_wrapper (
     reg [2:0] S_sw4_sync_100m;
     reg [2:0] S_sw3_sync_100m;
     reg [2:0] S_cv_on_sync_100m;
-    reg [5:0] S_cv_blob_cnt_s1, S_cv_blob_cnt_s2;
     reg [7:0] S_cv_bin_thr_s1, S_cv_bin_thr_s2;
     always @(posedge S_clk_100m) begin
         if (!S_rst_n_100m) begin
             S_sw4_sync_100m <= 3'd0;
             S_sw3_sync_100m <= 3'd0;
             S_cv_on_sync_100m <= 3'd0;
-            S_cv_blob_cnt_s1 <= 6'd0; S_cv_blob_cnt_s2 <= 6'd0;
             S_cv_bin_thr_s1 <= 8'd0;  S_cv_bin_thr_s2 <= 8'd0;
         end else begin
             S_sw4_sync_100m <= {S_sw4_sync_100m[1:0], I_sw4};
             S_sw3_sync_100m <= {S_sw3_sync_100m[1:0], I_sw3};
             S_cv_on_sync_100m <= {S_cv_on_sync_100m[1:0], r_cv_on};
-            S_cv_blob_cnt_s1 <= S_cv_blob_cnt;
-            S_cv_blob_cnt_s2 <= S_cv_blob_cnt_s1;
             S_cv_bin_thr_s1  <= S_cv_bin_thr;        // 8bit 慢变（手动调），2FF 同步
             S_cv_bin_thr_s2  <= S_cv_bin_thr_s1;
         end
     end
 
     // B7: H1 切换给 MCU —— status_report 删除，O_uart_tx 由 MCU uart0_tx 驱动
+    wire S_mcu_uart0_tx;   // 前向声明（ps_wrapper 输出）
     assign O_uart_tx = S_mcu_uart0_tx;
 
     // ============================================================ LED 状态指示
@@ -766,7 +773,6 @@ module design_top_wrapper (
     wire S_mcu_core_reset = ~(S_pll_lock & S_pll_mcu_lock);
 
     // ---- AHB 互连 ----
-    wire        S_ahb_clk;
     wire [1:0]  S_htrans;
     wire        S_hwrite;
     wire [30:0] S_haddr;
@@ -796,28 +802,34 @@ module design_top_wrapper (
         .O_hrdata      ( S_hrdata          ),
         .O_hreadyout   ( S_hready          ),
         .O_hresp       ( S_hresp           ),
-        // 状态输入（各域原信号；slave 内部 2FF 同步到 ahb_clk）
+        // 状态输入（pixel/100M 域原信号；slave 内部 2FF 同步到 ahb_clk）
         .I_cam_id      ( S_cam_sensor_id    ),
         .I_cam_id_ok   ( S_cam_sensor_id_ok ),
         .I_cam_i2c_err ( S_cam_i2c_error    ),
         .I_cam_cfg_done( S_cam_cfg_done     ),
         .I_ddr_rdy     ( S_ddr_rdy_s[1]     ),
-        .I_sw4         ( S_sw4_sync_100m[2]  ),
-        .I_sw3         ( S_sw3_sync_100m[2]  ),
+        .I_sw4         ( S_sw4_sync_100m[2] ),
+        .I_sw3         ( S_sw3_sync_100m[2] ),
         .I_cv_on       ( S_cv_on_sync_100m[2]),
-        .I_blob_cnt    ( S_cv_blob_cnt_s2   ),
+        .I_blob_cnt    ( 6'd0              ),   // CCL 转 MCU，无硬件检测数
         .I_bin_thr     ( S_cv_bin_thr_s2    ),
-        .I_run_cnt     ( S_cv_run_cnt       ),
-        .I_ccl_busy    ( S_cv_ccl_busy      ),
-        .I_run_overflow( S_cv_run_overflow  ),
+        .I_run_cnt     ( S_cv_run_cnt       ),   // pixel 域，slave 内 2FF
+        .I_min_y       ( S_cv_min_y         ),
+        .I_max_y       ( S_cv_max_y         ),
         .I_vsync       ( S_hdmi_vsync       ),
+        // run_mem 间接读口（slave 发地址 → cv_top B 口出数据）
+        .O_run_rd_addr ( S_run_rd_addr     ),
+        .I_run_rd_data ( S_run_rd_data     ),
+        // overlay + count（MCU 写 → cv_top 叠加读）
+        .O_overlay     ( S_overlay          ),
+        .O_count       ( S_count            ),
         .O_heartbeat   ( S_mcu_heartbeat    ),
         .O_scratch     ( S_mcu_scratch      ),
         .O_frame_cnt   ( S_mcu_frame_cnt    )
     );
 
     // ---- MCU（ps_wrapper，AHB master 暴露）----
-    wire        S_mcu_uart0_tx;       // → H1（B7：MCU 接管串口）
+    // S_mcu_uart0_tx 已在 B7 assign 段前向声明
     wire        S_mcu_core_sysrst;    // MCU 主动复位，暂悬空
     ps_wrapper u_ps (
         .I_core_clk   ( S_clk_300m        ),
