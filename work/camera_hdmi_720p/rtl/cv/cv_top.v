@@ -30,7 +30,7 @@ module cv_top #(
     parameter         MAX_RPR   = 32,
     parameter         MAX_LABELS= 32,
     parameter [11:0]  FBOX_W    = 12'd2,
-    parameter         MASK_VIEW = 1,
+    parameter         MASK_VIEW = 0,       // 0=显示真实画面(叠加框); 1=显示二值掩膜(调试)
     parameter         MASK_SRC  = 1,       // 1=Sobel 边缘圆环(默认); 0=亮阈值(回退对比)
     parameter [10:0]  EDGE_THR  = 11'd80,  // Sobel 幅值阈值(同 edge_detect_96)；K3/K4 调偏置
     parameter [10:0]  DARK_THR  = 11'd110, // 暗区阈值(MASK_SRC=3)：w_y < DARK_THR 视为前景(如深色钢珠)
