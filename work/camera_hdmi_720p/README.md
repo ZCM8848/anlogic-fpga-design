@@ -15,8 +15,9 @@ PH1P35MDG324（HX1P35A 开发板 / TD 6.2.1）上，从零搭建的 **SC500CS / 
 | M4 | 灰度直通出图（行缓存版，暂不接 DDR） | ✅ **上板验收通过**（2026-09-27 11:35）：实时灰度画面、感光正常；串口 `HS=1 … RX=1`（MIPI 链路完好，帧率 **≈59.6fps**）。画面证据 `work/test/M4_00/`。已知（预期）现象：纵向细条纹 = Bayer 网格（M6 去马赛克消）、缓慢自上而下滚动 = 相机帧率 59.6fps 与显示 60Hz 未锁相（相差约 0.4Hz）而行缓存「跟随最新行」的固有现象（M5 帧缓存消）。**注意：串口 F/L/W/G 是 BCD 码（RTL 字段名 `D_fs_bcd` 等），解析勿按 hex。** |
 | M5 | DDR2 帧缓存（自研读写控制器） | 🔨 **①空载校准版 ✅ 上板验收通过**（2026-09-27：串口第三行 `DDR RDY=1 ARDY=1 WRDY=1` 稳定（15/15、28/29）；MIPI 行照旧健康、59.67fps。构建方式与坑见 `tools/td_run/`，证据 `work/test/M5_00/`）；**②完整帧缓存版：实施计划已细化定稿**（`docs/plan.md`「M5-② 实施计划」，接口事实已按 IPUG035 + 厂商 lab + 构建报告三方核对），待开工 |
 | M6 | 三模式重构（彩条 / 边缘提取 / 彩色+OSD，SW4/SW3 切换） | ✅ **上板验收通过**（2026-09-28~29）。整棵搬入厂商 ISP + video_in/out/mc + DDR2 IP + hdmi_mixer/OSD 三件套；自研 hdmi_timing(复刻 uivtc)、test_pattern(2 级流水)、video_mux(帧边界门控)、status_report(握手修复)。经 4 轮调试修复：① status_report 发送 FSM 握手竞态→串口丢字 ② video_mux 两源 de 相位跳变→变量水平回绕 ③ hdmi_timing 与 uivtc 时序差→logo/画面静态偏移 ④ PROBE_PHASE 探针定位（后回滚）。check_rtl 0 错 0 警；bit md5 `B96CCE65`，时序 -1.7ns/9（ISP edge 域，OSD/彩条干净）。详见下「M6 构建记录」 |
-| M7 | 收尾 + 钢珠检测（CV） | 🔨 **①检测+框选（Phase A）编码完成，待上板**：自研 `rtl/cv/cv_top.v`（亮度阈值+run 提取+简化 CCL+bbox 叠加），`tools/sim/cv_sim.py` 7/7 通过；KEY2(A9) CV 开关、串口加 `CV=/NB=` 字段。bit md5 `6D1CC08E`，WNS -1.83ns（cv_top 组合路径，CV 关时干净=等价 M6）。**构建管线修复**：run.bat 改纯 ASCII+正斜杠（中文 rem 在 GBK cmd 失效；Tcl `\a` 吃反斜杠）；发现 TD 命令行开 `*.prj` 非 `.al`，新增源文件须 `tools/td_run/sync_prj.py` 同步否则 black box。详见下「M7 构建记录」。待办：上板验证 CV 框选、edge 模式 -1.7ns、OSD 左 5px 重复、Phase B 跟踪+计数 |
+| M7 | 收尾 + 钢珠检测（CV） | 🔨 **①检测+框选（Phase A）编码完成，待上板**：自研 `rtl/cv/cv_top.v`（亮度阈值+run 提取+简化 CCL+bbox 叠加），`tools/sim/cv_sim.py` 7/7 通过；KEY2(A9) CV 开关、串口加 `CV=/NB=` 字段。bit md5 `6D1CC08E`，WNS -1.83ns（cv_top 组合路径，CV 关时干净=等价 M6）。**构建管线修复**：run.bat 改纯 ASCII+正斜杠（中文 rem 在 GBK cmd 失效；Tcl `\a` 吃反斜杠）；发现 TD 命令行开 `*.prj` 非 `.al`，新增源文件须 `tools/td_run/sync_prj.py` 同步否则 black box。详见下「M7 构建记录」。待办：上板验证 CV 框选、edge 模式 -1.7ns、OSD 左 5px 重复（M6 遗留）；Phase B 跟踪+计数已由 M9 转入 MCU 完成 |
 | M8 | MCU 接管串口状态上报（B1–B8） | ✅ **上板验收通过**（2026-10-12）。内嵌 RISC-V 跑固件，经 AHB 从口（`0x80000000`）读板级状态、UART0 上报 H1，输出与原 status_report 逐字符一致。**status_report.v/uart_tx.v 已删**（移 retired/），串口改由 MCU 固件 `mcu_fw/main.c` 驱动。自研 `rtl/mcu/ahb_status_slave.v`（AHB-Lite，状态寄存器）+ `ps_wrapper.v`（MCU 例化）+ `pll_mcu`（50→300MHz core_clk）。iverilog 13/13；syn WNS -2.16ns / Hold +20ps（干净）。详见 `docs/hardware/HW_MCU.md`。待办：CV 动态验证（KEY2 开 CV + 钢珠看 NB/TH 变）、retired/ 清理 status_report.v/uart_tx.v 从 .al 移除 |
+| M9 | CV 后处理转 MCU（CCL/跟踪/exit 计数） | 🔨 **编码+构建+固件编译+上板通过，参数待调**（2026-10-15）。cv_top 重构：删 CCL/跟踪/计数 FSM 与 feature/det/track/rca 表，留 Sobel+阈值+run 写（run_mem 双口 BRAM：A 口 pixel 写 / B 口 ahb 读）+ 叠加（读 overlay 画绿框/ID、读 count 画 4 位 hex）；移除颜色门/line 计数/方向箭头。ahb_status_slave 加 run_mem 间接读口（RUN_IDX/RUN_DAT）+ overlay 寄存器组（8×64bit）+ META_REG + OV_COUNT（VER MCV2）。main.c：CCL(union-find)+形状筛选+a-b 跟踪+exit/death 计数+overlay 写+串口加 CNT。bit md5 `B4C7AF9C`（slice 85%，Setup WNS -1.09ns/Hold +20ps，cv_top/ahb 改动 0 违例，22FEP 全 ISP awb→edge M6 遗留）；MCU ELF md5 `68148597`（bss 9388B，DLM 内）。iverilog 0 语法错；check_rtl 0 真错。上板：串口 `CNT` 增长（38→52），有绿框但未跟住钢珠（GATE=240/ALPHA=0.5/BETA=0.0625/EDGE_THR=80→TH=50 待调）。**观测（2026-10-15）**：固件加 CV 调试流 `D`（≈30Hz，含 bbox+面积分桶）→ 实测 `RUN` **恒 1024**（run_mem 溢出 → 处理被截断在 **y≈330**，钢珠大半没进 CCL）、`NC` 恒 64（label 饱和）、通过筛选的都是 **15~50px 小碎片**（"很多框挤在一颗球上"）。**根因 = run 容量 + 前端噪声，非筛选本身**。详见下「M9 构建记录」。HOLD：DDR2 调试通道（SW2+K2 触发传原图）待开工 |
 
 详细计划与调研结论见 `docs/plan.md`。
 
@@ -46,10 +47,14 @@ camera_hdmi_720p/
 ├─ README.md          # 本文档
 ├─ docs/plan.md       # 实施计划、调研结论、风险
 ├─ rtl/               # 自研 RTL
-│  ├─ top/            # design_top_wrapper.v  板级顶层
-│  ├─ common/         # reset_ctrl.v、i2c_master.v、uart_tx.v
-│  ├─ video/          # hdmi_timing.v、test_pattern.v
-│  └─ camera/         # cam_ctrl.v（上电+I²C 初始化）、cam_report.v（串口报告）
+│  ├─ top/            # design_top_wrapper.v  板级顶层（M9：cv_top↔ahb_slave 连线）
+│  ├─ common/         # reset_ctrl.v
+│  ├─ video/          # hdmi_timing.v、test_pattern.v、video_mux.v + video_in/out/mc/hdmi_mixer/osd_char_lib/anlogic_logo_rom（厂商 M6 起）
+│  ├─ camera/         # uicfgcs520/uii2c/ae_set/SC520GainTbl/寄存器表（厂商 M6 起）
+│  ├─ isp/            # demosaic/awb/edge_detect_96/csi/raw10/uial2axis（厂商 M6 起）
+│  ├─ cv/             # cv_top.v（M9 v2：Sobel+阈值+run写+叠加；CCL/跟踪/计数转 MCU）
+│  └─ mcu/            # ahb_status_slave.v（M9 v2：+run_mem/overlay/count 窗口）、ps_wrapper.v
+├─ mcu_fw/            # main.c（M9：CCL+跟踪+exit计数+overlay 写，MCU 固件）
 ├─ constraints/       # 自研约束：pin.adc（引脚）、timing.sdc（时序）
 ├─ ip/                # 复用件（不自研、不修改），来源见 ip/README.md
 │  ├─ pll/            # 通用 PLL IP（IP 生成件）
@@ -57,6 +62,8 @@ camera_hdmi_720p/
 │  └─ sc520reg/       # SC520CS 720p60 原厂寄存器表（数据件）
 ├─ tools/             # 自研验证工具：静态自检 + iverilog RTL 仿真 + Python 行为级仿真
 │  ├─ check_rtl.py    # 静态自检：.al 清单 / 端口-网络-位宽交叉校验
+│  ├─ serial_dbg.py   # CV 调试流解析（MCU 串口 "D ..." 行）
+│  ├─ sync_fw.ps1     # 同步 mcu_fw/main.c → FD 工程 + 删 build/obj/main.c.o（改固件后必跑）
 │  ├─ sim/            # iverilog RTL testbench（tb_*.v + run_iverilog.ps1）+ Python 行为级仿真（*_sim.py）
 │  └─ td_run/         # TD run 参数模板 + 自愈式 run.bat + sync_prj.py（命令行构建）
 └─ td_project/        # TD 工程目录（camera_hdmi_720p.al + 自动生成的 *_Runs/）
@@ -365,6 +372,85 @@ MIPI HS=1 F=000012 L=0720 W=01280 G=0320 ER=00 HW=2B0640xx PW=xxxx PL=0000 HC=0 
 2. **简化 CCL 过分割**：无 union-find，有内部间隙的 blob 偶尔被分成 2 个框（圆球无间隙→不受影响）。噪声大时可加形态学（开运算）去间隙再 CCL。
 3. **1 帧延迟**：框比球滞后 1 帧（~16ms），Phase B 跟踪用当前帧预测对齐。
 4. edge 模式 -1.7ns、OSD 左 5px 重复（M6 遗留，未动）。
+
+## M9 构建记录（CV 后处理转 MCU，2026-10-15）
+
+**决策**：把 M7 cv_top 里的 CCL/形状筛选/a-b 跟踪/计数 FSM 与 feature/det/track/rca 表整体搬到 MCU 固件（腾门资源 + 软件可灵活调参/上 union-find）。cv_top 只留像素级实时部分。
+
+**cv_top 重构**（`rtl/cv/cv_top.v`）：
+- 删 CCL FSM（S_CLR/S_RD/S_SCAN/S_DCOLLECT）、跟踪 FSM（S_TK_*/S_TU_*）、feature/det/track/rca 表、所有跟踪/形状筛选算术。
+- 留 Sobel 3×3（2 行缓存 BRAM）+ 自适应阈值（min/max midpoint）+ 用户偏置（K3/K4）。
+- run 提取写 `run_mem`：**双口 BRAM**，A 口 pixel 域写（`{row_y[9:0],xs[10:0],xe[10:0]}` 32bit，≤1024 项），B 口 ahb_clk 域读（给 MCU 间接读）。
+- 叠加：读 `I_overlay`（8 项 × 64bit：`{valid,id,x0,y0,x1,y1}`）画绿框+ID（5×7 字模 f_digit 0-F）；读 `I_count` 画左上 4 位 hex Count。
+- 移除：颜色门（管道哑光黑无彩色干扰）、line 计数 + 方向箭头（只留 exit/death）。
+
+**ahb_status_slave v2**（`rtl/mcu/ahb_status_slave.v`）：
+- 加 `RUN_IDX`/`RUN_DAT`：MCU 写索引→cv_top run_mem B 口同步读→slave 锁存→MCU 读（间接寻址，hreadyout 恒 1 不破坏 AHB 时序）。
+- 加 `OV_IDX`/`OV_W0`/`OV_W1`：MCU 写 overlay 项（8×64bit 寄存器组），W1 写触发提交。
+- 加 `META_REG`（`{run_cnt,min_y,max_y}`）、`OV_COUNT`（exit 计数，MCU 写/cv_top 读显示）。
+- VER 升 `MCV2`（`0x4D435602`）。
+
+**design_top_wrapper**：cv_top↔ahb_slave 的 run_mem/overlay/count 连线；删 blob_cnt/ccl_busy 同步（CCL 转 MCU，`I_blob_cnt` 接 0）；`S_ahb_clk`/`S_mcu_uart0_tx` 前向声明。`.al` 清除两个指向不存在路径的 `AutoExcluded` 条目（M8 删除的 status_report/uart_tx）。
+
+**main.c**（`mcu_fw/main.c`，含 CCL/跟踪/计数）：
+- 每帧 vsync 后（轮询 FRAME_REG 变化）：读 META → 逐 run 读 run_mem → 软件 CCL（行 run 重叠合并 + **union-find**）→ feature（area/bbox/Σx/Σy）→ 形状筛选（面积/填充率/长短比/贴边）→ det → a-b 跟踪（预测/贪心 NN/coast/新建/ID 管理）→ exit/death 计数 → 写 overlay + count。
+- 参数：`GATE=240`、`MISS_K=20`、`MIN_HITS_EX=4`、`MIN_HITS_DT=5`、`EXIT_MISS=10`、`ALPHA_Q=128`(0.5)、`BETA_Q=16`(0.0625)；`EDGE_THR=80`/`MASK_SRC=1` 在 cv_top。
+- 串口：`CAM ID=.. .. TH=<hex> CNT=<dec>`（加 CNT，去 NB）。
+
+**验证**：
+- `check_rtl.py`：0 真错（6 个 IP 未录入是 check_rtl 不解析 IP_FILE 的误报）。
+- iverilog 0.9.7 全量（rtl/ 跳 retired/）：0 真语法错（16 个全是厂商 IP/原语 Unknown module，iverilog 无 Anlogic 库）。
+- main.c：riscv-gcc `-fsyntax-only` 通过（al_core.h 平台头跳过隔离验证我的代码）。
+
+**构建**（TD 命令行 `tools/td_run/run.bat`）：
+- syn：Setup WNS -2.4ns（ISP awb→edge + hdmi_mixer OSD 路径，均非新增）。
+- phy final：**Setup WNS -1.09ns / Hold +20ps / 22 FEP**（全在 u_isp_top 的 awb→edge，M6 遗留；**cv_top/ahb 改动 0 违例**）。
+- bit `phy_1/camera_hdmi_720p.bit`（1789539B，md5 `B4C7AF9C08A9AE83C1D58D03886850A3`）。
+- 资源：slice 18072/21216=85%，LUT 16377，ERAM 41（run_mem 推断 2 块 BRAM ✓），DSP 9，MCU 1。
+
+**MCU 固件编译**（FD make，ph1p35 toolchain gcc 13.1.1，`-march=rv32imafc_zba_zbb_zbc_zbs -mabi=ilp32f`）：
+- ELF `build/ph1p35_status.elf`（186972B，md5 `68148597C458AD834C4A8753ACCD6A8D`），text 33508/data 600/bss 9388（feat/prev/cur/trk/det 数组，DLM 16KB 内）；bin 34160B。
+- 坑：命令行用 fpsoc toolchain(gcc 10.2) + `-mabi=ilp32`(soft-float) 编的 main.c.o 与工程 single-float .o 冲突；删 main.c.o 让 FD 用 ph1p35 toolchain + `ilp32f` 重编即解。
+- **同步坑（重要，易反复踩）**：`mcu_fw/main.c` 与 FD 工程 `<FD>/main.c` 用"硬链同一份"维护，但编辑器以"新建+改名"写盘会**打断硬链**，导致 FD 一直编译旧内容（曾整轮调试流丢失：串口只有 `CAM` 行、没有 `D` 行）。**改完固件务必先跑 `tools/sync_fw.ps1`**（复制 `mcu_fw/main.c` → FD 工程 + 删 `build/obj/main.c.o`）再在 FD 里 Build。
+
+**上板（2026-10-15）**：
+- 串口：`CAM ID=EE4B OK=1 E=1 CFG=1 DDR=1 SW4=1 SW3=1 CV=1 TH=50 CNT=38→52`（CNT 增长，CV 后处理链路 MCU↔run_mem↔CCL↔跟踪↔计数↔overlay 整体通）。
+- 画面：有绿框但**未跟住钢珠**（参数待调）。
+
+### M9 观测记录（CV 调试流 `D`，2026-10-15）
+
+**动机**：上板现象是"5 颗球全不框"或"很多框挤在一颗球上"，且串口只有 `CAM` 行，无法判断前端到底看到什么。故先加**高频观测**（不改筛选逻辑）定位。
+
+**固件调试流**（`mcu_fw/main.c`，仅 `CV=1` 时输出；`DBG_DIV=2`→≈30Hz，`DBG_TOPK=6`，`BKT1/BKT2=100/500`）：
+
+```
+D F=<帧号> RUN=<本帧run数> NC=<连通域数> DET=<通过筛选数> B=<lt100,100_500,gt500> | [.*]area,x0,y0,x1,y1 ...
+```
+
+- `[ * ]`=通过筛选（会画框）／`[ . ]`=被筛掉；`RUN/NC/DET` 分别受 `MAX_RUNS=1024`/`MAX_LABELS=64`/`MAX_DET=8` 上限约束。
+- `B` = 全部有效连通域按面积分桶（<100 / 100–500 / >500 px）计数。
+- 解析器 **`tools/serial_dbg.py`**：`--file log.txt` 解析已存日志，或直接给 `COM口 秒数` 实时读（含 top 连通域的 `w/h/fill/ratio` 与"被哪条判据卡住"）。
+
+**实测结论（COM4 @115200，两次抓取）**：
+
+| 观测 | 值 | 含义 |
+|---|---|---|
+| `RUN` | **恒 = 1024** | run_mem **每帧溢出**，只存前 1024 条 run（按行扫描） |
+| 所有连通域 `y1` | **≤ ≈330** | **处理被截断在下半帧之前**，钢珠（多在 y>330）从未进入 CCL |
+| `NC` | **恒 = 64** | `MAX_LABELS` 饱和 |
+| `DET` | 0～8（常 8） | `MAX_DET` 饱和 |
+| 通过筛选的目标 | area 60~520、bbox **15~50px** | 全是**小碎片**，不是球环 |
+| 最大连通域 | 桌面横线（`area 1500~4100`、`w`≤1278、`fill~6%）+ x=2~3 视频边框竖线 | 均未通过 |
+
+**根因**：① **`run_mem` 容量不足**——环每行约 2 条 run，5 球即数千条，远超 1024 → 帧被截断；② **前端 mask 噪声多**（桌面织物纹理 + 视频边框 + `TH=50` 低于默认 `EDGE_THR=80`，K3/K4 调低后噪声更多）；③ `MAX_LABELS/MAX_DET` 饱和。→ **此时改"形状筛选"无意义**（球大多没进 CCL），须先"降噪声 / 扩容量"。
+
+**固件同步（新增）**：`mcu_fw/main.c` 编辑后，先跑 `tools/sync_fw.ps1`（复制到 FD 工程 + 删 `build/obj/main.c.o`）再 FD Build——否则 FD 可能一直编译旧内容（本轮曾因此整段调试流丢失）。
+
+**待办**：
+0. **（新，最高优先级）解决 run_mem 溢出 / 前端噪声**：一帧 run>1024 → 处理截断在 y≈330、钢珠大半丢失。先做**零成本实验**：用 KEY4 调高 `TH` 看 `RUN/NC` 是否回落到上限以下、连通域 `y` 是否覆盖到钢珠；若仍溢出则**扩 `MAX_RUNS`(→~4096)/`MAX_DET`(→16)**（cv_top，需重编 FPGA）并处理 mask 噪声（提高阈值 / 屏蔽视频边框）。之后再落地"环感知筛选"。
+1. 调参让框跟住钢珠：`GATE=240` 偏大、`ALPHA_Q=128`/`BETA_Q=16` 增益低（速度收敛慢）、`EDGE_THR=80`（已 K3 调到 TH=50）、`MASK_SRC=1` Sobel 可能换亮度阈值（`MASK_SRC=0`，钢珠在黑背景是亮斑）。
+2. CNT 准确性对照真实钢珠数（当前 4s 涨 14 可能误计）。
+3. **HOLD**：DDR2 调试通道（SW2+K2 触发，MCU 经 AHB→DDR 读桥读 video_in 帧串口传原图），需加 AHB→DDR 读桥 + 跨域 + 仲裁，待开工。
 
 
 

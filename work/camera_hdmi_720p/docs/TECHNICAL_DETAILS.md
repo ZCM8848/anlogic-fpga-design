@@ -14,7 +14,7 @@
 | 0 | × | × | 彩条测试图案 | test_pattern → video_mux → hdmi_tx |
 | 1 | 0 | 关 | 边缘提取（Sobel 二值图） | camera → ISP(edge_on=1) → DDR → hdmi_mixer → video_mux → hdmi_tx |
 | 1 | 1 | 关 | 彩色摄像头 + OSD | camera → ISP(edge_on=0) → DDR → hdmi_mixer(osd_on=1) → video_mux → hdmi_tx |
-| 1 | × | **按一下→开** | 摄像头 + 钢珠白框（M7） | camera → ISP(edge/osd 关) → DDR → hdmi_mixer → **cv_top(叠加)** → video_mux → hdmi_tx |
+| 1 | × | **按一下→开** | 摄像头 + 钢珠绿框（M9） | camera → ISP(edge/osd 关) → DDR → hdmi_mixer → **cv_top(叠加：读 MCU 算的 overlay 画绿框/ID/Count)** → video_mux → hdmi_tx |
 
 ### 设计决策
 - **整棵搬入厂商 ISP**（demosaic/AWB/edge_detect_96/video_in/video_out/mc_to_user_interface/hdmi_mixer/osd_char_lib/anlogic_logo_rom/uicfgcs520 等），来自两个已验证参考工程 `lab_ex2_edge_SC520`（边缘提取）和 `lab_ex3_osd_SC520`（彩色+OSD）。
@@ -29,7 +29,7 @@
 ### FPGA 芯片
 - **型号**：Anlogic PH1P35MDG324（PH1P 系列，速度等级 -3）
 - **资源**：LUT ~20800 / EBR 108 / DSP 40 / PLL 6 / GCLK 32
-- **当前占用**：LUT 9756(47%) / EBR 39(36%) / DSP 9(22.5%) / PLL 3(50%) / GCLK 9(28%)
+- **当前占用（M9，2026-10-15）**：LUT 16377 / EBR 41 / DSP 9 / slice 18072(85%) / PLL 4 / MCU 1；bit `B4C7AF9C`，Setup WNS -1.09ns / Hold +20ps（cv_top/ahb 改动 0 违例，22FEP 全 ISP awb→edge M6 遗留）
 
 ### 外设
 | 外设 | 接口 | 引脚 |
@@ -72,8 +72,24 @@
     → isp_top[ demosaic → data128_96 → awb → edge_detect_96(edge_on 门控 bypass) → data_96bit_to_128bit ]
     → video_in(async FIFO,4帧乒乓) → mc_to_user_interface → DDR2 IP → video_out(async FIFO)
 
-100MHz 域: uicfgcs520(I²C 配置) + ae_set(自动曝光) + uart_tx/status_report(调试) + LED 心跳
+100MHz 域: uicfgcs520(I²C 配置) + ae_set(自动曝光) + LED 心跳（M8 起 status_report/uart_tx 退役，串口由 MCU 驱动）
+ahb_clk ~150MHz 域（M8 起）: MCU core_clk/2 → ahb_status_slave + ps_wrapper
 ```
+
+### M9 CV 后处理通路（cv_top ↔ ahb_status_slave ↔ MCU）
+
+```mermaid
+graph LR
+  HDMI["hdmi_mixer<br/>S_hdmi_out_data"] --> CV["cv_top (pixel 75MHz)<br/>Sobel+阈值→mask<br/>run 写 run_mem(A口)"]
+  CV -->|叠加读 overlay/count| VMUX["video_mux → hdmi_tx"]
+  CV -->|"run_mem 双口BRAM<br/>B口 ahb读"| SLAVE["ahb_status_slave (ahb_clk)<br/>RUN_IDX/RUN_DAT 间接读<br/>overlay 寄存器组×8<br/>META/OV_COUNT"]
+  SLAVE <-->|AHB 0x8000_0000| MCU["MCU 固件 main.c (RISC-V 300MHz)<br/>每帧 vblank: CCL(union-find)→筛选<br/>→a-b跟踪→exit/death计数<br/>→写overlay+count"]
+  MCU -->|overlay/count 回写| SLAVE
+```
+
+cv_top 只留像素级前端（Sobel+阈值+run 写+叠加），CCL/形状筛选/a-b 跟踪/exit 计数全在 MCU 固件。run_mem 双口 BRAM：A 口 pixel 域写、B 口 ahb_clk 域读（MCU 经 RUN_IDX/RUN_DAT 间接寻址）。overlay 8 项 ×64bit 寄存器组在 ahb_slave，MCU 写、cv_top 读叠加。详见 `docs/plan.md`「M9 实施记录」。
+
+**M9 调试流（观测用）**：固件在 `CV=1` 时以 ≈30Hz 输出 `D F=.. RUN=.. NC=.. DET=.. B=<lt100,100_500,gt500> | [.*]area,x0,y0,x1,y1 ..`（run 数 / 连通域数 / 通过筛选数 / 面积分桶 + top 连通域 bbox），解析见 `tools/serial_dbg.py`。**已知瓶颈**：`run_mem` 上限 1024 条 run/帧——环每行约 2 条 run，满屏多球会溢出，导致处理被截断（实测止于 y≈330、钢珠大半没进 CCL）。详见 `README.md`「M9 观测记录」。
 
 ### 时钟域划分（4 个异步时钟组）
 

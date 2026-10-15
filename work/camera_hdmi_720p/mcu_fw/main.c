@@ -60,6 +60,12 @@ extern void al_simp_putchar(char c);
 #define EXIT_MISS   10      /* 出画面允许丢失帧数 */
 #define MARGIN      20      /* 出画面判定边距 */
 
+/* ---- 调试流（D：仅观测，不改筛选行为）---- */
+#define DBG_DIV     2       /* 每 N 帧发一行：1=60Hz, 2=30Hz */
+#define DBG_TOPK    6       /* 每行 dump 面积最大的前 K 个连通域 */
+#define BKT1        100     /* 面积分桶阈值 1（px）*/
+#define BKT2        500     /* 面积分桶阈值 2（px）*/
+
 #define ABS(x) ((x) < 0 ? -(x) : (x))
 
 /* ---- 数据结构 ---- */
@@ -81,6 +87,12 @@ static int            n_det;
 static struct Track   trk[MAX_TRK];
 static int            next_id;
 static int            count;
+
+/* ---- 调试流缓冲（每帧由 ccl_finalize 填充）---- */
+struct DbgComp { int area, x0, y0, x1, y1, pass; };
+static struct DbgComp dbg[DBG_TOPK];
+static int            n_dbg;
+static int            bkt_a, bkt_b, bkt_c;   /* 面积 <BKT1 / BKT1..BKT2 / >BKT2 的连通域个数 */
 
 /* ---- hex 输出（al_simp_printf 不支持 %0Nx）---- */
 static void putx(uint32_t val, int width)
@@ -199,26 +211,52 @@ static void ccl_finalize(void)
             feat[i].valid = 0;
         }
     }
-    /* 形状筛选 → det */
+    /* 形状筛选 → det；同时为调试流收集统计（不改判定逻辑） */
     n_det = 0;
+    n_dbg = 0;
+    bkt_a = bkt_b = bkt_c = 0;
     for (i = 0; i < next_label; i++) {
+        int area, w, h, mn, mx, pass;
         if (!feat[i].valid) continue;
-        int area = feat[i].area;
-        if (area < MIN_AREA || area > MAX_AREA) continue;
-        int w = feat[i].x1 - feat[i].x0 + 1;
-        int h = feat[i].y1 - feat[i].y0 + 1;
-        int mn = w < h ? w : h, mx = w < h ? h : w;
-        if (area * 100 < MIN_FILL * w * h) continue;       /* 填充率 */
-        if (mn * 100 < MIN_RATIO * mx) continue;            /* 长短比 */
-        if (feat[i].x0 < EDGE_MG || feat[i].y0 < EDGE_MG ||
-            feat[i].x1 >= IMG_W - EDGE_MG || feat[i].y1 >= IMG_H - EDGE_MG) continue;
-        if (n_det >= MAX_DET) break;
-        det[n_det].valid = 1;
-        det[n_det].cx = (int)(feat[i].sum_x / area);
-        det[n_det].cy = (int)(feat[i].sum_y / area);
-        det[n_det].x0 = feat[i].x0; det[n_det].y0 = feat[i].y0;
-        det[n_det].x1 = feat[i].x1; det[n_det].y1 = feat[i].y1;
-        n_det++;
+        area = feat[i].area;
+        w = feat[i].x1 - feat[i].x0 + 1;
+        h = feat[i].y1 - feat[i].y0 + 1;
+        mn = w < h ? w : h; mx = w < h ? h : w;
+        pass = 1;
+        if (area < MIN_AREA || area > MAX_AREA)                    pass = 0;  /* 面积 */
+        else if (area * 100 < MIN_FILL * w * h)                    pass = 0;  /* 填充率 */
+        else if (mn * 100 < MIN_RATIO * mx)                        pass = 0;  /* 长短比 */
+        else if (feat[i].x0 < EDGE_MG || feat[i].y0 < EDGE_MG ||
+                 feat[i].x1 >= IMG_W - EDGE_MG ||
+                 feat[i].y1 >= IMG_H - EDGE_MG)                    pass = 0;  /* 贴边 */
+
+        /* 面积分桶（px）*/
+        if (area < BKT1) bkt_a++;
+        else if (area < BKT2) bkt_b++;
+        else bkt_c++;
+
+        /* 维护面积最大的前 DBG_TOPK 个（降序插入）*/
+        if (n_dbg < DBG_TOPK) {
+            int k = n_dbg;
+            while (k > 0 && dbg[k - 1].area < area) { dbg[k] = dbg[k - 1]; k--; }
+            dbg[k].area = area; dbg[k].x0 = feat[i].x0; dbg[k].y0 = feat[i].y0;
+            dbg[k].x1 = feat[i].x1; dbg[k].y1 = feat[i].y1; dbg[k].pass = pass;
+            n_dbg++;
+        } else if (area > dbg[DBG_TOPK - 1].area) {
+            int k = DBG_TOPK - 1;
+            while (k > 0 && dbg[k - 1].area < area) { dbg[k] = dbg[k - 1]; k--; }
+            dbg[k].area = area; dbg[k].x0 = feat[i].x0; dbg[k].y0 = feat[i].y0;
+            dbg[k].x1 = feat[i].x1; dbg[k].y1 = feat[i].y1; dbg[k].pass = pass;
+        }
+
+        if (pass && n_det < MAX_DET) {
+            det[n_det].valid = 1;
+            det[n_det].cx = (int)(feat[i].sum_x / area);
+            det[n_det].cy = (int)(feat[i].sum_y / area);
+            det[n_det].x0 = feat[i].x0; det[n_det].y0 = feat[i].y0;
+            det[n_det].x1 = feat[i].x1; det[n_det].y1 = feat[i].y1;
+            n_det++;
+        }
     }
 }
 
@@ -355,6 +393,23 @@ static void report_serial(void)
     al_simp_printf(" CNT=%d\r\n", count);
 }
 
+/* ---- 调试流上报（D）：每 DBG_DIV 帧一行，top-K 连通域 + 面积分桶 ----
+ * 格式：D F=<frame> RUN=<run数> NC=<连通域数> DET=<通过筛选数> B=<lt100,100_500,gt500> | [.*]area,x0,y0,x1,y1 ...
+ *   [*] = 通过当前筛选，[.] = 被筛掉（PC 端据此看出球被哪条判据卡住）*/
+static void report_debug(uint32_t frame, int run_cnt)
+{
+    int i;
+    al_simp_printf("D F=%u RUN=%d NC=%d DET=%d B=%d,%d,%d | ",
+                   (unsigned)(frame & 0xFFFFFFu), run_cnt, next_label, n_det,
+                   bkt_a, bkt_b, bkt_c);
+    for (i = 0; i < n_dbg; i++) {
+        al_simp_putchar(dbg[i].pass ? '*' : '.');
+        al_simp_printf("%d,%d,%d,%d,%d ",
+                       dbg[i].area, dbg[i].x0, dbg[i].y0, dbg[i].x1, dbg[i].y1);
+    }
+    al_simp_printf("\r\n");
+}
+
 int main(void)
 {
     uint32_t ver = VER_REG;
@@ -372,6 +427,7 @@ int main(void)
     uint32_t last_frame = FRAME_REG;
     uint32_t hb = 0;
     int report_div = 0;
+    int dbg_div = 0;
 
     while (1) {
         uint32_t fr = FRAME_REG;
@@ -386,6 +442,11 @@ int main(void)
             track_update();
             write_overlay();
             OV_COUNT = (uint32_t)count;
+            /* 调试流（D）：仅 CV 开启时，每 DBG_DIV 帧一行 */
+            if (((CAM_REG >> 9) & 1) && (++dbg_div >= DBG_DIV)) {
+                dbg_div = 0;
+                report_debug(fr, run_cnt);
+            }
             if (++report_div >= 30) {       /* 每 30 帧 ≈ 0.5s 上报 */
                 report_div = 0;
                 report_serial();

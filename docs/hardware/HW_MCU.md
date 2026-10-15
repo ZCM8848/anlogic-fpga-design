@@ -50,7 +50,7 @@ MCU IP 有 **AHB master** 和 **APB master** 两个面向 fabric 的主端口（
 
 - 来源：FD 自带 `data/embeddedsw/master_sdk/solutions/demo/baremetal/ahb_demo_n/ahb_demo.c` 里 `#define AHB_BaseAddr 0x80000000`，演示 MCU→fabric AHB 读写。
 - 固件 `*(volatile uint32_t*)0x80000000` → MCU AHB master → 外部 AHB 从口。
-- 本项目 `ahb_status_slave` 挂在 AHB master 上，地址 `0x80000000 + 偏移`（CAM/CV/FRAME/VER/HEARTBEAT/SCRATCH @ 0x00/0x04/0x08/0x0C/0x10/0x14）。
+- 本项目 `ahb_status_slave` 挂在 AHB master 上，地址 `0x80000000 + 偏移`。M8 状态寄存器：CAM/CV/FRAME/VER/HEARTBEAT/SCRATCH @ 0x00/0x04/0x08/0x0C/0x10/0x14。**M9 扩展 CV 数据通路**：RUN_IDX/RUN_DAT（run_mem 间接读）@ 0x18/0x1C、OV_IDX/OV_W0/OV_W1（overlay 写）@ 0x20/0x24/0x28、META_REG @ 0x2C、OV_COUNT @ 0x30；VER 升 MCV2(`0x4D435602`)。详见 `work/camera_hdmi_720p/docs/plan.md`「M9 实施记录」。
 
 ### 4.2 APB master 窗口 = **文档无记载**（实测结论）
 

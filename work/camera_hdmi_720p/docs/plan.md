@@ -50,8 +50,10 @@ camera 控制(自研 M2): 上电时序 + I²C 主机 + 寄存器表加载 + 状�
 | M3 | MIPI 接收 + CSI/RAW10 解包 + 帧统计 | ✅ **上板验收通过**（2026-09-27 09:59）：串口 `MIPI HS=1 F=…(60fps) L=0720 W=01280 G=0320 ER=00 HW=2B06403B PL=0000 HC=0`；首轮发现 D-PHY 字节配对问题（原始流配对为 `(b0,b2),(b1,b3)…`），加 `lane_deint.v` 重排后通过 |
 | M4 | 灰度直通（行缓存） | ✅ **上板验收通过**（2026-09-27）：实时灰度画面、感光正常；串口 `HS=1 … RX=1`（帧率 ≈59.6fps）；画面证据 `work/test/M4_00/` |
 | M5 | DDR2 帧缓存 | 🟡 计划已定（见下「M5 实施要点」），IP 已入库 `ip/ddr2/`，待实施 |
-| M6 | 彩色 ISP | 全彩实时画面 |
-| M7 | 收尾 | 按键/模式、README/验证记录、CI lint 接入 |
+| M6 | 三模式重构（彩条/边缘/彩色+OSD，SW4/SW3） | ✅ 上板通过（2026-09-28~29）；bit `B96CCE65` |
+| M7 | 钢珠检测（CV，Phase A 检测+框选） | ✅ 编码完成；bit `6D1CC08E`；后演进到 Phase B（Sobel+跟踪+计数） |
+| M8 | MCU 接管串口状态上报（B1–B8） | ✅ 上板通过（2026-10-12）；`status_report.v`/`uart_tx.v` 退役 |
+| M9 | CV 后处理转 MCU（CCL/跟踪/exit 计数） | 🔨 编码+构建+固件编译+上板通过，参数待调（2026-10-15）；bit `B4C7AF9C`，ELF `68148597`；详见下「M9 实施记录」 |
 
 ### M2 实施要点（已完成编码 + 仿真验证）
 
@@ -279,6 +281,55 @@ WR/RD/OV/UN/ER 全部符合预期**。
 5. **构建流程（M5 已解决，留档）**：DDR2 IP 约束只能经 run `settings.cfg` 的 `IpADCList/IpSDCList` 由命令行流程加载；
    GUI Run 不读该文件且会 reset/重写它 → 报 `SYN-8534`。已固化 `tools/td_run/`（模板 + 自愈 run.bat），
    今后重建一律双击 `*_Runs/{syn_1,phy_1}/run.bat`。
+
+## 三·补、M9 实施记录（CV 后处理转 MCU，2026-10-15）
+
+**背景**：M7 cv_top 把 CCL/形状筛选/a-b 跟踪/计数 FSM 全做在硬件（feature/det/track/rca 表 + 距离/面积/填充算术），组合路径 -1.83ns 且调参要重建。M9 把这些帧级顺序处理整体转给 MCU 固件，cv_top 只留像素级实时部分，腾门资源 + 软件可灵活调参（含 union-find）。
+
+**架构（cv_top ↔ ahb_status_slave ↔ MCU）**：
+
+```mermaid
+graph LR
+  A["pixel active<br/>I_data→Sobel+阈值→mask"] --> B["run 提取写 run_mem<br/>A口pixel"]
+  B -->|双口BRAM B口ahb读| C["MCU vblank<br/>读META+run_mem"]
+  C --> D["软件CCL<br/>union-find"]
+  D --> E["形状筛选→det"]
+  E --> F["a-b跟踪"]
+  F --> G["exit/death计数"]
+  G --> H["写overlay+count"]
+  H -->|下帧active| I["cv_top读overlay画绿框/ID<br/>读count画Count"]
+```
+
+**接口（ahb_status_slave v2，窗口 0x8000_0000，haddr[6:2] 选槽）**：
+
+| 偏移 | 寄存器 | 方向 | 说明 |
+|---|---|---|---|
+| 0x00 | CAM_REG | RO | cam_id/id_ok/i2c_err/cfg_done/ddr_rdy/sw4/sw3/cv_on/blob_cnt(=0) |
+| 0x04 | CV_REG | RO | bin_thr/run_cnt/frame_cnt[7:0] |
+| 0x08 | FRAME_REG | RO | vsync 累计 frame_cnt |
+| 0x0C | VER_REG | RO | MCV2 (`0x4D435602`) |
+| 0x18 | RUN_IDX | WO | run_mem 读索引 → cv_top B 口寻址 |
+| 0x1C | RUN_DAT | RO | run_mem[B 口同步读] → slave 锁存（写地址后隔 1 次读取新值） |
+| 0x20 | OV_IDX | WO | overlay 写索引(0..7) |
+| 0x24 | OV_W0 | WO | overlay 项高32bit `{valid,id,x0,y0}` 暂存 |
+| 0x28 | OV_W1 | WO | overlay 项低32bit `{x1,y1}`；写触发 `overlay[OV_IDX]<={W0,W1}` |
+| 0x2C | META_REG | RO | `{run_cnt[10:0],min_y,max_y}` |
+| 0x30 | OV_COUNT | RW | exit 计数值（MCU 写 / cv_top 显示） |
+
+overlay 项 64bit = `{valid[1], id[3:0], x0[11:0], y0[11:0], x1[11:0], y1[11:0], pad}`（W0 高 32 + W1 低 32）。run_mem 项 32bit = `{row_y[9:0], xs[10:0], xe[10:0]}`。
+
+**cv_top 重构**：删 CCL/跟踪 FSM 与 feature/det/track/rca 表；留 Sobel 3×3（2 行缓存）+ 自适应阈值(min/max midpoint) + run 写 run_mem + 叠加（读 overlay 8 项 bbox+ID 5×7 字模 + count 4 位 hex）；移除颜色门/line 计数/方向箭头。
+
+**main.c**：CCL（行 run 重叠 + union-find + feature area/bbox/Σx/Σy）→ 形状筛选（面积/填充/长短比/贴边）→ a-b 跟踪（预测/贪心 NN/coast/新建）→ exit（出画面+MARGIN，hits≥4）+ death（missed>MISS_K，hits≥5）计数 → overlay 写 + 串口 CNT。参数 `GATE=240/MISS_K=20/MIN_HITS_EX=4/MIN_HITS_DT=5/EXIT_MISS=10/ALPHA_Q=128(0.5)/BETA_Q=16(0.0625)`；`EDGE_THR=80/MASK_SRC=1` 在 cv_top。
+
+**验证与构建**：check_rtl 0 真错；iverilog 0 语法错；TD syn+phy+bitgen 通过，bit `B4C7AF9C`（slice 85%，WNS -1.09ns/Hold +20ps，cv_top/ahb 改动 0 违例，22FEP 全 ISP awb→edge M6 遗留）；MCU ELF `68148597`（bss 9388B，DLM 内）；上板 CNT 增长（38→52）+ 有框未跟住（参数待调）。
+
+**M9 观测记录（CV 调试流 `D`，2026-10-15）**：上板现象"不框/框挤在球上"，先加高频观测（不改筛选逻辑）。固件仅 `CV=1` 时输出 `D F=<帧号> RUN=<run数> NC=<连通域数> DET=<通过数> B=<lt100,100_500,gt500> | [.*]area,x0,y0,x1,y1 ...`（`DBG_DIV=2`≈30Hz、`DBG_TOPK=6`），解析器 `tools/serial_dbg.py`。**实测**：`RUN` **恒 1024**（run_mem 溢出 → 只存前 1024 条 run，**处理截断在 y≈330**，钢珠多在 y>330 → **没进 CCL**）、`NC` 恒 64（MAX_LABELS 饱和）、`DET` 常 8（MAX_DET 饱和）、通过筛选的都是 **15~50px 小碎片**（area 60~520）→ 视觉"很多框挤在一颗球上"；最大连通域是桌面横线（area 1500~4100、w≤1278、fill~6%）+ 视频边框竖线，均未通过。**根因=① run_mem 容量不足（环每行≈2 run，5 球数千条）+ ② 前端噪声多（纹理/边框/TH=50 低于默认 80）+ ③ label/det 饱和**。固件同步新增 `tools/sync_fw.ps1`（防 FD 编译旧副本）。
+
+**待办/HOLD**：
+0. **（最高优先级）解决 run_mem 溢出/前端噪声**：先零成本实验——KEY4 调高 `TH` 看 `RUN/NC` 是否回落、连通域 `y` 是否覆盖到钢珠；仍溢出则扩 `MAX_RUNS`(→~4096)/`MAX_DET`(→16)（cv_top，重编 FPGA）+ mask 去噪（提高阈值/屏蔽视频边框）；之后再做"环感知筛选"。
+1. 调参（GATE/ALPHA/BETA/EDGE_THR/MASK_SRC）让框跟住钢珠 + CNT 准确。
+2. **HOLD** DDR2 调试通道（SW2+K2 触发传原图，需 AHB→DDR 读桥 + 跨域 + 仲裁，待开工）。
 
 ## 四、风险与对策
 
