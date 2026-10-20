@@ -91,6 +91,7 @@ module cv_top #(
     wire [10:0] base_thr = (MASK_SRC==3) ? DARK_THR : (MASK_SRC ? EDGE_THR : {3'b0, r_otsu_thr});
     wire [11:0] thr_plus = {1'b0,base_thr} + {5'b0,r_user_off};
     wire [10:0] eff_thr  = thr_plus[11] ? 11'h7FF : thr_plus[10:0];
+    wire        w_wide   = (eff_thr >= 11'd130);   // 亮场景：允许更大的块团(快球+模糊)
 
     // ---------- 检测掩膜 ----------
     //   MASK_SRC=1 : Sobel 边缘圆环（原 M7）
@@ -302,7 +303,8 @@ module cv_top #(
         .MIN_FILL(MIN_FILL), .MIN_RATIO(MIN_RATIO), .MAX_BLOBS(MAX_BLOBS)
     ) u_blkdet (
         .clk(I_clk), .rst_n(I_rst_n), .de(I_de), .vs(I_vs), .rgb(I_data),
-        .i_sel(blk_det_sel), .o_ready(blk_ready), .o_count(blk_count), .o_det_box(blk_det_box)
+        .i_sel(blk_det_sel), .i_wide(w_wide),
+        .o_ready(blk_ready), .o_count(blk_count), .o_det_box(blk_det_box)
     );
 
     integer k;

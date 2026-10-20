@@ -30,6 +30,7 @@ module cv_blkdet #(
     input             vs,
     input      [23:0] rgb,
     input      [2:0]  i_sel,                 // 选择输出第几个检测框
+    input             i_wide,                // 高阈值(亮场景)：放宽块宽/高与填充率
     output reg        o_ready,               // 检测表就绪(保持到下次 vs)
     output reg [5:0]  o_count,
     output     [47:0] o_det_box              // 第 i_sel 个框 {minx,maxx,miny,maxy} 像素坐标
@@ -168,20 +169,26 @@ module cv_blkdet #(
     wire [23:0] fn_fill = fn_ab * 8'd100;
     wire [7:0]  fn_mn = (fn_wb<fn_hb)? fn_wb : fn_hb;
     wire [7:0]  fn_mx = (fn_wb<fn_hb)? fn_hb : fn_wb;
+    // 亮场景(DARK_THR 高)快球+运动模糊的团块更大、填充率更低：放宽到 32 块 / 35%
+    wire [7:0]  fn_maxwh = i_wide ? 8'd32 : 8'd16;
+    wire [23:0] fn_fill_min = i_wide ? (24'd35 * fn_box)
+                                     : ({18'd0, MIN_FILL} * fn_box);
     // 贴角剔除：假块多出现在"角"上(x、y 同时贴边)；靠边滚过的球只贴一个边 -> 保住
     wire fn_lft = (fn_mnx==7'd0), fn_rgt = (fn_mxx==7'd79);
     wire fn_top = (fn_mny==7'd0), fn_bot = (fn_mxy==7'd44);
     wire fn_corner = (fn_lft&fn_top)|(fn_rgt&fn_top)|(fn_lft&fn_bot)|(fn_rgt&fn_bot);
     wire f_pass = s_ff[64] && (fn_ab>=MIN_BLKN) && (fn_ab<=MAX_BLKN)
-               && (fn_fill >= MIN_FILL*fn_box)
+               && (fn_fill >= fn_fill_min)
                && ({fn_mn,7'b0} >= MIN_RATIO*fn_mx)
                && (fn_mnx!=0) && (fn_mny!=0)     // 不贴左/上边（剔除底面长条）
-               && (fn_wb<=8'd16) && (fn_hb<=8'd16)  // 剔除过宽/过高块(球~7块; 桌沿长条几十块)
+               && (fn_wb<=fn_maxwh) && (fn_hb<=fn_maxwh)  // 剔除过宽/过高块
                && !fn_corner;                    // 不贴角（剔除角上的假块）
     // 贴球对：细长团块(长边/短边 >= PAIR_ASPECT%) = 两颗球贴在一起 -> 拆成两个检测
     wire [15:0] fn_asp   = fn_mx * 8'd100;
     wire [15:0] fn_asp_t = PAIR_ASPECT * fn_mn;
-    wire        fn_pair  = (fn_ab >= PAIR_MINAREA) && (fn_asp >= fn_asp_t);
+    wire        fn_pair  = (fn_ab >= PAIR_MINAREA) &&
+                           (i_wide ? (fn_fill >= 24'd60 * fn_box) : 1'b1) &&
+                           (fn_asp >= fn_asp_t);
     wire [11:0] fn_mdx   = (s_ff[63:52] + s_ff[51:40]) >> 1;   // bbox 横向中点(px)
     wire [11:0] fn_mdy   = (s_ff[39:28] + s_ff[27:16]) >> 1;   // bbox 纵向中点(px)
 

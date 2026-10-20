@@ -13,7 +13,8 @@ cv_pipeline_sim.py — 当前 FPGA 检测/跟踪/计数管线的离线视频仿�
 
 注意:
   * 背景取 5 帧前的 80x45 块均值：静止暗块不进掩膜，运动球离开旧位置后必然与背景不同。
-  * 形状筛选与 cv_blkdet 同参：MIN_FILL=40%、MIN_RATIO=50%、MIN_BLKN=14、贴球对拆分。
+  * 形状筛选与 cv_blkdet 同参：MIN_FILL=40%、MIN_RATIO=50%、MIN_BLKN=14、贴球对拆分；
+    亮场景(DARK_THR>=130)放宽为 32 块 / 35%，贴球对拆分要求填充率>=60%。
   * 块域判别与 RTL 用 4 连通近似。
 """
 import argparse
@@ -28,7 +29,9 @@ REC = 2                # 只有"丢失 <= REC"帧的轨迹才画(滑行幻影不
 CB_DELTA = 20          # 块均值须比 5 帧前的背景低这么多才判暗
 AMIN = 14              # 连通域最小面积(块数)；与 cv_blkdet 的 MIN_BLKN 对应
 MFILL = 40             # 填充率下限 %，对应 cv_blkdet 的 MIN_FILL
+MFILL_BIG = 35         # 高阈值(亮场景)下宽团块的填充率下限
 MRATIO = 50            # 长短边比下限 %，对应 cv_blkdet 的 MIN_RATIO
+WIDE_THR = 130         # DARK_THR >= 此值时放宽块宽/高上限(亮场景快球更大)
 MIN_HITS_EX = 4        # 出画面即时计数门限(左/右边缘)
 MIN_HITS_V = 8         # 上/下边缘出画面门限(更高：滤掉球的阴影/反光短轨迹)
 PAIR_ASPECT = 150      # 长/短边比 >= 150% 判为"两颗贴在一起"
@@ -47,18 +50,23 @@ def detect(frame, dark, bg=None):
     if bg is None:
         return []
     m = ((bm < dark) & (bm < bg - CB_DELTA)).astype(np.uint8)
+    wide = dark >= WIDE_THR
+    maxwh = 32 if wide else 16
     n, lab, stats, cent = cv2.connectedComponentsWithStats(m, 4)
     out = []
     for i in range(1, n):
         x, y, w, h, a = stats[i]
         if a < AMIN or a > 400: continue
-        if w > 16 or h > 16: continue                  # 剔除过宽/过高块(球~7块; 桌沿/长条几十块)
-        if a * 100 < MFILL * w * h: continue          # 填充率下限
+        if w > maxwh or h > maxwh: continue            # 剔除过宽/过高块(球~7块; 桌沿/长条几十块)
+        lim = MFILL_BIG if wide else MFILL
+        if a * 100 < lim * w * h: continue            # 填充率下限
         if min(w, h) * 100 < MRATIO * max(w, h): continue  # 长短边比下限
         xl, xr, yt, yb = (x == 0), ((x + w) >= 80), (y == 0), ((y + h) >= 45)
         if xl or yt: continue                         # 左/上边(与 cv_blkdet 一致)
         if (xl and yt) or (xr and yt) or (xl and yb) or (xr and yb): continue  # 贴角
-        if PAIR_MINAREA and a >= PAIR_MINAREA and max(w, h) * 100 >= PAIR_ASPECT * min(w, h):
+        pair_fill = 60 if wide else 0
+        if PAIR_MINAREA and a >= PAIR_MINAREA and a * 100 >= pair_fill * w * h and \
+                max(w, h) * 100 >= PAIR_ASPECT * min(w, h):
             # 两颗贴在一起(细长团块) -> 沿长边拆成两个检测
             if h >= w:
                 my = (y + (y + h)) // 2

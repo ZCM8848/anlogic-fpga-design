@@ -24,7 +24,7 @@ module tb_cv_blkdet;
         .MAX_BLOBS(8)
     ) dut (
         .clk(clk), .rst_n(rst_n), .de(de), .vs(vs), .rgb(rgb),
-        .i_sel(i_sel), .o_ready(o_ready), .o_count(o_count), .o_det_box(o_det_box)
+        .i_sel(i_sel), .i_wide(1'b0), .o_ready(o_ready), .o_count(o_count), .o_det_box(o_det_box)
     );
 
     always #5 clk = ~clk;
