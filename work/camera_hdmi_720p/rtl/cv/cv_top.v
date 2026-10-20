@@ -35,13 +35,11 @@ module cv_top #(
     parameter [10:0]  EDGE_THR  = 11'd80,  // Sobel 幅值阈值(同 edge_detect_96)；K3/K4 调偏置
     parameter [10:0]  DARK_THR  = 11'd110, // 暗区阈值(MASK_SRC=3)：w_y < DARK_THR 视为前景(如深色钢珠)
     parameter [7:0]  ALPHA_Q   = 8'd128,  // a*256 =0.5（位置增益）
-    parameter [7:0]  BETA_Q    = 8'd16,   // b*256 =0.0625（速度增益）；原 48/256=0.1875 在帧间位移大时会让轨迹跑飞
-    parameter [11:0] GATE      = 12'd80,  // 配对最大 Manhattan 距离
+    parameter [7:0]  BETA_Q    = 8'd48,   // b*256 =0.1875（速度增益）；快球预测跟得上
+    parameter [11:0] GATE      = 12'd320, // 配对最大 Manhattan 距离（快球帧间位移大）
     parameter [5:0]  MISS_K    = 6'd35,   // 丢失几帧删轨迹(6位: 0..63)
     parameter [5:0]  EXIT_MISS = 6'd10,   // "出画面即计数"允许的丢失帧数(放宽: 球刚出画面就丢检也能即时计数)
-    parameter [3:0]  MIN_HITS  = 4'd5,    // (旧)保留兼容; 新逻辑用下面两个
     parameter [3:0]  MIN_HITS_EX = 4'd4,  // 出画面即时计数: 轨迹确证出画面, 命中>=4 即可
-    parameter [3:0]  MIN_HITS_DT = 4'd5,  // 消亡补计: 仅"消失", 可信度低, 命中>=5 才计
     parameter         OTSU_EN   = 1
 )(
     input  wire        I_clk,
@@ -60,7 +58,7 @@ module cv_top #(
     output wire        O_ccl_busy,
     output wire        O_run_overflow,
     output wire [7:0]  O_bin_thr,
-    output wire [15:0] O_count          // 累计计数：确认过的轨迹消亡(离开视野)时 +1
+    output wire [15:0] O_count          // 累计计数：绿框轨迹出画面时 +1
 );
     localparam FW  = 65;
     localparam RPW = (MAX_RPR==32)?5:6;
@@ -417,10 +415,9 @@ module cv_top #(
                                           t_min_x,t_max_x,t_min_y,t_max_y};
                         end
                     end
-                    // 计数：出画面即时计数(要求最近有检测, 避免滑行幻影被计)；未出画面的在消亡时补计。
+                    // 计数：绿框轨迹预测出画面 -> +1（不做消亡补计）
                     if (t_valid && !r_cnt_mask[r_ti[2:0]] &&
-                        ((t_out && (t_miss<=EXIT_MISS) && (r_hits[r_ti] >= MIN_HITS_EX)) ||
-                         (!t_alive && (r_hits[r_ti] >= MIN_HITS_DT)))) begin
+                        (t_out && (t_miss<=EXIT_MISS) && (r_hits[r_ti] >= MIN_HITS_EX))) begin
                         r_cnt_mask[r_ti[2:0]] <= 1'b1;
                         r_count <= r_count + 16'd1;
                     end

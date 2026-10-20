@@ -74,50 +74,55 @@ module cv_blkdet #(
     end
     always @(posedge clk) if (col_we) col_acc[col_wa] <= col_wd;
 
-    // ---------------- 80x45 块掩膜（局部对比阈值）----------------
-    //   块均值须低于"上一帧大格(8x8 块 -> 10x6 格)均值" CB_DELTA 才判暗：
-    //   静态的桌沿/木纹/边角在"上一帧"里也暗 -> 不构成对比 -> 抑制；
-    //   运动中的球在其大格背景里明显偏暗 -> 检出。
+    // ---------------- 80x45 块掩膜（5 帧背景差分）----------------
+    //   块均值须低于"5 帧前的同一块" CB_DELTA 才判暗：
+    //   静止的桌沿/木纹/边角在 5 帧前也暗 -> 抑制；
+    //   球离开旧位置后，当前位置与 5 帧前必然不同 -> 检出
+    //   （避免上一帧 128x128 大格背景把快球/并排球吞掉）。
+    localparam BG_FRAMES = 5;
     wire [7:0]  blk_bm   = blk_total[15:8];
-    wire [4:0]  cell_row = r_y[11:7];
-    wire [4:0]  cell_col = r_x[11:7];
-    wire [6:0]  cell_idx = {2'b0,cell_row}*7'd10 + {2'b0,cell_col};   // 0..59
-    reg  [7:0]  cell_prev [0:59];
-    reg  [7:0]  cell_cur  [0:59];
-    reg  [15:0] cell_acc  [0:59];
-    wire [15:0] cell_sum  = cell_acc[cell_idx] + {8'b0, blk_bm};
-    wire        cell_end  = (r_x[6:4]==3'd7) && (r_y[6:4]==3'd7);     // 每 8x8 块
-    wire        blk_dark  = (blk_bm < DARK_THR) && ((blk_bm + CB_DELTA) < cell_prev[cell_idx]);
+    wire [12:0] cur_bm_addr = {1'b0, r_y[11:4]}*7'd80 + {8'b0, r_x[11:4]};  // 0..3599
+    reg  [2:0]  r_slot;                          // 当前帧槽 0..4
+    wire [14:0] bg_addr = {r_slot, cur_bm_addr[11:0]};   // 5 槽 x 4096
+    reg  [7:0]  bg_rd;                           // 5 帧前的块均值(同步读)
+    reg  [7:0]  bg_blk;                          // 本块背景(块内锁存，抗 BRAM 读延迟)
+    (* ram_style="block" *) reg [7:0] bg_mem [0:BG_FRAMES*4096-1];
+    wire        blk_end  = rowblk_end & blkrow_end;
+    wire        blk_dark = ({3'b0, blk_bm} < DARK_THR) &&
+                           (({1'b0, blk_bm} + {1'b0, CB_DELTA}) < {1'b0, bg_blk});
+
+    always @(posedge clk) bg_rd <= bg_mem[bg_addr];
+    always @(posedge clk) if (de && (r_x[3:0]==4'd4)) bg_blk <= bg_rd;
 
     (* ram_style="distributed" *) reg blk_mask [0:BW*BH-1];
     reg        bm_we; reg [12:0] bm_wa; reg bm_wd;
-    wire [12:0] cur_bm_addr = {1'b0, r_y[11:4]}*7'd80 + {8'b0, r_x[11:4]};
-    integer ci;
+    reg        bg_we; reg [14:0] bg_wa; reg [7:0] bg_wd;
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            bm_we <= 1'b0;
-            for (ci=0; ci<60; ci=ci+1) begin cell_prev[ci]<=8'd0; cell_cur[ci]<=8'd0; cell_acc[ci]<=16'd0; end
+            bm_we <= 1'b0; bg_we <= 1'b0; r_slot <= 3'd0;
         end else begin
-            bm_we <= rowblk_end & blkrow_end;
-            if (rowblk_end & blkrow_end) begin
+            bm_we <= blk_end;
+            bg_we <= blk_end;
+            if (blk_end) begin
                 bm_wa <= cur_bm_addr;
                 bm_wd <= blk_dark;
-                cell_acc[cell_idx] <= cell_end ? 16'd0 : cell_sum;
-                if (cell_end) cell_cur[cell_idx] <= cell_sum[13:6];   // 64 块均值
+                bg_wa <= bg_addr;
+                bg_wd <= blk_bm;
             end
-            if (vs_rise) for (ci=0; ci<60; ci=ci+1) cell_prev[ci] <= cell_cur[ci];
+            if (vs_rise) r_slot <= (r_slot==BG_FRAMES-1) ? 3'd0 : r_slot + 3'd1;
         end
     end
     always @(posedge clk) if (bm_we) blk_mask[bm_wa] <= bm_wd;
+    always @(posedge clk) if (bg_we) bg_mem[bg_wa] <= bg_wd;
 
     // ---------------- 特征表 + 行缓冲(ping-pong) ----------------
     // feat 字段: [FW-1]=valid [42:31]=minx [30:19]=maxx [18:7]=miny [6:0] 不够 -> 用 12b*4
     // 布局: valid(1) | minx(12) | maxx(12) | miny(12) | maxy(12) | area(16)
     // 单写口/单读口，否则 TD 不推断 RAM（会变成寄存器+大 mux -> 面积爆炸）
     (* ram_style="distributed" *) reg [FW-1:0] feat [0:(1<<LABW)-1];
-    wire [LABW-1:0]  ft_ra = (t_st==T_FILT) ? t_lv : t_lbl;   // 读地址
+    wire [LABW-1:0]  ft_ra = (t_st==T_FILT) ? t_lv : t_lbl;   // 读地址(已寄存的本块标签)
     wire [FW-1:0]    ft_rd = feat[ft_ra];                     // 组合读
-    wire             ft_we = (t_st==T_CLR) | ((t_st==T_WR) & t_dark);
+    wire             ft_we = (t_st==T_CLR) | ((t_st==T_UPD) & t_dark);
     wire [LABW-1:0]  ft_wa = (t_st==T_CLR) ? t_lv : t_lbl;
     wire [FW-1:0]    ft_wd = (t_st==T_CLR) ? {FW{1'b0}}
                            : {1'b1, nf_minx, nf_maxx, nf_miny, nf_maxy, nf_area};
@@ -127,7 +132,7 @@ module cv_blkdet #(
     // FW=65: valid[64] minx[63:52] maxx[51:40] miny[39:28] maxy[27:16] area[15:0]
 
     // ---------------- 扫描 FSM ----------------
-    localparam T_IDLE=3'd0, T_CLR=3'd1, T_READ=3'd2, T_WR=3'd3, T_FILT=3'd4;
+    localparam T_IDLE=3'd0, T_CLR=3'd1, T_READ=3'd2, T_WR=3'd3, T_FILT=3'd4, T_UPD=3'd5;
     reg [2:0]  t_st;
     reg [LABW-1:0] t_bx, t_by, t_lv, t_next, t_lbl;
     reg        t_sel;
@@ -142,7 +147,6 @@ module cv_blkdet #(
     wire [LABW-1:0] s_up    = (t_by==0) ? {LABW{1'b0}} : rbuf[{~t_sel, t_bx}];
     wire [LABW-1:0] s_lbl   = (s_left!=0) ? s_left : ((s_up!=0) ? s_up : t_next);
     wire            s_isnew = s_dark && (s_left==0) && (s_up==0);
-    wire [FW-1:0]   s_fval  = ft_rd;
 
     // 特征更新（块坐标 -> 直接存像素 = 块<<4）
     wire [11:0] bx_px = {5'b0, t_bx, 4'b0};
@@ -199,11 +203,14 @@ module cv_blkdet #(
                     t_dark <= s_dark;
                     t_lbl  <= s_lbl;
                     t_new  <= s_isnew;
-                    t_frd  <= s_fval;
                     rbuf[{t_sel, t_bx}] <= s_dark ? s_lbl : {LABW{1'b0}};
                     t_st <= T_WR;
                 end
                 T_WR: begin
+                    t_frd <= ft_rd;                 // 用已寄存标签读特征表
+                    t_st <= T_UPD;
+                end
+                T_UPD: begin
                     if (t_new) t_next <= t_next + 1'b1;
                     if (t_bx==BW-1) begin
                         t_bx <= 0;

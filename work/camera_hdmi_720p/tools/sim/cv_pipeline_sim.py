@@ -3,52 +3,49 @@
 cv_pipeline_sim.py — 当前 FPGA 检测/跟踪/计数管线的离线视频仿真（与 RTL 同参）
 ================================================================================
 复刻当前 bit 的 CV 逻辑，用于在没有摄像头时对**录像**做验证：
-  * 检测：块域(16x16)暗块  —— 对应 rtl/cv/cv_blkdet.v（DARK_THR 阈值 + 形状筛选）
+  * 检测：块域(16x16)暗块 —— 对应 rtl/cv/cv_blkdet.v
+          （DARK_THR + 与 5 帧前的块背景比较 + 形状筛选）
   * 跟踪：cv_top 的 a-b 预测 + 贪心最近邻(GATE) + 丢失删轨(MISS_K)
-  * 计数：出画面即时 +1，未出画面的轨迹在消亡时补计一次(去重) —— 对应 cv_top.O_count 的 combined 规则
+  * 计数：绿框轨迹预测出画面时 +1 —— 对应 cv_top.O_count（不做消亡补计）
 
 用法:
-  python cv_pipeline_sim.py <video> <out.mp4> [GATE MISS_K DARK MIN_HITS] [--count-rule death|exit|combined]
-  （位置参数缺省值取当前 bit: GATE=240、MISS_K=35、DARK=100；MIN_HITS 为旧参数，保留兼容、已不参与计数）
+  python cv_pipeline_sim.py <video> <out.mp4> [GATE MISS_K DARK] [--amin N]
 
 注意:
-  * DARK_THR 与场景强相关（较亮场景要用更大的 DARK_THR）；上板可用 K3/K4 调偏置。
+  * 背景取 5 帧前的 80x45 块均值：静止暗块不进掩膜，运动球离开旧位置后必然与背景不同。
   * 形状筛选与 cv_blkdet 同参：MIN_FILL=40%、MIN_RATIO=50%、MIN_BLKN=14、贴球对拆分。
-  * 块域判别与 RTL 用 4 连通近似；结果与 iverilog 集成仿真一致（钢珠5 frame200 检出 3 球）。
+  * 块域判别与 RTL 用 4 连通近似。
 """
 import argparse
 import cv2
 import numpy as np
 
-ALPHA = 0.5        # a-b 位置增益(≈cv_top ALPHA_Q/256)
-BETA = 0.0625      # a-b 速度增益；原 0.1875 在 30fps(帧间位移大)下会让轨迹"跑飞"->重建轨->多计
-MARGIN = 0         # exit 计数：与 cv_top.t_out 一致(预测位置出画面即算离开)
-REC    = 2         # 只有"丢失 <= REC"帧的轨迹才画(滑行幻影不画)
+ALPHA = 0.5            # a-b 位置增益(≈cv_top ALPHA_Q/256)
+BETA = 0.1875          # a-b 速度增益(≈cv_top BETA_Q/256)；GATE 配合吸收快球
+BG_DELAY = 5           # 块背景取 5 帧前(与 cv_blkdet 的 BG_FRAMES 对应)
+REC = 2                # 只有"丢失 <= REC"帧的轨迹才画(滑行幻影不画)
 
-
-CB_DELTA = 20      # 局部对比：块均值须低于其大格背景这么多
-AMIN = 14          # 连通域最小面积(块数)；与 cv_blkdet 的 MIN_BLKN 对应（真球17~38块; 桌沿假块8~13块）
-MFILL = 40         # 填充率下限 %，对应 cv_blkdet 的 MIN_FILL
-MRATIO = 50        # 长短边比下限 %，对应 cv_blkdet 的 MIN_RATIO
-MIN_HITS_EX = 4    # 出画面即时计数门限
-MIN_HITS_DT = 5    # 消亡补计门限
-PAIR_ASPECT = 150  # 长/短边比 >= 150% 判为"两颗贴在一起"
-PAIR_MINAREA = 24  # 且面积 >= 这么多块
-EXIT_MISS = 10     # "出画面即计数"允许的丢失帧数(与 cv_top EXIT_MISS 对应)
+CB_DELTA = 20          # 块均值须比 5 帧前的背景低这么多才判暗
+AMIN = 14              # 连通域最小面积(块数)；与 cv_blkdet 的 MIN_BLKN 对应
+MFILL = 40             # 填充率下限 %，对应 cv_blkdet 的 MIN_FILL
+MRATIO = 50            # 长短边比下限 %，对应 cv_blkdet 的 MIN_RATIO
+MIN_HITS_EX = 4        # 出画面即时计数门限
+PAIR_ASPECT = 150      # 长/短边比 >= 150% 判为"两颗贴在一起"
+PAIR_MINAREA = 24      # 且面积 >= 这么多块
+EXIT_MISS = 10         # 出画面计数允许的丢失帧数(与 cv_top EXIT_MISS 对应)
 
 
 def detect(frame, dark, bg=None):
     """块域暗块检测 -> 检测框[像素(x,y,w,h)]列表（与 cv_blkdet 同参）。
-    bg!=None 时用局部对比（块均值 < 大格背景 - CB_DELTA）。"""
+    bg 为 5 帧前的 80x45 块均值；None 表示背景尚未建立。"""
     B = frame[:, :, 0].astype(np.uint16)
     G = frame[:, :, 1].astype(np.uint16)
     R = frame[:, :, 2].astype(np.uint16)
     wy = ((R >> 2) + (G >> 1) + (B >> 2)).astype(np.float32)
     bm = cv2.resize(wy, (80, 45), interpolation=cv2.INTER_AREA)  # 16x16 块均值
     if bg is None:
-        m = (bm < dark).astype(np.uint8)
-    else:
-        m = ((bm < dark) & (bm < bg - CB_DELTA)).astype(np.uint8)
+        return []
+    m = ((bm < dark) & (bm < bg - CB_DELTA)).astype(np.uint8)
     n, lab, stats, cent = cv2.connectedComponentsWithStats(m, 4)
     out = []
     for i in range(1, n):
@@ -79,11 +76,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("video")
     ap.add_argument("out")
-    ap.add_argument("gate", type=int, nargs="?", default=240)
+    ap.add_argument("gate", type=int, nargs="?", default=320)
     ap.add_argument("miss_k", type=int, nargs="?", default=35)
     ap.add_argument("dark", type=int, nargs="?", default=100)
-    ap.add_argument("min_hits", type=int, nargs="?", default=1)
-    ap.add_argument("--count-rule", choices=["death", "exit", "combined"], default="combined")
     ap.add_argument("--amin", type=int, default=14)
     args = ap.parse_args()
     global AMIN
@@ -94,21 +89,19 @@ def main():
     fps = cap.get(cv2.CAP_PROP_FPS) or 60
     vw = cv2.VideoWriter(args.out, cv2.VideoWriter_fourcc(*"mp4v"), fps, (W, H))
 
-    tracks = []   # [cx,cy,vx,vy,missed,hits,box,counted]
+    tracks = []   # [cx,cy,vx,vy,missed,hits,box,counted,id]
     next_id = 0; count = 0; nf = 0; events = []
-    prev_cells = None
+    hist = []     # 最近 BG_DELAY 帧的 80x45 块均值
     while True:
         ok, fr = cap.read()
         if not ok: break
         nf += 1
-        # 上一帧大格(10x6, 每格 8x8 块)均值当局部背景
         Bf = fr[:, :, 0].astype(np.uint16); Gf = fr[:, :, 1].astype(np.uint16); Rf = fr[:, :, 2].astype(np.uint16)
         bmf = cv2.resize(((Rf >> 2) + (Gf >> 1) + (Bf >> 2)).astype(np.float32), (80, 45), interpolation=cv2.INTER_AREA)
-        cells = cv2.resize(bmf, (10, 6), interpolation=cv2.INTER_AREA)
-        if prev_cells is None: prev_cells = cells
-        bg = cv2.resize(prev_cells, (80, 45), interpolation=cv2.INTER_NEAREST)
+        bg = hist[-BG_DELAY] if len(hist) >= BG_DELAY else None
         dets = detect(fr, args.dark, bg)
-        prev_cells = cells
+        hist.append(bmf)
+        if len(hist) > BG_DELAY: hist.pop(0)
         taken = [False] * len(dets); assigns = [-1] * len(tracks)
         for ti, t in enumerate(tracks):
             px, py = t[0] + t[2], t[1] + t[3]
@@ -129,21 +122,12 @@ def main():
         for j, d in enumerate(dets):
             if not taken[j]:
                 tracks.append([d[0], d[1], 0, 0, 0, 1, d[2:6], False, next_id]); next_id += 1
-        # 出画面即时计数（exit / combined）
+        # 绿框轨迹预测出画面 -> +1（不做消亡补计）
         for t in tracks:
-            if args.count_rule in ("exit", "combined") and (not t[7]) and t[5] >= MIN_HITS_EX and \
-               t[4] <= EXIT_MISS and \
-               (t[0] < -MARGIN or t[0] > W + MARGIN or t[1] < -MARGIN or t[1] > H + MARGIN):
+            if (not t[7]) and t[5] >= MIN_HITS_EX and t[4] <= EXIT_MISS and \
+               (t[0] < 0 or t[0] >= W or t[1] < 0 or t[1] >= H):
                 t[7] = True; count += 1; events.append((nf, count))
-        alive = []
-        for t in tracks:
-            if t[4] > args.miss_k:
-                if args.count_rule == "death" or \
-                   (args.count_rule == "combined" and (not t[7]) and t[5] >= MIN_HITS_DT):
-                    t[7] = True; count += 1; events.append((nf, count))   # 消亡补计(去重)
-            else:
-                alive.append(t)
-        tracks = alive
+        tracks = [t for t in tracks if t[4] <= args.miss_k]
         for t in tracks:
             if t[4] > REC: continue          # 纯预测滑行的不画
             b = t[6]
@@ -154,8 +138,8 @@ def main():
                     cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 128, 255), 2)
         vw.write(fr)
     vw.release()
-    print("video=%s frames=%d GATE=%d MISS_K=%d DARK=%d MIN_HITS=%d rule=%s -> COUNT=%d ids=%d"
-          % (args.video, nf, args.gate, args.miss_k, args.dark, args.min_hits, args.count_rule, count, next_id))
+    print("video=%s frames=%d GATE=%d MISS_K=%d DARK=%d -> COUNT=%d ids=%d"
+          % (args.video, nf, args.gate, args.miss_k, args.dark, count, next_id))
     print("COUNT increments at frames:", [e[0] for e in events])
 
 
