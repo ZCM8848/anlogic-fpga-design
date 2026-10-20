@@ -40,7 +40,7 @@ module cv_top #(
     parameter [5:0]  MISS_K    = 6'd35,   // 丢失几帧删轨迹(6位: 0..63)
     parameter [5:0]  EXIT_MISS = 6'd10,   // "出画面即计数"允许的丢失帧数(放宽: 球刚出画面就丢检也能即时计数)
     parameter [3:0]  MIN_HITS_EX = 4'd4,  // 左/右边缘出画面: 命中>=4 即可
-    parameter [3:0]  MIN_HITS_V  = 4'd8,  // 上/下边缘出画面: 命中>=8 (滤掉阴影/反光的短轨迹)
+    parameter [3:0]  MIN_HITS_V  = 4'd6,  // 上/下边缘出画面: 命中>=6 (顶边真球 6；4 次命中的阴影仍被滤掉)
     parameter         OTSU_EN   = 1
 )(
     input  wire        I_clk,

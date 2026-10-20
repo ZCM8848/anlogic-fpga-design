@@ -33,7 +33,7 @@ MFILL_BIG = 35         # 高阈值(亮场景)下宽团块的填充率下限
 MRATIO = 50            # 长短边比下限 %，对应 cv_blkdet 的 MIN_RATIO
 WIDE_THR = 130         # DARK_THR >= 此值时放宽块宽/高上限(亮场景快球更大)
 MIN_HITS_EX = 4        # 出画面即时计数门限(左/右边缘)
-MIN_HITS_V = 8         # 上/下边缘出画面门限(更高：滤掉球的阴影/反光短轨迹)
+MIN_HITS_V = 6         # 上/下边缘出画面门限(顶边真球 6；4 次命中的阴影仍被滤掉)
 PAIR_ASPECT = 150      # 长/短边比 >= 150% 判为"两颗贴在一起"
 PAIR_MINAREA = 24      # 且面积 >= 这么多块
 EXIT_MISS = 10         # 出画面计数允许的丢失帧数(与 cv_top EXIT_MISS 对应)
