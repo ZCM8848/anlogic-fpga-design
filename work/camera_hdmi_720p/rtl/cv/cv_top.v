@@ -39,7 +39,8 @@ module cv_top #(
     parameter [11:0] GATE      = 12'd320, // 配对最大 Manhattan 距离（快球帧间位移大）
     parameter [5:0]  MISS_K    = 6'd35,   // 丢失几帧删轨迹(6位: 0..63)
     parameter [5:0]  EXIT_MISS = 6'd10,   // "出画面即计数"允许的丢失帧数(放宽: 球刚出画面就丢检也能即时计数)
-    parameter [3:0]  MIN_HITS_EX = 4'd4,  // 出画面即时计数: 轨迹确证出画面, 命中>=4 即可
+    parameter [3:0]  MIN_HITS_EX = 4'd4,  // 左/右边缘出画面: 命中>=4 即可
+    parameter [3:0]  MIN_HITS_V  = 4'd8,  // 上/下边缘出画面: 命中>=8 (滤掉阴影/反光的短轨迹)
     parameter         OTSU_EN   = 1
 )(
     input  wire        I_clk,
@@ -247,9 +248,10 @@ module cv_top #(
     wire [11:0] n_vx=n_vx_s[11:0], n_vy=n_vy_s[11:0];
     wire [5:0] n_miss = t_miss + 6'd1;
     wire       t_alive = t_valid && (n_miss <= MISS_K);
-    // 预测位置已出画面 -> 该轨迹离开视野（即时计数）
-    wire       t_out = (px_s >= $signed(13'd1280)) || (px_s < $signed(13'd0)) ||
-                       (py_s >= $signed(13'd720))  || (py_s < $signed(13'd0));
+    // 预测位置已出画面 -> 该轨迹离开视野（左右边缘与上下边缘分别给命中门限）
+    wire       t_out_x = (px_s >= $signed(13'd1280)) || (px_s < $signed(13'd0));
+    wire       t_out_y = (py_s >= $signed(13'd720))  || (py_s < $signed(13'd0));
+    wire       t_out   = t_out_x | t_out_y;
 
     // ======================================================================
     // run 提取 + 直方图（active）
@@ -415,9 +417,10 @@ module cv_top #(
                                           t_min_x,t_max_x,t_min_y,t_max_y};
                         end
                     end
-                    // 计数：绿框轨迹预测出画面 -> +1（不做消亡补计）
+                    // 计数：绿框轨迹预测出画面 -> +1（左右边缘命中≥4；上下边缘需≥8，滤阴影/反光短轨迹）
                     if (t_valid && !r_cnt_mask[r_ti[2:0]] &&
-                        (t_out && (t_miss<=EXIT_MISS) && (r_hits[r_ti] >= MIN_HITS_EX))) begin
+                        (t_out && (t_miss<=EXIT_MISS) &&
+                         (r_hits[r_ti] >= (t_out_x ? MIN_HITS_EX : MIN_HITS_V)))) begin
                         r_cnt_mask[r_ti[2:0]] <= 1'b1;
                         r_count <= r_count + 16'd1;
                     end

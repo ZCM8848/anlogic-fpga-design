@@ -29,7 +29,8 @@ CB_DELTA = 20          # 块均值须比 5 帧前的背景低这么多才判暗
 AMIN = 14              # 连通域最小面积(块数)；与 cv_blkdet 的 MIN_BLKN 对应
 MFILL = 40             # 填充率下限 %，对应 cv_blkdet 的 MIN_FILL
 MRATIO = 50            # 长短边比下限 %，对应 cv_blkdet 的 MIN_RATIO
-MIN_HITS_EX = 4        # 出画面即时计数门限
+MIN_HITS_EX = 4        # 出画面即时计数门限(左/右边缘)
+MIN_HITS_V = 8         # 上/下边缘出画面门限(更高：滤掉球的阴影/反光短轨迹)
 PAIR_ASPECT = 150      # 长/短边比 >= 150% 判为"两颗贴在一起"
 PAIR_MINAREA = 24      # 且面积 >= 这么多块
 EXIT_MISS = 10         # 出画面计数允许的丢失帧数(与 cv_top EXIT_MISS 对应)
@@ -122,10 +123,12 @@ def main():
         for j, d in enumerate(dets):
             if not taken[j]:
                 tracks.append([d[0], d[1], 0, 0, 0, 1, d[2:6], False, next_id]); next_id += 1
-        # 绿框轨迹预测出画面 -> +1（不做消亡补计）
+        # 绿框轨迹预测出画面 -> +1（左右边缘命中≥4；上下边缘需≥8，滤阴影/反光）
         for t in tracks:
-            if (not t[7]) and t[5] >= MIN_HITS_EX and t[4] <= EXIT_MISS and \
-               (t[0] < 0 or t[0] >= W or t[1] < 0 or t[1] >= H):
+            out_x = t[0] < 0 or t[0] >= W
+            out_y = t[1] < 0 or t[1] >= H
+            need = MIN_HITS_EX if out_x else MIN_HITS_V
+            if (not t[7]) and t[5] >= need and t[4] <= EXIT_MISS and (out_x or out_y):
                 t[7] = True; count += 1; events.append((nf, count))
         tracks = [t for t in tracks if t[4] <= args.miss_k]
         for t in tracks:

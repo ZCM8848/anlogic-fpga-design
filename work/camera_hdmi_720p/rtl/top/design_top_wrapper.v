@@ -627,7 +627,8 @@ module design_top_wrapper (
         .MAX_AREA ( 16'd20000 ),
         .MIN_FILL ( 6'd40  ),    // 与 cv_blkdet/cv_pipeline_sim 同参：填充率下限 40%
         .MIN_RATIO( 6'd50  ),
-        .MIN_HITS_EX( 4'd4 ),    // 出画面即时计数: 命中>=4 (可收住高速球)
+        .MIN_HITS_EX( 4'd4 ),    // 左/右边缘出画面: 命中>=4 (可收住高速球)
+        .MIN_HITS_V ( 4'd8 ),    // 上/下边缘出画面: 命中>=8 (滤阴影/反光短轨迹)
         .MIN_BLKN ( 16'd14 ),    // 暗块最小面积(块数)：真球17~38块; 桌沿假块8~13块 -> 滤掉
         .EDGE_MG  ( 12'd4  ),
         .EDGE_THR ( 11'd300 ),
