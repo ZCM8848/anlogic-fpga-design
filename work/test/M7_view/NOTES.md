@@ -48,6 +48,16 @@ wire [23:0] cv_base = (MASK_VIEW!=0) ? (w_mask ? 24'hFFFFFF : 24'h000000) : I_da
 |---|---|---|
 | `camera_hdmi_720p.bit` | 1,789,539 B | `CF7C91E885BB233FB760A8F920B73D24` |
 
+## 钢珠9 录像复验（离线等价管线，2026-10-20）
+
+`cv_pipeline_sim.py` 按本 bit 的参数（`DARK_THR=100`、`GATE=240`、`MISS_K=35`、
+`MIN_BLKN=14`、`MIN_HITS_EX=4`、`MIN_HITS_DT=5`、`EXIT_MISS=10`）跑桌面 `钢珠9.mp4`
+（1280×720@60，1141 帧）：**COUNT=10**（真值 10）。
+
+事件构成不成立：10 次里 6 次为真实出画面（255/432/447/646/867/929），
+4 次为画面底部与右上静态暗块的消亡补计；同时漏计 4 颗快球/并排双球。
+总数 10 是漏计与误计抵消。详见 `work/test/VIDEO_VALIDATION.md`。
+
 ## 上板验收
 1. 烧 `td_project\camera_hdmi_720p.bit`；
 2. **SW4=1**（摄像头）；**按 KEY2 开 CV**；

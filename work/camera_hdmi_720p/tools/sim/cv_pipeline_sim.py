@@ -5,13 +5,15 @@ cv_pipeline_sim.py — 当前 FPGA 检测/跟踪/计数管线的离线视频仿�
 复刻当前 bit 的 CV 逻辑，用于在没有摄像头时对**录像**做验证：
   * 检测：块域(16x16)暗块  —— 对应 rtl/cv/cv_blkdet.v（DARK_THR 阈值 + 形状筛选）
   * 跟踪：cv_top 的 a-b 预测 + 贪心最近邻(GATE) + 丢失删轨(MISS_K)
-  * 计数：轨迹消亡 +1 —— 对应 cv_top.O_count（可换成"出画面即计数"，见 --count-rule）
+  * 计数：出画面即时 +1，未出画面的轨迹在消亡时补计一次(去重) —— 对应 cv_top.O_count 的 combined 规则
 
 用法:
-  python cv_pipeline_sim.py <video> <out.mp4> [GATE MISS_K DARK MIN_HITS] [--count-rule death|exit]
+  python cv_pipeline_sim.py <video> <out.mp4> [GATE MISS_K DARK MIN_HITS] [--count-rule death|exit|combined]
+  （位置参数缺省值取当前 bit: GATE=240、MISS_K=35、DARK=100；MIN_HITS 为旧参数，保留兼容、已不参与计数）
 
 注意:
   * DARK_THR 与场景强相关（较亮场景要用更大的 DARK_THR）；上板可用 K3/K4 调偏置。
+  * 形状筛选与 cv_blkdet 同参：MIN_FILL=40%、MIN_RATIO=50%、MIN_BLKN=14、贴球对拆分。
   * 块域判别与 RTL 用 4 连通近似；结果与 iverilog 集成仿真一致（钢珠5 frame200 检出 3 球）。
 """
 import argparse
@@ -20,12 +22,14 @@ import numpy as np
 
 ALPHA = 0.5        # a-b 位置增益(≈cv_top ALPHA_Q/256)
 BETA = 0.0625      # a-b 速度增益；原 0.1875 在 30fps(帧间位移大)下会让轨迹"跑飞"->重建轨->多计
-MARGIN = 20        # exit 计数：预测位置超出画面 + MARGIN 视为"离开"
+MARGIN = 0         # exit 计数：与 cv_top.t_out 一致(预测位置出画面即算离开)
 REC    = 2         # 只有"丢失 <= REC"帧的轨迹才画(滑行幻影不画)
 
 
 CB_DELTA = 20      # 局部对比：块均值须低于其大格背景这么多
 AMIN = 14          # 连通域最小面积(块数)；与 cv_blkdet 的 MIN_BLKN 对应（真球17~38块; 桌沿假块8~13块）
+MFILL = 40         # 填充率下限 %，对应 cv_blkdet 的 MIN_FILL
+MRATIO = 50        # 长短边比下限 %，对应 cv_blkdet 的 MIN_RATIO
 MIN_HITS_EX = 4    # 出画面即时计数门限
 MIN_HITS_DT = 5    # 消亡补计门限
 PAIR_ASPECT = 150  # 长/短边比 >= 150% 判为"两颗贴在一起"
@@ -51,8 +55,8 @@ def detect(frame, dark, bg=None):
         x, y, w, h, a = stats[i]
         if a < AMIN or a > 400: continue
         if w > 16 or h > 16: continue                  # 剔除过宽/过高块(球~7块; 桌沿/长条几十块)
-        if a * 100 < 30 * w * h: continue            # 填充率 >= 30%(容许运动模糊)
-        if min(w, h) * 100 < 30 * max(w, h): continue # 长短比 >= 30%
+        if a * 100 < MFILL * w * h: continue          # 填充率下限
+        if min(w, h) * 100 < MRATIO * max(w, h): continue  # 长短边比下限
         xl, xr, yt, yb = (x == 0), ((x + w) >= 80), (y == 0), ((y + h) >= 45)
         if xl or yt: continue                         # 左/上边(与 cv_blkdet 一致)
         if (xl and yt) or (xr and yt) or (xl and yb) or (xr and yb): continue  # 贴角
@@ -76,7 +80,7 @@ def main():
     ap.add_argument("video")
     ap.add_argument("out")
     ap.add_argument("gate", type=int, nargs="?", default=240)
-    ap.add_argument("miss_k", type=int, nargs="?", default=20)
+    ap.add_argument("miss_k", type=int, nargs="?", default=35)
     ap.add_argument("dark", type=int, nargs="?", default=100)
     ap.add_argument("min_hits", type=int, nargs="?", default=1)
     ap.add_argument("--count-rule", choices=["death", "exit", "combined"], default="combined")
