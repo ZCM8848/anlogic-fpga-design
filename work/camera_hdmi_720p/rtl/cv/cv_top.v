@@ -294,6 +294,26 @@ module cv_top #(
                   ((r_ex_y3 < 12'd100) || (r_ex_y3 > 12'd650)) &&
                   (({1'b0,exax3} + {1'b0,exay3}) <= 15'd150);
     wire w_dup  = w_dup0 | w_dup1 | w_dup2 | w_dup3;
+    wire [14:0] exd0 = {1'b0,exax0} + {1'b0,exay0};
+    wire [14:0] exd1 = {1'b0,exax1} + {1'b0,exay1};
+    wire [14:0] exd2 = {1'b0,exax2} + {1'b0,exay2};
+    wire [14:0] exd3 = {1'b0,exax3} + {1'b0,exay3};
+    wire [7:0]  dt0 = r_frame - r_ex_t0, dt1 = r_frame - r_ex_t1;
+    wire [7:0]  dt2 = r_frame - r_ex_t2, dt3 = r_frame - r_ex_t3;
+    wire        w_short = (r_hits[r_ti] <= 4'd3);
+    // 短轨迹(命中<=3)紧邻已计离场：同一颗球的碎片/阴影，抑制
+    wire w_dup_short = w_short &&
+        ((r_ex_v[0] && dt0<=8'd2 && exd0<=15'd80) ||
+         (r_ex_v[1] && dt1<=8'd2 && exd1<=15'd80) ||
+         (r_ex_v[2] && dt2<=8'd2 && exd2<=15'd80) ||
+         (r_ex_v[3] && dt3<=8'd2 && exd3<=15'd80));
+    // 底边(y>550)的短轨迹，15 帧内靠近已计离场：阴影/反光
+    wire w_dup_shadow = w_short && (py > 12'd550) &&
+        ((r_ex_v[0] && dt0<=8'd15 && exd0<=15'd300) ||
+         (r_ex_v[1] && dt1<=8'd15 && exd1<=15'd300) ||
+         (r_ex_v[2] && dt2<=8'd15 && exd2<=15'd300) ||
+         (r_ex_v[3] && dt3<=8'd15 && exd3<=15'd300));
+    wire w_dup_all = w_dup | w_dup_short | w_dup_shadow;
 
     // ======================================================================
     // run 提取 + 直方图（active）
@@ -466,7 +486,7 @@ module cv_top #(
                     if (t_valid && !r_cnt_mask[r_ti[2:0]] &&
                         (t_out && (t_miss<=EXIT_MISS) && (r_hits[r_ti] >= w_need))) begin
                         r_cnt_mask[r_ti[2:0]] <= 1'b1;
-                        if (!w_dup) begin
+                        if (!w_dup_all) begin
                             r_count <= r_count + 16'd1;
                             r_ex_v[r_ex_w] <= 1'b1;
                             case (r_ex_w)

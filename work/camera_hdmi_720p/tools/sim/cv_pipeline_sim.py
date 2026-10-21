@@ -146,11 +146,19 @@ def main():
                 dup = corner and any(nf - rf <= 3 and (ry < 100 or ry > 650) and
                                      abs(t[0] - rx) + abs(t[1] - ry) <= 150
                                      for rf, rx, ry in recent)
+                short = t[5] <= 3
+                dup2 = short and any(nf - rf <= 2 and
+                                     abs(t[0] - rx) + abs(t[1] - ry) <= 80
+                                     for rf, rx, ry in recent)
+                shadow2 = short and t[1] > 550 and any(nf - rf <= 15 and
+                                     abs(t[0] - rx) + abs(t[1] - ry) <= 300
+                                     for rf, rx, ry in recent)
+                dup = dup or dup2 or shadow2
                 if not dup:
                     count += 1
                     events.append((nf, count, int(t[0]), int(t[1]), t[5]))
-                recent.append((nf, t[0], t[1]))
-                recent = recent[-6:]
+                    recent.append((nf, t[0], t[1]))
+                    recent = recent[-8:]
         tracks = [t for t in tracks if t[4] <= args.miss_k]
         for t in tracks:
             if t[4] > REC: continue          # 纯预测滑行的不画
