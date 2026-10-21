@@ -188,8 +188,9 @@ module cv_blkdet #(
     // 贴球对：细长团块(长边/短边 >= PAIR_ASPECT%) = 两颗球贴在一起 -> 拆成两个检测
     wire [15:0] fn_asp   = fn_mx * 8'd100;
     wire [15:0] fn_asp_t = PAIR_ASPECT * fn_mn;
+    wire        fn_bigpair = i_wide && ((fn_wb >= 8'd20) || (fn_hb >= 8'd20)) && (fn_ab >= 16'd100);
     wire        fn_pair  = (fn_ab >= PAIR_MINAREA) &&
-                           (i_wide ? (fn_fill >= 24'd60 * fn_box) : 1'b1) &&
+                           (fn_bigpair || (i_wide ? (fn_fill >= 24'd60 * fn_box) : 1'b1)) &&
                            (fn_asp >= fn_asp_t);
     wire [11:0] fn_mdx   = (s_ff[63:52] + s_ff[51:40]) >> 1;   // bbox 横向中点(px)
     wire [11:0] fn_mdy   = (s_ff[39:28] + s_ff[27:16]) >> 1;   // bbox 纵向中点(px)

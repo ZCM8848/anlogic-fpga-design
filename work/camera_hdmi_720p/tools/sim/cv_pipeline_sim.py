@@ -32,7 +32,7 @@ MFILL = 40             # 填充率下限 %，对应 cv_blkdet 的 MIN_FILL
 MFILL_BIG = 35         # 高阈值(亮场景)下宽团块的填充率下限
 MRATIO = 50            # 长短边比下限 %，对应 cv_blkdet 的 MIN_RATIO
 WIDE_THR = 130         # DARK_THR >= 此值时放宽块宽/高上限(亮场景快球更大)
-MIN_HITS_EX = 3        # 左/右边缘出画面门限(快球可能只有 3 次命中)
+MIN_HITS_EX = 3        # 窄场景左/右边缘出画面门限；亮场景用 2（并排第二颗命中少）
 MIN_HITS_V = 6         # 上/下边缘出画面门限(顶边真球 6；4 次命中的阴影仍被滤掉)
 PAIR_ASPECT = 150      # 长/短边比 >= 150% 判为"两颗贴在一起"
 PAIR_MINAREA = 24      # 且面积 >= 这么多块
@@ -65,8 +65,8 @@ def detect(frame, dark, bg=None):
         if xl and (not wide or not (w >= 6 and h >= 6 and a * 100 >= 50 * w * h)): continue  # 左边仅亮场景放行紧凑团块
         if yt: continue                               # 上边(与 cv_blkdet 一致)
         if (xl and yt) or (xr and yt) or (xl and yb) or (xr and yb): continue  # 贴角
-        pair_fill = 60 if wide else 0
-        if PAIR_MINAREA and a >= PAIR_MINAREA and a * 100 >= pair_fill * w * h and \
+        big_pair = wide and (w >= 20 or h >= 20) and a >= 100
+        if (big_pair or (a >= PAIR_MINAREA and a * 100 >= (60 if wide else 0) * w * h)) and \
                 max(w, h) * 100 >= PAIR_ASPECT * min(w, h):
             # 两颗贴在一起(细长团块) -> 沿长边拆成两个检测
             if h >= w:
@@ -93,6 +93,7 @@ def main():
     args = ap.parse_args()
     global AMIN
     AMIN = args.amin
+    wide = args.dark >= WIDE_THR
 
     cap = cv2.VideoCapture(args.video)
     W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)); H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -136,7 +137,9 @@ def main():
         for t in tracks:
             out_x = t[0] < 0 or t[0] >= W
             out_y = t[1] < 0 or t[1] >= H
-            need = MIN_HITS_EX if out_x else MIN_HITS_V
+            need = (2 if wide else MIN_HITS_EX) if out_x else MIN_HITS_V
+            if t[1] > 650 and t[0] < 700:
+                need = 8   # 底部左侧反光带：阴影/倒影，要求更高命中
             if (not t[7]) and t[5] >= need and t[4] <= EXIT_MISS and (out_x or out_y):
                 t[7] = True
                 corner = (t[1] < 100 or t[1] > 650)
@@ -144,7 +147,8 @@ def main():
                                      abs(t[0] - rx) + abs(t[1] - ry) <= 150
                                      for rf, rx, ry in recent)
                 if not dup:
-                    count += 1; events.append((nf, count))
+                    count += 1
+                    events.append((nf, count, int(t[0]), int(t[1]), t[5]))
                 recent.append((nf, t[0], t[1]))
                 recent = recent[-6:]
         tracks = [t for t in tracks if t[4] <= args.miss_k]
@@ -160,7 +164,7 @@ def main():
     vw.release()
     print("video=%s frames=%d GATE=%d MISS_K=%d DARK=%d -> COUNT=%d ids=%d"
           % (args.video, nf, args.gate, args.miss_k, args.dark, count, next_id))
-    print("COUNT increments at frames:", [e[0] for e in events])
+    print("COUNT events (frame,count,x,y,hits):", events)
 
 
 if __name__ == "__main__":

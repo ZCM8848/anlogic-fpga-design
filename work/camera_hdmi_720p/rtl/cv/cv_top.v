@@ -253,6 +253,9 @@ module cv_top #(
     wire       t_out_x = (px_s >= $signed(13'd1280)) || (px_s < $signed(13'd0));
     wire       t_out_y = (py_s >= $signed(13'd720))  || (py_s < $signed(13'd0));
     wire       t_out   = t_out_x | t_out_y;
+    wire       w_shadow = (py > 12'd650) && (px < 12'd700);   // 底部左侧反光带(阴影/倒影)
+    wire [3:0] w_need_ex = w_wide ? 4'd2 : MIN_HITS_EX;
+    wire [3:0] w_need = w_shadow ? 4'd8 : (t_out_x ? w_need_ex : MIN_HITS_V);
 
     // ---- 角部重复计数抑制：同一颗球在顶/底区裂成两条轨迹时只计一次 ----
     reg  [7:0]  r_frame;
@@ -461,8 +464,7 @@ module cv_top #(
                     end
                     // 计数：绿框轨迹预测出画面 -> +1（顶/底角区的重复轨迹只计一次）
                     if (t_valid && !r_cnt_mask[r_ti[2:0]] &&
-                        (t_out && (t_miss<=EXIT_MISS) &&
-                         (r_hits[r_ti] >= (t_out_x ? MIN_HITS_EX : MIN_HITS_V)))) begin
+                        (t_out && (t_miss<=EXIT_MISS) && (r_hits[r_ti] >= w_need))) begin
                         r_cnt_mask[r_ti[2:0]] <= 1'b1;
                         if (!w_dup) begin
                             r_count <= r_count + 16'd1;
