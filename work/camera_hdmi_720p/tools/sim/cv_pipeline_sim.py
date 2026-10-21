@@ -32,7 +32,7 @@ MFILL = 40             # 填充率下限 %，对应 cv_blkdet 的 MIN_FILL
 MFILL_BIG = 35         # 高阈值(亮场景)下宽团块的填充率下限
 MRATIO = 50            # 长短边比下限 %，对应 cv_blkdet 的 MIN_RATIO
 WIDE_THR = 130         # DARK_THR >= 此值时放宽块宽/高上限(亮场景快球更大)
-MIN_HITS_EX = 4        # 出画面即时计数门限(左/右边缘)
+MIN_HITS_EX = 3        # 左/右边缘出画面门限(快球可能只有 3 次命中)
 MIN_HITS_V = 6         # 上/下边缘出画面门限(顶边真球 6；4 次命中的阴影仍被滤掉)
 PAIR_ASPECT = 150      # 长/短边比 >= 150% 判为"两颗贴在一起"
 PAIR_MINAREA = 24      # 且面积 >= 这么多块
@@ -62,7 +62,8 @@ def detect(frame, dark, bg=None):
         if a * 100 < lim * w * h: continue            # 填充率下限
         if min(w, h) * 100 < MRATIO * max(w, h): continue  # 长短边比下限
         xl, xr, yt, yb = (x == 0), ((x + w) >= 80), (y == 0), ((y + h) >= 45)
-        if xl or yt: continue                         # 左/上边(与 cv_blkdet 一致)
+        if xl and (not wide or not (w >= 6 and h >= 6 and a * 100 >= 50 * w * h)): continue  # 左边仅亮场景放行紧凑团块
+        if yt: continue                               # 上边(与 cv_blkdet 一致)
         if (xl and yt) or (xr and yt) or (xl and yb) or (xr and yb): continue  # 贴角
         pair_fill = 60 if wide else 0
         if PAIR_MINAREA and a >= PAIR_MINAREA and a * 100 >= pair_fill * w * h and \
@@ -99,7 +100,7 @@ def main():
     vw = cv2.VideoWriter(args.out, cv2.VideoWriter_fourcc(*"mp4v"), fps, (W, H))
 
     tracks = []   # [cx,cy,vx,vy,missed,hits,box,counted,id]
-    next_id = 0; count = 0; nf = 0; events = []
+    next_id = 0; count = 0; nf = 0; events = []; recent = []
     hist = []     # 最近 BG_DELAY 帧的 80x45 块均值
     while True:
         ok, fr = cap.read()
@@ -137,7 +138,15 @@ def main():
             out_y = t[1] < 0 or t[1] >= H
             need = MIN_HITS_EX if out_x else MIN_HITS_V
             if (not t[7]) and t[5] >= need and t[4] <= EXIT_MISS and (out_x or out_y):
-                t[7] = True; count += 1; events.append((nf, count))
+                t[7] = True
+                corner = (t[1] < 100 or t[1] > 650)
+                dup = corner and any(nf - rf <= 3 and (ry < 100 or ry > 650) and
+                                     abs(t[0] - rx) + abs(t[1] - ry) <= 150
+                                     for rf, rx, ry in recent)
+                if not dup:
+                    count += 1; events.append((nf, count))
+                recent.append((nf, t[0], t[1]))
+                recent = recent[-6:]
         tracks = [t for t in tracks if t[4] <= args.miss_k]
         for t in tracks:
             if t[4] > REC: continue          # 纯预测滑行的不画

@@ -39,7 +39,7 @@ module cv_top #(
     parameter [11:0] GATE      = 12'd320, // 配对最大 Manhattan 距离（快球帧间位移大）
     parameter [5:0]  MISS_K    = 6'd35,   // 丢失几帧删轨迹(6位: 0..63)
     parameter [5:0]  EXIT_MISS = 6'd10,   // "出画面即计数"允许的丢失帧数(放宽: 球刚出画面就丢检也能即时计数)
-    parameter [3:0]  MIN_HITS_EX = 4'd4,  // 左/右边缘出画面: 命中>=4 即可
+    parameter [3:0]  MIN_HITS_EX = 4'd3,  // 左/右边缘出画面: 命中>=3 (快球可能只有 3 次命中)
     parameter [3:0]  MIN_HITS_V  = 4'd6,  // 上/下边缘出画面: 命中>=6 (顶边真球 6；4 次命中的阴影仍被滤掉)
     parameter         OTSU_EN   = 1
 )(
@@ -254,6 +254,44 @@ module cv_top #(
     wire       t_out_y = (py_s >= $signed(13'd720))  || (py_s < $signed(13'd0));
     wire       t_out   = t_out_x | t_out_y;
 
+    // ---- 角部重复计数抑制：同一颗球在顶/底区裂成两条轨迹时只计一次 ----
+    reg  [7:0]  r_frame;
+    reg  [7:0]  r_ex_t0, r_ex_t1, r_ex_t2, r_ex_t3;
+    reg  [11:0] r_ex_x0, r_ex_x1, r_ex_x2, r_ex_x3;
+    reg  [11:0] r_ex_y0, r_ex_y1, r_ex_y2, r_ex_y3;
+    reg  [3:0]  r_ex_v;
+    reg  [1:0]  r_ex_w;
+    wire        w_corner_now = (py < 12'd100) || (py > 12'd650);
+    wire signed [13:0] exdx0 = $signed({1'b0,px}) - $signed({1'b0,r_ex_x0});
+    wire signed [13:0] exdy0 = $signed({1'b0,py}) - $signed({1'b0,r_ex_y0});
+    wire signed [13:0] exdx1 = $signed({1'b0,px}) - $signed({1'b0,r_ex_x1});
+    wire signed [13:0] exdy1 = $signed({1'b0,py}) - $signed({1'b0,r_ex_y1});
+    wire signed [13:0] exdx2 = $signed({1'b0,px}) - $signed({1'b0,r_ex_x2});
+    wire signed [13:0] exdy2 = $signed({1'b0,py}) - $signed({1'b0,r_ex_y2});
+    wire signed [13:0] exdx3 = $signed({1'b0,px}) - $signed({1'b0,r_ex_x3});
+    wire signed [13:0] exdy3 = $signed({1'b0,py}) - $signed({1'b0,r_ex_y3});
+    wire [13:0] exax0 = exdx0[13] ? -exdx0 : exdx0;
+    wire [13:0] exay0 = exdy0[13] ? -exdy0 : exdy0;
+    wire [13:0] exax1 = exdx1[13] ? -exdx1 : exdx1;
+    wire [13:0] exay1 = exdy1[13] ? -exdy1 : exdy1;
+    wire [13:0] exax2 = exdx2[13] ? -exdx2 : exdx2;
+    wire [13:0] exay2 = exdy2[13] ? -exdy2 : exdy2;
+    wire [13:0] exax3 = exdx3[13] ? -exdx3 : exdx3;
+    wire [13:0] exay3 = exdy3[13] ? -exdy3 : exdy3;
+    wire w_dup0 = r_ex_v[0] && ((r_frame - r_ex_t0) <= 8'd3) && w_corner_now &&
+                  ((r_ex_y0 < 12'd100) || (r_ex_y0 > 12'd650)) &&
+                  (({1'b0,exax0} + {1'b0,exay0}) <= 15'd150);
+    wire w_dup1 = r_ex_v[1] && ((r_frame - r_ex_t1) <= 8'd3) && w_corner_now &&
+                  ((r_ex_y1 < 12'd100) || (r_ex_y1 > 12'd650)) &&
+                  (({1'b0,exax1} + {1'b0,exay1}) <= 15'd150);
+    wire w_dup2 = r_ex_v[2] && ((r_frame - r_ex_t2) <= 8'd3) && w_corner_now &&
+                  ((r_ex_y2 < 12'd100) || (r_ex_y2 > 12'd650)) &&
+                  (({1'b0,exax2} + {1'b0,exay2}) <= 15'd150);
+    wire w_dup3 = r_ex_v[3] && ((r_frame - r_ex_t3) <= 8'd3) && w_corner_now &&
+                  ((r_ex_y3 < 12'd100) || (r_ex_y3 > 12'd650)) &&
+                  (({1'b0,exax3} + {1'b0,exay3}) <= 15'd150);
+    wire w_dup  = w_dup0 | w_dup1 | w_dup2 | w_dup3;
+
     // ======================================================================
     // run 提取 + 直方图（active）
     // ======================================================================
@@ -316,10 +354,12 @@ module cv_top #(
             r_otsu_thr<=BIN_THR; r_bin_thr<=BIN_THR;   // 阈值归主 FSM 管（S_ADAPTIVE + reset）
             r_trk_i<=0; r_det_j<=0; r_asg<=NONE_ASG; r_min_cost<=0; r_min_j<=0; r_min_valid<=0;
             r_ndet<=0; r_next_id<=0; r_count<=16'd0; r_cnt_mask<=8'd0;
+            r_frame<=8'd0; r_ex_v<=4'd0; r_ex_w<=2'd0;
             // track 表原来从不复位 -> 依赖上电 FF 初值（仿真为 x 会导致不建轨迹）；
             // 这里显式清零 valid（否则 !track[..].valid 判定为 x，新建轨迹分支走不进）。
             for (k=0;k<MAX_BLOBS;k=k+1) begin r_det_taken[k]<=0; r_assign[k]<=NONE_ASG; track[k]<={TW{1'b0}}; r_hits[k]<=4'd0; end
         end else begin
+            if (vs_rise) r_frame <= r_frame + 8'd1;
             case (r_st)
                 S_IDLE: if (vs_rise) r_st<=S_ADAPTIVE;
 
@@ -419,12 +459,22 @@ module cv_top #(
                                           t_min_x,t_max_x,t_min_y,t_max_y};
                         end
                     end
-                    // 计数：绿框轨迹预测出画面 -> +1（左右边缘命中≥4；上下边缘需≥8，滤阴影/反光短轨迹）
+                    // 计数：绿框轨迹预测出画面 -> +1（顶/底角区的重复轨迹只计一次）
                     if (t_valid && !r_cnt_mask[r_ti[2:0]] &&
                         (t_out && (t_miss<=EXIT_MISS) &&
                          (r_hits[r_ti] >= (t_out_x ? MIN_HITS_EX : MIN_HITS_V)))) begin
                         r_cnt_mask[r_ti[2:0]] <= 1'b1;
-                        r_count <= r_count + 16'd1;
+                        if (!w_dup) begin
+                            r_count <= r_count + 16'd1;
+                            r_ex_v[r_ex_w] <= 1'b1;
+                            case (r_ex_w)
+                                2'd0: begin r_ex_t0<=r_frame; r_ex_x0<=px; r_ex_y0<=py; end
+                                2'd1: begin r_ex_t1<=r_frame; r_ex_x1<=px; r_ex_y1<=py; end
+                                2'd2: begin r_ex_t2<=r_frame; r_ex_x2<=px; r_ex_y2<=py; end
+                                default: begin r_ex_t3<=r_frame; r_ex_x3<=px; r_ex_y3<=py; end
+                            endcase
+                            r_ex_w <= r_ex_w + 2'd1;
+                        end
                     end
                     if (r_ti==MAX_BLOBS-1) begin r_ti<=0; r_dj<=0; r_free<=0; r_st<=S_TU_NEW; end
                     else begin r_ti<=r_ti+1; r_st<=S_TU_START; end

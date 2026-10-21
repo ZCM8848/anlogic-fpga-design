@@ -180,7 +180,9 @@ module cv_blkdet #(
     wire f_pass = s_ff[64] && (fn_ab>=MIN_BLKN) && (fn_ab<=MAX_BLKN)
                && (fn_fill >= fn_fill_min)
                && ({fn_mn,7'b0} >= MIN_RATIO*fn_mx)
-               && (fn_mnx!=0) && (fn_mny!=0)     // 不贴左/上边（剔除底面长条）
+               && (fn_mnx!=0 || (i_wide && fn_wb>=8'd6 && fn_hb>=8'd6 &&
+                                fn_fill>=24'd50*fn_box))  // 左边：亮场景放行紧凑团块
+               && (fn_mny!=0)                    // 不贴上边（剔除底面长条）
                && (fn_wb<=fn_maxwh) && (fn_hb<=fn_maxwh)  // 剔除过宽/过高块
                && !fn_corner;                    // 不贴角（剔除角上的假块）
     // 贴球对：细长团块(长边/短边 >= PAIR_ASPECT%) = 两颗球贴在一起 -> 拆成两个检测
