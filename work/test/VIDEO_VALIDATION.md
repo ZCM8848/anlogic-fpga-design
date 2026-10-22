@@ -3,6 +3,7 @@
 > 没有摄像头时，用**与 RTL 同参的等价管线**对桌面的实拍录像做验证。
 > 脚本：`work/camera_hdmi_720p/tools/sim/cv_pipeline_sim.py`（检测=`cv_blkdet`，
 > 跟踪=`cv_top` 的 a-b+贪心 NN，计数=`O_count`：绿框轨迹出画面才 +1）。
+> 结果视频叠加与 bit 一致：绿色 2px 框 + 白色 5×7 ID（框左上角），不显示调试计数文字。
 
 ## 管线（与最新 bit 一致）
 
