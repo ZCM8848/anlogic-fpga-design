@@ -104,8 +104,9 @@ module design_top_wrapper (
     // 异步复位最稳、且 TD 可走全局网络避免高扇出 recovery 违例）。本工程沿用。
     wire S_rst_n = S_pll_lock;
 
-    // CV 开关（前向声明：r_cv_on 在像素域 KEY2 段赋值，此处先声明供 ae_set/edge_on 早期引用）
-    reg r_cv_on;
+    // CV 三态：0=关，1=真实画面+框，2=暗块掩膜+框
+    reg  [1:0] r_cv_mode;
+    wire       r_cv_on = (r_cv_mode != 2'd0);
 
     // ============================================================ 摄像头上电时序 + I2C 配置（参考件）
     reg  [17:0] S_cam_power_cnt;
@@ -292,7 +293,7 @@ module design_top_wrapper (
             S_sw3_sync_rx <= {S_sw3_sync_rx[1:0], I_sw3};
         end
     end
-    // CV 开关（r_cv_on 在像素域 KEY2 段赋值；此处同步到字节域供 edge_on 门控）
+    // CV 开关（r_cv_mode 在像素域 KEY2 段更新；r_cv_on 组合派生，此处同步到字节域供 edge_on 门控）
     reg [2:0]  r_cv_on_sync_rx;
     always @(posedge S_csi_rx_clk or negedge S_rst_n_rx) begin
         if (!S_rst_n_rx) r_cv_on_sync_rx <= 3'd0;
@@ -522,8 +523,9 @@ module design_top_wrapper (
             S_sw3_sync_pix <= {S_sw3_sync_pix[1:0], I_sw3};
         end
     end
-    // ============================================================ KEY2 → CV 开关（像素域去抖 + 翻转 + 跨域同步）
-    // KEY2=A9 板载按键（PULLUP，按下=0）。计数器采样去抖（~14ms），下降沿翻转 r_cv_on。
+    // ============================================================ KEY2 → CV 三态（像素域去抖 + 循环 + 跨域同步）
+    // KEY2=A9 板载按键（PULLUP，按下=0）。计数器采样去抖（~14ms），下降沿循环 r_cv_mode：
+    // 0=检测关（纯摄像头）→1=真实画面+框→2=掩膜+框→0。
     // CV 开时强制 edge_on=0 / osd_on=0（让 hdmi_mixer/isp_top 直通纯摄像头画面供检测）。
     reg [20:0] r_key2_cnt;
     reg [2:0]  r_key2_sync;
@@ -531,13 +533,13 @@ module design_top_wrapper (
     wire       key2_fall = ~r_key2_sync[2] & r_key2_d;
     always @(posedge S_pixel_clk or negedge S_rst_n_pix) begin
         if (!S_rst_n_pix) begin
-            r_key2_cnt <= 21'd0; r_key2_sync <= 3'd0; r_key2_d <= 1'b0; r_cv_on <= 1'b0;
+            r_key2_cnt <= 21'd0; r_key2_sync <= 3'd0; r_key2_d <= 1'b0; r_cv_mode <= 2'd0;
         end else begin
             r_key2_sync <= {r_key2_sync[1:0], I_key2};
             if (r_key2_cnt == 21'd1048575) begin   // ~14ms @75MHz
                 r_key2_cnt <= 21'd0;
                 r_key2_d   <= r_key2_sync[2];
-                if (key2_fall) r_cv_on <= ~r_cv_on;
+                if (key2_fall) r_cv_mode <= (r_cv_mode==2'd2) ? 2'd0 : (r_cv_mode + 2'd1);
             end else begin
                 r_key2_cnt <= r_key2_cnt + 21'd1;
             end
@@ -636,7 +638,6 @@ module design_top_wrapper (
         .ALPHA_Q  ( 8'd128  ),   // 位置增益 0.5
         .BETA_Q   ( 8'd48   ),   // 速度增益 0.1875（快球预测跟得上）
         .MASK_SRC ( 3      ),    // 3=暗区检测（替代 Sobel 边缘；钢珠是深色实心圆盘）
-        .MASK_VIEW( 0      ),    // 0=显示真实摄像头画面(叠加绿框); 1=显示二值掩膜(调试用, 画面会全黑)
         .GATE     ( 12'd320),    // 配对门限：覆盖快球帧间位移
         .MISS_K   ( 6'd35  ),    // 丢失多少帧后删轨(6位字段); 35 可跨断帧重新接上同一颗球
         .EXIT_MISS( 6'd10  )     // 出画面即时计数允许的丢失帧数(计时更贴合球离开画面)
@@ -644,6 +645,7 @@ module design_top_wrapper (
         .I_clk          ( S_pixel_clk      ),
         .I_rst_n        ( S_rst_n_pix      ),
         .I_cv_on        ( r_cv_on          ),
+        .I_mask_view    ( r_cv_mode==2'd2  ),
         .I_thr_up       ( R_thr_up         ),
         .I_thr_dn       ( R_thr_dn         ),
         .I_de           ( S_hdmi_out_de    ),
@@ -726,7 +728,7 @@ module design_top_wrapper (
     // SW4/SW3 同步到 100M 域（供串口上报）
     reg [2:0] S_sw4_sync_100m;
     reg [2:0] S_sw3_sync_100m;
-    reg [2:0] S_cv_on_sync_100m;
+    reg [1:0] S_cv_mode_s1, S_cv_mode_s2;
     reg [5:0] S_cv_blob_cnt_s1, S_cv_blob_cnt_s2;
     reg [7:0] S_cv_bin_thr_s1, S_cv_bin_thr_s2;
     reg [15:0] S_cv_count_s1, S_cv_count_s2;
@@ -734,14 +736,15 @@ module design_top_wrapper (
         if (!S_rst_n_100m) begin
             S_sw4_sync_100m <= 3'd0;
             S_sw3_sync_100m <= 3'd0;
-            S_cv_on_sync_100m <= 3'd0;
+            S_cv_mode_s1 <= 2'd0;   S_cv_mode_s2 <= 2'd0;
             S_cv_blob_cnt_s1 <= 6'd0; S_cv_blob_cnt_s2 <= 6'd0;
             S_cv_bin_thr_s1 <= 8'd0;  S_cv_bin_thr_s2 <= 8'd0;
             S_cv_count_s1 <= 16'd0;   S_cv_count_s2 <= 16'd0;
         end else begin
             S_sw4_sync_100m <= {S_sw4_sync_100m[1:0], I_sw4};
             S_sw3_sync_100m <= {S_sw3_sync_100m[1:0], I_sw3};
-            S_cv_on_sync_100m <= {S_cv_on_sync_100m[1:0], r_cv_on};
+            S_cv_mode_s1 <= r_cv_mode;
+            S_cv_mode_s2 <= S_cv_mode_s1;
             S_cv_blob_cnt_s1 <= S_cv_blob_cnt;
             S_cv_blob_cnt_s2 <= S_cv_blob_cnt_s1;
             S_cv_bin_thr_s1  <= S_cv_bin_thr;        // 8bit 慢变（手动调），2FF 同步
@@ -761,7 +764,7 @@ module design_top_wrapper (
         .I_ddr_rdy     ( S_ddr_rdy_s[1]      ),
         .I_sw4         ( S_sw4_sync_100m[2]  ),
         .I_sw3         ( S_sw3_sync_100m[2]  ),
-        .I_cv_on       ( S_cv_on_sync_100m[2]),
+        .I_cv_mode     ( S_cv_mode_s2       ),
         .I_blob_cnt    ( S_cv_blob_cnt_s2    ),
         .I_bin_thr     ( S_cv_bin_thr_s2     ),
         .I_count       ( S_cv_count_s2       ),

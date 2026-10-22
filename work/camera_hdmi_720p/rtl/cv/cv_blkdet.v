@@ -33,7 +33,8 @@ module cv_blkdet #(
     input             i_wide,                // 高阈值(亮场景)：放宽块宽/高与填充率
     output reg        o_ready,               // 检测表就绪(保持到下次 vs)
     output reg [5:0]  o_count,
-    output     [47:0] o_det_box              // 第 i_sel 个框 {minx,maxx,miny,maxy} 像素坐标
+    output     [47:0] o_det_box,             // 第 i_sel 个框 {minx,maxx,miny,maxy} 像素坐标
+    output wire       o_mask_bit             // 上一帧同块的暗块掩膜位(1=暗块)
 );
     // TD 不允许数组端口/端口直访数组 -> 内部存储 + 选择线读出
     reg [47:0] box_mem [0:MAX_BLOBS-1];
@@ -143,7 +144,33 @@ module cv_blkdet #(
     reg [5:0]  t_col;
 
     wire [12:0]     s_bidx  = {1'b0, t_by}*7'd80 + {8'b0, t_bx};
-    wire            s_dark  = blk_mask[s_bidx];
+    // blk_mask 只有一个读口：CCL 扫描期间读 s_bidx；active 期间预读下一块（上一帧值）
+    wire            ccl_scan = (t_st != T_IDLE);
+    wire [12:0]     bm_nxt   = (cur_bm_addr < (BW*BH-1)) ? (cur_bm_addr + 13'd1) : 13'd0;
+    wire [12:0]     bm_ra    = vs_rise ? 13'd0 : (ccl_scan ? s_bidx : bm_nxt);
+    wire            bm_rd    = blk_mask[bm_ra];
+    wire            s_dark   = bm_rd;
+
+    // ---- 掩膜视图：块末预读下一块，锁存覆盖整块 16 像素；vs 预读块 0 ----
+    // 当前块的 blk_mask 写发生在该块第一个像素的时钟沿；在上一块最后一个像素
+    // 读取下一块地址，得到的仍是上一帧的位。显示与 track 表（也是上一帧）同步。
+    reg       r_mask_disp;
+    reg [1:0] r_mask_vs;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            r_mask_disp <= 1'b0;
+            r_mask_vs   <= 2'd0;
+        end else begin
+            if (vs_rise) begin
+                r_mask_disp <= bm_rd;
+                r_mask_vs   <= (r_mask_vs==2'd2) ? 2'd2 : (r_mask_vs + 2'd1);
+            end else if (de && (r_x[3:0]==4'hF)) begin
+                r_mask_disp <= bm_rd;
+            end
+        end
+    end
+    assign o_mask_bit = (r_mask_vs==2'd2) ? r_mask_disp : 1'b0;
+
     wire [LABW-1:0] s_left  = (t_bx==0) ? {LABW{1'b0}} : rbuf[{t_sel, t_bx-1'b1}];
     wire [LABW-1:0] s_up    = (t_by==0) ? {LABW{1'b0}} : rbuf[{~t_sel, t_bx}];
     wire [LABW-1:0] s_lbl   = (s_left!=0) ? s_left : ((s_up!=0) ? s_up : t_next);

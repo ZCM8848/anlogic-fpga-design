@@ -30,7 +30,6 @@ module cv_top #(
     parameter         MAX_RPR   = 32,
     parameter         MAX_LABELS= 32,
     parameter [11:0]  FBOX_W    = 12'd2,
-    parameter         MASK_VIEW = 0,       // 0=显示真实画面(叠加框); 1=显示二值掩膜(调试)
     parameter         MASK_SRC  = 1,       // 1=Sobel 边缘圆环(默认); 0=亮阈值(回退对比)
     parameter [10:0]  EDGE_THR  = 11'd80,  // Sobel 幅值阈值(同 edge_detect_96)；K3/K4 调偏置
     parameter [10:0]  DARK_THR  = 11'd110, // 暗区阈值(MASK_SRC=3)：w_y < DARK_THR 视为前景(如深色钢珠)
@@ -46,6 +45,7 @@ module cv_top #(
     input  wire        I_clk,
     input  wire        I_rst_n,
     input  wire        I_cv_on,
+    input  wire        I_mask_view,           // 1=显示上一帧 80x45 暗块掩膜(调试)
     input  wire        I_thr_up,
     input  wire        I_thr_dn,
     input  wire        I_de,
@@ -137,6 +137,7 @@ module cv_top #(
     wire [5:0]  blk_count;
     wire [47:0] blk_det_box;
     wire [2:0]  blk_det_sel;
+    wire        w_mask_bit;             // 上一帧同块暗块掩膜(0/1)
 
     // ---------- 存储 ----------
     (* ram_style="block" *) reg [33:0]  run_mem [0:MAX_RUNS-1];
@@ -259,6 +260,7 @@ module cv_top #(
 
     // ---- 角部重复计数抑制：同一颗球在顶/底区裂成两条轨迹时只计一次 ----
     reg  [7:0]  r_frame;
+    reg         r_cv_on_d;
     reg  [7:0]  r_ex_t0, r_ex_t1, r_ex_t2, r_ex_t3;
     reg  [11:0] r_ex_x0, r_ex_x1, r_ex_x2, r_ex_x3;
     reg  [11:0] r_ex_y0, r_ex_y1, r_ex_y2, r_ex_y3;
@@ -365,7 +367,8 @@ module cv_top #(
     ) u_blkdet (
         .clk(I_clk), .rst_n(I_rst_n), .de(I_de), .vs(I_vs), .rgb(I_data),
         .i_sel(blk_det_sel), .i_wide(w_wide),
-        .o_ready(blk_ready), .o_count(blk_count), .o_det_box(blk_det_box)
+        .o_ready(blk_ready), .o_count(blk_count), .o_det_box(blk_det_box),
+        .o_mask_bit(w_mask_bit)
     );
 
     integer k;
@@ -377,14 +380,26 @@ module cv_top #(
             r_otsu_thr<=BIN_THR; r_bin_thr<=BIN_THR;   // 阈值归主 FSM 管（S_ADAPTIVE + reset）
             r_trk_i<=0; r_det_j<=0; r_asg<=NONE_ASG; r_min_cost<=0; r_min_j<=0; r_min_valid<=0;
             r_ndet<=0; r_next_id<=0; r_count<=16'd0; r_cnt_mask<=8'd0;
-            r_frame<=8'd0; r_ex_v<=4'd0; r_ex_w<=2'd0;
+            r_frame<=8'd0; r_ex_v<=4'd0; r_ex_w<=2'd0; r_cv_on_d<=1'b0;
             // track 表原来从不复位 -> 依赖上电 FF 初值（仿真为 x 会导致不建轨迹）；
             // 这里显式清零 valid（否则 !track[..].valid 判定为 x，新建轨迹分支走不进）。
             for (k=0;k<MAX_BLOBS;k=k+1) begin r_det_taken[k]<=0; r_assign[k]<=NONE_ASG; track[k]<={TW{1'b0}}; r_hits[k]<=4'd0; end
         end else begin
+            r_cv_on_d <= I_cv_on;
             if (vs_rise) r_frame <= r_frame + 8'd1;
+            if (r_cv_on_d && !I_cv_on) begin
+                // 关闭检测：立刻停主状态机，清轨迹/检测表/计数，再开启时从干净状态开始
+                r_st <= S_IDLE;
+                r_count <= 16'd0; r_cnt_mask <= 8'd0;
+                r_ex_v <= 4'd0; r_ex_w <= 2'd0;
+                r_ti <= 0; r_dj <= 0; r_free <= 0; r_lv <= 0; r_collect <= 0; r_ndet <= 0;
+                for (k=0;k<MAX_BLOBS;k=k+1) begin
+                    track[k] <= {TW{1'b0}}; r_hits[k] <= 4'd0;
+                    r_det_taken[k] <= 1'b0; r_assign[k] <= NONE_ASG; det[k] <= {DW{1'b0}};
+                end
+            end else begin
             case (r_st)
-                S_IDLE: if (vs_rise) r_st<=S_ADAPTIVE;
+                S_IDLE: if (vs_rise && I_cv_on) r_st<=S_ADAPTIVE;
 
                 // 自适应阈值：midpoint = (min+max)/2（用上帧 min/max，下帧用）
                 S_ADAPTIVE: begin
@@ -527,6 +542,7 @@ module cv_top #(
 
                 default: r_st<=S_IDLE;
             endcase
+            end
         end
     end
 
@@ -588,7 +604,7 @@ module cv_top #(
         end
     end
 
-    wire [23:0] cv_base = (MASK_VIEW!=0) ? (w_mask ? 24'hFFFFFF : 24'h000000) : I_data;
+    wire [23:0] cv_base = I_mask_view ? (w_mask_bit ? 24'hFFFFFF : 24'h000000) : I_data;
     assign O_de=I_de; assign O_vs=I_vs;
     assign O_data = (I_cv_on && I_de) ? (r_digit ? 24'hFFFFFF : (r_border ? 24'h00FF00 : cv_base)) : I_data;
     assign O_blob_cnt = r_collect;

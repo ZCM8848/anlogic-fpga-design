@@ -15,6 +15,7 @@ module tb_cv_blkdet;
     wire o_ready;
     wire [5:0] o_count;
     wire [47:0] o_det_box;
+    wire o_mask_bit;
 
     cv_blkdet #(
         .IMG_W(1280), .IMG_H(720),
@@ -24,16 +25,20 @@ module tb_cv_blkdet;
         .MAX_BLOBS(8)
     ) dut (
         .clk(clk), .rst_n(rst_n), .de(de), .vs(vs), .rgb(rgb),
-        .i_sel(i_sel), .i_wide(1'b0), .o_ready(o_ready), .o_count(o_count), .o_det_box(o_det_box)
+        .i_sel(i_sel), .i_wide(1'b0), .o_ready(o_ready), .o_count(o_count), .o_det_box(o_det_box),
+        .o_mask_bit(o_mask_bit)
     );
 
     always #5 clk = ~clk;
 
     integer f, x, y;
     integer fx;
+    integer fx_prev;
     integer counts [0:11];
     integer minxs [0:11];
     integer errors = 0;
+    reg mask_center, mask_bg;
+    reg mask_edge_prev, mask_edge_first, mask_edge_last;
 
     task automatic run_frame(input integer fnum, input integer xpos);
         begin
@@ -49,12 +54,30 @@ module tb_cv_blkdet;
                 counts[fnum-1] = o_count;
                 minxs[fnum-1] = o_det_box[47:36];
             end
+            // 掩膜视图：应显示上一帧的块掩膜；取上一帧方块中心与一个背景块
+            fx_prev = (fnum <= 6) ? 400 : (480 + (fnum - 7) * 80);
+            mask_center = 1'bx;
+            mask_bg     = 1'bx;
+            mask_edge_prev = 1'bx;
+            mask_edge_first = 1'bx;
+            mask_edge_last = 1'bx;
             // active 帧：亮背景 + 144x144 暗块
             for (y = 0; y < 720; y = y + 1) begin
                 for (x = 0; x < 1280; x = x + 1) begin
                     de = 1;
                     rgb = (x >= xpos && x < xpos + 144 && y >= 300 && y < 444)
                           ? 24'h282828 : 24'hC8C8C8;
+                    if ((fnum >= 7) && (x == (fx_prev + 72)) && (y == 372)) begin
+                        #4; mask_center = o_mask_bit;
+                    end else if ((fnum >= 7) && (x == 100) && (y == 100)) begin
+                        #4; mask_bg = o_mask_bit;
+                    end else if ((fnum == 11) && (y == 372) && (x == 799)) begin
+                        #4; mask_edge_prev = o_mask_bit;
+                    end else if ((fnum == 11) && (y == 372) && (x == 800)) begin
+                        #4; mask_edge_first = o_mask_bit;
+                    end else if ((fnum == 11) && (y == 372) && (x == 815)) begin
+                        #4; mask_edge_last = o_mask_bit;
+                    end
                     @(posedge clk);
                     #1;
                 end
@@ -105,6 +128,29 @@ module tb_cv_blkdet;
         check(9, 1, 720);
         check(10, 1, 800);
         check(11, 1, 880);
+
+        // 掩膜视图检查（帧 7..11 显示的是帧 6..10 的掩膜）
+        if (mask_center !== 1'b1) begin
+            $display("FAIL mask center=%b (exp 1, last frame)", mask_center);
+            errors = errors + 1;
+        end else begin
+            $display("PASS mask center=%b", mask_center);
+        end
+        if (mask_bg !== 1'b0) begin
+            $display("FAIL mask bg=%b (exp 0, last frame)", mask_bg);
+            errors = errors + 1;
+        end else begin
+            $display("PASS mask bg=%b", mask_bg);
+        end
+        // 块边界：x=799 为块 49 末像素(0)，x=800/815 为块 50(1)，验证首像素不偏移
+        if (mask_edge_prev !== 1'b0 || mask_edge_first !== 1'b1 || mask_edge_last !== 1'b1) begin
+            $display("FAIL mask edge prev=%b first=%b last=%b (exp 0/1/1)",
+                     mask_edge_prev, mask_edge_first, mask_edge_last);
+            errors = errors + 1;
+        end else begin
+            $display("PASS mask edge prev=%b first=%b last=%b",
+                     mask_edge_prev, mask_edge_first, mask_edge_last);
+        end
 
         if (errors != 0) begin
             $display("RESULT FAIL errors=%0d", errors);

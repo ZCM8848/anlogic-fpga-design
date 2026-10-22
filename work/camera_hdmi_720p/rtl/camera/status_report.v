@@ -3,7 +3,7 @@
 // status_report.v — 状态串口上报（自研，M6 精简版）
 //
 // 每 REPEAT_MS 连发一行（115200 8N1）：
-//   CAM ID=<4hex> OK=<0/1> E=<0/1> CFG=<0/1> DDR=<0/1> SW4=<0/1> SW3=<0/1> CV=<0/1> NB=<2hex> TH=<2hex>\r\n
+//   CAM ID=<4hex> OK=<0/1> E=<0/1> CFG=<0/1> DDR=<0/1> SW4=<0/1> SW3=<0/1> CV=<0/1/2> NB=<2hex> TH=<2hex>\r\n
 //
 //   ID  = uicfgcs520 读回的 sensor ID（应为 9E4B）
 //   OK  = ID 校验通过
@@ -30,7 +30,7 @@ module status_report #(
     input  wire        I_ddr_rdy,
     input  wire        I_sw4,
     input  wire        I_sw3,
-    input  wire        I_cv_on,
+    input  wire [1:0]  I_cv_mode,           // 0=关 1=真实画面+框 2=掩膜+框
     input  wire [5:0]  I_blob_cnt,
     input  wire [7:0]  I_bin_thr,
     input  wire [15:0] I_count,             // 累计钢珠计数(cv_top.O_count)
@@ -96,7 +96,7 @@ module status_report #(
     assign ln[45] = "C";
     assign ln[46] = "V";
     assign ln[47] = "=";
-    assign ln[48] = I_cv_on        ? "1" : "0";
+    assign ln[48] = hx(I_cv_mode);
     assign ln[49] = " ";
     assign ln[50] = "N";
     assign ln[51] = "B";

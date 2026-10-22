@@ -119,8 +119,10 @@ def main():
     ap.add_argument("miss_k", type=int, nargs="?", default=35)
     ap.add_argument("dark", type=int, nargs="?", default=100)
     ap.add_argument("--amin", type=int, default=14)
-    ap.add_argument("--mask", action="store_true", help="输出内部 80x45 块掩膜（白=暗块，黑=背景）")
+    ap.add_argument("--mask", action="store_true", help="输出内部 80x45 块掩膜（白=暗块，黑=背景，无叠加）")
+    ap.add_argument("--mask-osd", action="store_true", help="输出块掩膜并叠加绿框/白色 ID（对应 K2 状态 2）")
     args = ap.parse_args()
+    mask_view = args.mask or args.mask_osd
     global AMIN
     AMIN = args.amin
     wide = args.dark >= WIDE_THR
@@ -128,7 +130,7 @@ def main():
     cap = cv2.VideoCapture(args.video)
     W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)); H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS) or 60
-    if args.mask:
+    if mask_view:
         if not args.out.lower().endswith(".mkv"):
             raise SystemExit("mask 视图使用 FFV1 无损编码，输出文件请用 .mkv")
         vw = cv2.VideoWriter(args.out, cv2.VideoWriter_fourcc(*"FFV1"), fps, (W, H))
@@ -146,7 +148,7 @@ def main():
         bmf = cv2.resize(((Rf >> 2) + (Gf >> 1) + (Bf >> 2)).astype(np.float32), (80, 45), interpolation=cv2.INTER_AREA)
         bg = hist[-BG_DELAY] if len(hist) >= BG_DELAY else None
         dets = detect(fr, args.dark, bg)
-        if args.mask:
+        if mask_view:
             if bg is None:
                 m = np.zeros((45, 80), np.uint8)
             else:
@@ -204,7 +206,7 @@ def main():
                     recent.append((nf, t[0], t[1]))
                     recent = recent[-8:]
         tracks = [t for t in tracks if t[4] <= args.miss_k]
-        if not args.mask:
+        if (not args.mask) or args.mask_osd:
             for t in tracks:
                 if t[4] > REC: continue          # 纯预测滑行的不画
                 b = t[6]
