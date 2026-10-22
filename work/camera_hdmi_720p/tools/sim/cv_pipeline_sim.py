@@ -119,6 +119,7 @@ def main():
     ap.add_argument("miss_k", type=int, nargs="?", default=35)
     ap.add_argument("dark", type=int, nargs="?", default=100)
     ap.add_argument("--amin", type=int, default=14)
+    ap.add_argument("--mask", action="store_true", help="输出内部 80x45 块掩膜（白=暗块，黑=背景）")
     args = ap.parse_args()
     global AMIN
     AMIN = args.amin
@@ -127,7 +128,12 @@ def main():
     cap = cv2.VideoCapture(args.video)
     W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)); H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS) or 60
-    vw = cv2.VideoWriter(args.out, cv2.VideoWriter_fourcc(*"mp4v"), fps, (W, H))
+    if args.mask:
+        if not args.out.lower().endswith(".mkv"):
+            raise SystemExit("mask 视图使用 FFV1 无损编码，输出文件请用 .mkv")
+        vw = cv2.VideoWriter(args.out, cv2.VideoWriter_fourcc(*"FFV1"), fps, (W, H))
+    else:
+        vw = cv2.VideoWriter(args.out, cv2.VideoWriter_fourcc(*"mp4v"), fps, (W, H))
 
     tracks = []   # [cx,cy,vx,vy,missed,hits,box,counted,id]
     next_id = 0; count = 0; nf = 0; events = []; recent = []
@@ -140,6 +146,15 @@ def main():
         bmf = cv2.resize(((Rf >> 2) + (Gf >> 1) + (Bf >> 2)).astype(np.float32), (80, 45), interpolation=cv2.INTER_AREA)
         bg = hist[-BG_DELAY] if len(hist) >= BG_DELAY else None
         dets = detect(fr, args.dark, bg)
+        if args.mask:
+            if bg is None:
+                m = np.zeros((45, 80), np.uint8)
+            else:
+                m = ((bmf < args.dark) & (bmf < bg - CB_DELTA)).astype(np.uint8)
+            out_fr = cv2.cvtColor(cv2.resize(m * 255, (W, H), interpolation=cv2.INTER_NEAREST),
+                                  cv2.COLOR_GRAY2BGR)
+        else:
+            out_fr = fr
         hist.append(bmf)
         if len(hist) > BG_DELAY: hist.pop(0)
         taken = [False] * len(dets); assigns = [-1] * len(tracks)
@@ -189,13 +204,14 @@ def main():
                     recent.append((nf, t[0], t[1]))
                     recent = recent[-8:]
         tracks = [t for t in tracks if t[4] <= args.miss_k]
-        for t in tracks:
-            if t[4] > REC: continue          # 纯预测滑行的不画
-            b = t[6]
-            cv2.rectangle(fr, (int(b[0]), int(b[1])), (int(b[2]), int(b[3])), (0, 255, 0), 2)
-            # 与 bit 的叠加一致：白色 5x7 ID 数字画在框左上角，不使用调试文字
-            draw_id(fr, int(b[0]), int(b[1]), t[8] & 0xF)
-        vw.write(fr)
+        if not args.mask:
+            for t in tracks:
+                if t[4] > REC: continue          # 纯预测滑行的不画
+                b = t[6]
+                cv2.rectangle(out_fr, (int(b[0]), int(b[1])), (int(b[2]), int(b[3])), (0, 255, 0), 2)
+                # 与 bit 的叠加一致：白色 5x7 ID 数字画在框左上角，不使用调试文字
+                draw_id(out_fr, int(b[0]), int(b[1]), t[8] & 0xF)
+        vw.write(out_fr)
     vw.release()
     print("video=%s frames=%d GATE=%d MISS_K=%d DARK=%d -> COUNT=%d ids=%d"
           % (args.video, nf, args.gate, args.miss_k, args.dark, count, next_id))

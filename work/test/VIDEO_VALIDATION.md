@@ -127,6 +127,22 @@
   当前短轨迹规则只抑制命中≤3；若现场核对为两颗，这一段成立，若为一颗则需再收紧。
 - 结果视频（未入库，桌面）：`钢珠14_计数结果.mp4`。
 
+## 内部二值视频流
+
+`cv_pipeline_sim.py --mask` 把 `cv_blkdet` 的 **80×45 块掩膜**（白 = 暗块，黑 = 背景）放大到
+1280×720（每块 16×16 像素），用 FFV1 无损编码写成 `.mkv`，像素只有 0/255：
+
+```bash
+python work/camera_hdmi_720p/tools/sim/cv_pipeline_sim.py 钢珠9.mp4 钢珠9_二值识别.mkv 320 35 100 --mask
+python work/camera_hdmi_720p/tools/sim/cv_pipeline_sim.py 钢珠10.mp4 钢珠10_二值识别.mkv 320 35 160 --mask
+```
+
+- 结果（桌面）：`钢珠9_二值识别.mkv` … `钢珠14_二值识别.mkv`，计数与 `_计数结果.mp4` 相同。
+- 这张图是检测器（`cv_blkdet`）交给 CCL 的输入掩膜，不含绿框/ID/计数叠加。
+- 比特流的 `MASK_VIEW=1` 显示的是像素级 `w_mask`；`MASK_SRC=3` 下 `w_mask` 恒为 0，
+  所以上板目前看不到这张块掩膜。要在板上直接看，需要给 `cv_blkdet` 增加按显示像素块坐标
+  读出 `blk_mask` 的输出，并在 `cv_top` 的 `MASK_VIEW` 分支使用它。
+
 ## 本轮修复
 
 1. **计数规则**：删除"轨迹消亡补计"，只保留绿框轨迹预测出画面时 +1
