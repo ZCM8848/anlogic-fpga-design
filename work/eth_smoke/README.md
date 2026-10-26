@@ -3,7 +3,9 @@
 用**最小、可验证**的设计证明 RGMII TX 通路：`FPGA → YT8511 → 网线 → PC`。
 每 200ms 发一个 128 字节的 ARP 请求帧。
 
-## 验证状态：✅ 已通过（2026-10-27）
+## 验证状态：✅ TX + RX 均已通过（2026-10-27）
+
+### TX（FPGA → PC）
 
 ```
 tshark 抓包结果：
@@ -19,6 +21,22 @@ tshark 抓包结果：
 PC 端 arp -a：
   192.168.1.200   01-23-45-67-89-ab   动态
 ```
+
+### RX（PC → FPGA）
+
+PC 每 200ms 回一个 ARP reply（`a8:2b:dd:29:a4:ce → 01:23:45:67:89:ab`），
+FPGA 解析后通过 COM4 每秒打印：
+
+```
+N=00C7 A=0032 M=A82BDD29A4CE
+N=00D2 A=0037 M=A82BDD29A4CE
+N=00D9 A=003C M=A82BDD29A4CE
+```
+
+- `N` = 收到的帧总数（含 PC 的 mDNS/LLMNR 广播）
+- `A` = ARP reply 命中次数（每 5 秒 +25，即 5 帧/秒，与 200ms 请求严格对应）
+- `M` = 学到的对端 MAC = `A8:2B:DD:29:A4:CE` ✅ 与 Wireshark 抓到的一致
+
 
 
 ## 为什么另建工程
@@ -92,9 +110,53 @@ zlib.crc32(整帧 128 字节)     = 0x2144DF1C  ← 以太网 CRC 余数魔数�
 | LED | 引脚 | 含义 |
 |-----|------|------|
 | LED1 | D10 | PLL lock（应常亮） |
-| LED2 | E10 | frame_sent（发过帧后常亮） |
-| LED3 | C6  | **RX_CLK 存在**：PHY 送来 125MHz 则常亮；不亮 = V3 没收到 RX_CLK |
+| LED2 | E10 | frame_sent（TX 发过帧后常亮） |
+| LED3 | C6  | **RX alive**：收到过至少一帧就常亮 |
 | LED4 | D6  | 50MHz 心跳（约 0.75Hz） |
+
+## RX 通路
+
+```
+I_rgmii_rxc (V3,125MHz)
+   │
+   ├─ rgmii_rx_phy   5× PH1P_LOGIC_HD_IDDR  (q0=上升沿=低 nibble/RX_DV)
+   │                 → gmii_rxd[7:0] / gmii_rx_dv / gmii_rx_er
+   │
+   ├─ eth_rx_mac     SFD 自适应对齐（跳 0x55 / 跳 0xD5 / PHY 已剥 SFD 直接当 DA）
+   │                 → frame_start / frame_data / frame_idx / frame_byte_v / frame_end / frame_len
+   │
+   ├─ arp_rx         校验 EtherType=0x0806、opcode=2、target IP=192.168.1.200
+   │                 → peer_mac / peer_ip / arp_cnt / rx_frame_cnt
+   │
+   └─ CDC            MAC 用 toggle 握手（静态数据），计数器 2FF 同步
+                     → 50MHz 域
+                          │
+                          └─ dbg_uart_report + uart_tx (H1, 115200)
+```
+
+### 串口协议
+
+每秒一行，30 字符，`115200 8N1`：
+
+```
+N=XXXX A=XXXX M=XXXXXXXXXXXX\r\n
+  N = 收帧总数(hex)   A = ARP reply 命中数(hex)   M = 对端 MAC(hex)
+```
+
+PC 端：
+
+```powershell
+python work\eth_smoke\host\rx_monitor.py COM4
+```
+
+### 已知限制
+
+- **不做 FCS 校验**：组合 CRC32 在 125MHz 下单字节更新时序偏紧，联调阶段用
+  「EtherType + opcode + target IP」三重自洽代替。后续做 UDP 时需要补
+  （可考虑 4 bit/拍 或流水化实现）。
+- 未做 DA 过滤（谁的帧都收），也未做 MAC 缓存（每帧都重新解析）。
+- 计数器跨时钟域是 2FF 直采，理论上有 ±1 的读数抖动（调试用足够）。
+
 
 ## 构建
 
@@ -119,5 +181,5 @@ cd ..\phy_1
 | MDC | V9 | MDIO | U10 |
 | RESET_N | V8 | TXCLK | U9 |
 | RXD0..3 | N9/T7/T8/T9 | TXD0..3 | R11/P11/T10/R12 |
-| TXEN | R10 | RXC_DV | N8 |
-| RX_CLK | **V3**（`IO_BE17P_22,GCLKIOT1`；docx 漏列，原理图 page2 球名↔网络名对齐确认。**旧工程写的 V2 是 GPIOA0，错的**） | | |
+| TXEN | R10 | RXC_DV (RX_DV) | N8 |
+| RX_CLK | **V3**（`IO_BE17P_22,GCLKIOT1`；docx 漏列，原理图 page2 球名↔网络名对齐确认。**旧工程写的 V2 是 GPIOA0，错的**） | UART TX | **H1** |

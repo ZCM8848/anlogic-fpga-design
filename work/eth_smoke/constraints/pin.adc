@@ -11,6 +11,9 @@ set_pin_assignment { O_led[1] }       { LOCATION = E10; IOSTANDARD = LVCMOS33; D
 set_pin_assignment { O_led[2] }       { LOCATION = C6;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; }
 set_pin_assignment { O_led[3] }       { LOCATION = D6;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; }
 
+# ---- USB-UART（RX 状态打印，115200 8N1）----
+set_pin_assignment { O_uart_tx }      { LOCATION = H1;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+
 # ---- RGMII TX（FPGA → PHY）----
 # GTX_CLK 加 OUTDEL=2 输出延迟（TD 合法范围 1-4）：
 #   YT8511 datasheet RGMII 时序要求 TskewR(接收端 data→clock skew) ≥ 1ns，
