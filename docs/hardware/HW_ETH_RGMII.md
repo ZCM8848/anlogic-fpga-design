@@ -204,6 +204,7 @@ zlib.crc32(全128字节) = 0x2144DF1C  ✅
 | 上传/构建 | `td_commands_prompt.exe D:/Anlogic/.../DefaultFlow.tcl`，先 `syn_1` 后 `phy_1`；`phy_1` 需要 `parent ../syn_1` 和同一份 `*.prj` |
 | SDC | 不加 SDC 时 TD 只会派生一个 50 MHz 时钟，125 MHz 逻辑不会被真正约束；加 `create_generated_clock` 后才可信 |
 | 时钟报告 | `report_clock_utilization` 的 waveform（如 `{2.000 6.000}`）只反映**约束/推导**，不代表 PLL 真的在振 |
+| **逻辑被静默优化** | 综合器会顺着「常量传播」把整条上游链路删掉。实测案例：UART 打印的握手写错 → `ci` 永不前进 → `msg_char` 变成常量 → `lat_*` 无用 → ARP 解析器 → RX MAC → IDDR 全被删。**判断方法：看 timing report 里的时钟 fanout**（那次 `rgmii_rxc` fanout = **0**，而正常是 158），或看 `#reg`/`#lut6` 数量是否异常变小 |
 
 ---
 
@@ -235,18 +236,25 @@ zlib.crc32(全128字节) = 0x2144DF1C  ✅
 ## 6. 已验证的最小实现
 
 `work/eth_smoke/`：
-- `rtl/eth_top.v`：PLL（125 MHz）+ PHY 复位 + ARP 帧发生器 + RGMII TX + LED 诊断
+- `rtl/eth_top.v`：PLL（125 MHz）+ PHY 复位 + ARP 帧发生器 + RGMII TX + **RGMII RX + ARP 解析 + UART 状态**
 - `rtl/rgmii_tx_phy.v`：HD_ODDR 映射（d0=上升沿）+ GTX_CLK（0° + OUTDEL）
-- `rtl/arp_frame_tx.v`：128 字节固定帧（自描述填充 + 预计算 FCS）
+- `rtl/rgmii_rx_phy.v`：5× HD_IDDR，`q0`=上升沿（低 nibble / RX_DV）
+- `rtl/eth_rx_mac.v`：SFD 自适应对齐 + 字节流
+- `rtl/arp_rx.v`：解析 ARP reply，学习对端 MAC/IP
+- `rtl/dbg_uart_report.v` + `rtl/uart_tx.v`：每秒打印 `N=xxxx A=xxxx M=xxxxxxxxxxxx`
 - `constraints/pin.adc` + `constraints/timing.sdc`
 
-**实测结果**：200 ms 一帧、124 字节、`0x0806`、PC `arp -a` 正确出现
-`192.168.1.200 → 01-23-45-67-89-ab`。
+**实测结果**：
+- TX：200 ms 一帧、124 字节、`0x0806`，PC `arp -a` 正确出现 `192.168.1.200 → 01-23-45-67-89-ab`
+- RX：`A` 每 5 秒 +25（5 帧/秒，与 200 ms 请求严格对应），学到的 MAC = `A8:2B:DD:29:A4:CE`（与 Wireshark 一致）
 
 ### 后续要做的事
 
-1. **RX 通路**：`PH1P_LOGIC_HD_IDDR`，`q0`=上升沿（低 nibble / RX_DV）、`q1`=下降沿（高 nibble / RX_DV^RX_ER）。
-2. **真正的 CRC-32 生成器**（组合逻辑，不用查找表）。
+1. **FCS 校验**：RX 目前没做 CRC（组合 CRC32 单字节更新在 125 MHz 时序偏紧），
+   做 UDP 时补；可 4 bit/拍 或加流水。
+2. **真正的 MAC 层**：DA 过滤、MAC 缓存、ARP 请求/应答自动处理。
 3. **MAC 地址**：现在用的 `01:23:45:67:89:AB` 的 bit0 = 1，是**组播地址**（Wireshark 会警告）。
    正式设计建议 `02:00:00:00:00:01` 这类本地管理单播地址。
 4. **UDP 打包**：视频每包 ~1400 字节，需要序号/帧号用于 PC 端丢帧检测。
+5. **UART 打印的握手坑**（已踩）：`valid` 必须保持到 `ready` 拉低之后再撤销，
+   不能在 always 块开头无条件清零——否则字符指针不前进，还会连带把上游逻辑优化掉。
