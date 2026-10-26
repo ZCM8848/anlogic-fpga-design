@@ -16,7 +16,8 @@
 // RGMII TX：GMII 8-bit @ 125M → RGMII 4-bit DDR
 // =====================================================================
 module rgmii_tx_ddr (
-    input  wire        clk_125m,       // GMII 域 125 MHz 时钟
+    input  wire        clk_125m,       // GMII 域 125 MHz 时钟（0 度，驱动 TX_DATA）
+    input  wire        clk_125m_90,    // 125 MHz 90 度相移时钟（驱动 GTX_CLK，RGMII TX delay ~2ns）
     input  wire [7:0]  gmii_txd,       // GMII 发送数据
     input  wire        gmii_tx_en,     // GMII 发送使能
     input  wire        gmii_tx_er,     // GMII 发送错误
@@ -24,10 +25,10 @@ module rgmii_tx_ddr (
     output wire [3:0]  rgmii_txd,      // RGMII TXD（4-bit DDR）
     output wire        rgmii_tx_ctl    // RGMII TX_CTL（上升沿=EN，下降沿=ER）
 );
-    // GTX_CLK：用 HD_ODDR 把 d1=1/d0=0 双沿打出，得到与数据 DDR 同相对齐的 125 MHz 时钟
+    // GTX_CLK：d1=1(上升沿), d0=0(下降沿) → 先高后低标准 50% 方波
     PH1P_LOGIC_HD_ODDR u_oddr_txc (
-        .q    ( rgmii_txc  ),
-        .clk  ( clk_125m   ),
+        .q    ( rgmii_txc    ),
+        .clk  ( clk_125m_90  ),
         .d1   ( 1'b1       ),     // 上升沿输出 1
         .d0   ( 1'b0       ),     // 下降沿输出 0
         .rst  ( 1'b0        )

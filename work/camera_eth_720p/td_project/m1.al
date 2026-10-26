@@ -27,7 +27,7 @@
                     <Attr Name="CompileOrder" Val="2"/>
                 </FileInfo>
             </File>
-            <File Path="../rtl/eth/mdio_ctrl.v">
+            <File Path="../rtl/eth/arp_tx.v">
                 <FileInfo>
                     <Attr Name="UsedInSyn" Val="true"/>
                     <Attr Name="UsedInP&R" Val="true"/>
@@ -35,20 +35,12 @@
                     <Attr Name="CompileOrder" Val="3"/>
                 </FileInfo>
             </File>
-            <File Path="../rtl/common/uart_tx.v">
+            <File Path="../rtl/eth/rgmii_ddr.v">
                 <FileInfo>
                     <Attr Name="UsedInSyn" Val="true"/>
                     <Attr Name="UsedInP&R" Val="true"/>
                     <Attr Name="BelongTo" Val="design_1"/>
                     <Attr Name="CompileOrder" Val="4"/>
-                </FileInfo>
-            </File>
-            <File Path="../rtl/eth/mdio_status_print.v">
-                <FileInfo>
-                    <Attr Name="UsedInSyn" Val="true"/>
-                    <Attr Name="UsedInP&R" Val="true"/>
-                    <Attr Name="BelongTo" Val="design_1"/>
-                    <Attr Name="CompileOrder" Val="5"/>
                 </FileInfo>
             </File>
         </Verilog>
@@ -62,6 +54,16 @@
                 </FileInfo>
             </File>
         </ADC_FILE>
+        <IP_FILE>
+            <File Path="../ip/pll/PLL.xml">
+                <FileInfo>
+                    <Attr Name="UsedInSyn" Val="true"/>
+                    <Attr Name="UsedInP&R" Val="true"/>
+                    <Attr Name="BelongTo" Val="design_1"/>
+                    <Attr Name="CompileOrder" Val="5"/>
+                </FileInfo>
+            </File>
+        </IP_FILE>
     </Source_Files>
     <FileSets>
         <FileSet Name="design_1" Type="DesignFiles">
