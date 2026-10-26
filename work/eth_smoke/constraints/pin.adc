@@ -1,0 +1,37 @@
+# eth_smoke — 引脚约束（与 camera_eth_720p/constraints/pin.adc 同一块板）
+# 依据：ref/HX1P35A_Contest_202606/9_康芯开发板使用手册及实验平台/HX1P35B开发板引脚分配汇总.docx
+#       「十五、以太网接口」+ 原理图 page2/page9（RX_CLK 在 docx 里漏列，原理图确认为 V2）
+
+# ---- 系统时钟（板载 50MHz 有源晶振）----
+set_pin_assignment { I_sys_clk }      { LOCATION = C4;  IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
+
+# ---- 4 个板载 LED ----
+set_pin_assignment { O_led[0] }       { LOCATION = D10; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; }
+set_pin_assignment { O_led[1] }       { LOCATION = E10; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; }
+set_pin_assignment { O_led[2] }       { LOCATION = C6;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; }
+set_pin_assignment { O_led[3] }       { LOCATION = D6;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; }
+
+# ---- RGMII TX（FPGA → PHY）----
+# GTX_CLK 加 OUTDEL=2 输出延迟（TD 合法范围 1-4）：
+#   YT8511 datasheet RGMII 时序要求 TskewR(接收端 data→clock skew) ≥ 1ns，
+#   PHY 内部 Tx_clk_delay_sel 默认只有 0.75~1.25ns，0° 时钟下处于临界，
+#   会导致 PHY 采样落到数据跳变沿上（现象：帧内字节重复/回卷）。
+set_pin_assignment { O_rgmii_txc }    { LOCATION = U9;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; OUTDEL = 2; }
+set_pin_assignment { O_rgmii_tx_ctl } { LOCATION = R10; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment { O_rgmii_txd[0] } { LOCATION = R11; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment { O_rgmii_txd[1] } { LOCATION = P11; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment { O_rgmii_txd[2] } { LOCATION = T10; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment { O_rgmii_txd[3] } { LOCATION = R12; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+
+# ---- RGMII RX（PHY → FPGA）----
+set_pin_assignment { I_rgmii_rxc }    { LOCATION = V3;  IOSTANDARD = LVCMOS33; PULLTYPE = NONE; }
+set_pin_assignment { I_rgmii_rx_ctl } { LOCATION = N8;  IOSTANDARD = LVCMOS33; PULLTYPE = NONE; }
+set_pin_assignment { I_rgmii_rxd[0] } { LOCATION = N9;  IOSTANDARD = LVCMOS33; PULLTYPE = NONE; }
+set_pin_assignment { I_rgmii_rxd[1] } { LOCATION = T7;  IOSTANDARD = LVCMOS33; PULLTYPE = NONE; }
+set_pin_assignment { I_rgmii_rxd[2] } { LOCATION = T8;  IOSTANDARD = LVCMOS33; PULLTYPE = NONE; }
+set_pin_assignment { I_rgmii_rxd[3] } { LOCATION = T9;  IOSTANDARD = LVCMOS33; PULLTYPE = NONE; }
+
+# ---- 管理 / 控制 ----
+set_pin_assignment { O_rgmii_mdc }    { LOCATION = V9;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment { IO_rgmii_mdio }  { LOCATION = U10; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
+set_pin_assignment { O_phy_rst_n }    { LOCATION = V8;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
