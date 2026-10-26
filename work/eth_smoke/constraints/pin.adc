@@ -1,6 +1,6 @@
 # eth_smoke — 引脚约束（与 camera_eth_720p/constraints/pin.adc 同一块板）
 # 依据：ref/HX1P35A_Contest_202606/9_康芯开发板使用手册及实验平台/HX1P35B开发板引脚分配汇总.docx
-#       「十五、以太网接口」+ 原理图 page2/page9（RX_CLK 在 docx 里漏列，原理图确认为 V2）
+#       「十五、以太网接口」+ 原理图 page2/page9（RX_CLK 在 docx 里漏列，实测确认为 V3，不是 V2）
 
 # ---- 系统时钟（板载 50MHz 有源晶振）----
 set_pin_assignment { I_sys_clk }      { LOCATION = C4;  IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }

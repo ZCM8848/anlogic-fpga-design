@@ -106,9 +106,24 @@
 | QSPI(N25Q128) CS/SDO/WP/HOLD/SCLK/SDI | D14 / D16 / C16 / A13 / N6 / E13 |
 | SPI(GD25Q128) CSN/DQ1/DQ2/DQ3/DQ0/GCLK | R8 / U12 / V11 / U11 / V12 / R15 |
 | TF: DAT3/DAT2/DAT1/DAT0/CLK/CMD | B12 / A12 / D8 / E8 / A7 / A8 |
-| 以太网: MDC0/MDIO0/RESET_N/TXCLK | V9 / U10 / V8 / U9 |
-| 以太网: RXD0~3 | N9 / T7 / T8 / T9 |
-| 以太网: TXD0~3 / TXEN / RXC_DV | R11 / P11 / T10 / R12 / R10 / N8 |
+### 以太网（YT8511，RGMII）✅ 已上板验证（2026-10-27，见 `HW_ETH_RGMII.md`）
+
+| 功能 | 信号名 | FPGA 引脚 |
+|---|---|---|
+| MDC（管理时钟） | `ETHPHY_MDC` | **V9** |
+| MDIO（管理数据，双向） | `ETHPHY_MDIO` | **U10** |
+| PHY 复位（低有效） | `ETHPHY_RESET_N` | **V8** |
+| GTX_CLK（125 MHz，FPGA→PHY） | `ETHPHY_TX_CLK` | **U9** |
+| TX_EN | `ETHPHY_TX_EN` | **R10** |
+| TXD0 / TXD1 / TXD2 / TXD3 | `ETHPHY_TXD0..3` | **R11 / P11 / T10 / R12** |
+| RX_CLK（125 MHz，PHY→FPGA） | `ETHPHY_RX_CLK` | **V3**（`IO_BE17P_22,GCLKIOT1`） |
+| RX_DV | `ETHPHY_RX_DV` | **N8** |
+| RXD0 / RXD1 / RXD2 / RXD3 | `ETHPHY_RXD0..3` | **N9 / T7 / T8 / T9** |
+
+> ⚠️ **板手册《HX1P35B开发板引脚分配汇总》有误**：它把 RX 侧写成单根 `RXC_DV = N8`，
+> 且**完全漏掉 RX_CLK**。实测 RX_CLK 在 **V3**（不是 V2！V2 是 `GPIOA0`）。
+> 核对方法：原理图 page2 的球名与网络名在图中是逐行对齐的，文字坐标必须按
+> 「网络名 x = 球名 x + ~2.1」的固定偏移配对，不能靠直觉或纯文本排序。
 
 ### 40 芯扩展口
 

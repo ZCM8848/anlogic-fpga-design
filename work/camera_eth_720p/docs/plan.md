@@ -52,14 +52,33 @@ SC520CS ─MIPI 2-lane 828Mbps─→ D-PHY RX(IP) ─→ lane_deint ─→ csi2_
 
 ### M1 — PHY 起来 + RGMII MAC 自环（基础砖）
 
+> ## ✅ M1 已完成（2026-10-27），但验收标准要改
+>
+> **MDIO 是死路，不要做**：本板 YT8511 靠上电 strap + 自协商工作，
+> 实测 MDIO 读不到 ACK（PHYAD 0..31、MDC 1/2.5 MHz、两种极性全试过）。
+> 厂商例程同样不用 MDIO。**M1 验收改为「PC 端能抓到正确的 ARP 请求」**。
+>
+> 已跑通的实现见 **`work/eth_smoke/`**（独立工程，PC `arp -a` 已能正确解析）。
+> 关键结论全部记录在 **`docs/hardware/HW_ETH_RGMII.md`**，要点：
+>
+> | 项 | 结论 |
+> |---|---|
+> | PLL 125 MHz | `REFCLK_DIV=2, FBCLK_DIV=5, CLKC0_DIV=12`（**只改 CLKC0_DIV 无效**） |
+> | ODDR 语义 | `d0`=上升沿、`d1`=下降沿；`rst` 高有效 |
+> | TX_CTL | 下降沿发 `TX_EN XOR TX_ER` |
+> | GTX_CLK | 0° + `OUTDEL=2`（PHY 内部延迟只有 0.75~1.25ns，`TskewR` 要求 ≥1ns） |
+> | 前导码 | 正好 `7×0x55 + 0xD5`（注意寄存器一拍延迟） |
+> | RX_CLK | **V3**（不是 V2） |
+> | FCS | 固定帧预计算写死；动态帧用组合逻辑，**不要用 `initial` 初始化查找表** |
+
 | 模块 | 文件 | 资源估算 | 关键技术点 |
 |---|---|---|---|
-| `mdio_ctrl.v` | `rtl/eth/mdio_ctrl.v` | ~200 LUT, 1 BRAM | 25 MHz MDC；状态机：复位→等 5ms→读 0x1/0x2 ID→写 0x9=0x0300（1000M 全双工+RGMII TX delay）→轮询 0x1 BMSR link_up |
+| ~~`mdio_ctrl.v`~~ | ~~`rtl/eth/mdio_ctrl.v`~~ | — | ❌ **不需要**（PHY 靠 strap，MDIO 实测无 ACK） |
 | `rgmii_mac.v`（TX+RX） | `rtl/eth/rgmii_mac.v` | ~2000 LUT, 4 BRAM | TX：GMII 8bit@125M → 4bit DDR；插 preamble/SFD/IFG；CRC32。RX：4bit DDR → GMII 8bit，仅 ARP/ICMP 路径要，可简化 |
-| `rgmii_iddr_oddrr.v`（或 PLL 相移方案） | `rtl/eth/rgmii_ddr.v` | — | ⚠️ **必须先验证 PH1P35 是否有 IDDR/ODDR 原语**；若无，用 PLL 90°/270° 相移时钟在 250 MHz 域双拍采样实现 DDR |
+| `rgmii_iddr_oddrr.v`（或 PLL 相移方案） | `rtl/eth/rgmii_ddr.v` | — | ✅ 已确认 PH1P35 有 HD_ODDR/HD_IDDR；**必须用 HD 变体**（普通变体会 SYN-8228） |
 | `phy_rst.v` | `rtl/eth/phy_rst.v` | ~50 LUT | RESET_N 上电序列，≥1ms 低 + 等自协商 |
 
-**M1 验收**：MDIO 能读出 PHY ID（YT8511 OUI=0x10d，PHY ID=0x878）；自环 MAC 收到自己发的包；PHY 链路灯亮。
+**M1 验收（修正后）**：PC 端 `arp -a` 出现 FPGA 的 IP/MAC，Wireshark 帧逐字节正确。✅ 已达成。
 
 ### M2 — ARP + ICMP + 最小 UDP TX（能让 ping 通 + 发测试包）
 

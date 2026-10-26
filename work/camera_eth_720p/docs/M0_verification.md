@@ -5,6 +5,28 @@
 > 目的：在动工实施 M1 之前，把 3 个硬约束落实，避免方案返工。
 > 风险清单对应 `docs/plan.md §3`。
 
+## ⚠️ 后续更正（2026-10-27，M1 实测后回填，以本节为准）
+
+本文档写于动工前，其中 **RX_CLK 引脚判为 V2 是错的**。上板调试（`work/eth_smoke`，已跑通）
+确认：
+
+| 项 | 本文档原结论 | **实测正确值** |
+|---|---|---|
+| RX_CLK | V2 | **V3**（`IO_BE17P_22,GCLKIOT1`，专用时钟输入） |
+| V2 | ETHPHY_RX_CLK | **GPIOA0**（不是以太网信号） |
+| RXC_DV = N8 | RX_DV | ✅ 正确（N8 = RX_DV） |
+| RGMII 引脚 bank | HDIO | ✅ 正确 |
+| PLL C0 | 100 MHz | 需按 `C0=(FIN/REFCLK_DIV)×FBCLK_DIV` 重算，本项目要 125 MHz |
+
+原因：Altium 导出的 PDF `rotation=90`，文字坐标不能按 y 排序直观配对。
+可靠方法是利用固定偏移 **网络名 x ≈ 球名 x + 2.1** 逐行匹配：
+`V3(561.8) → ETHPHY_RX_CLK(564.4)`、`V2(566.9) → GPIOA0(569.0)`。
+详见 `docs/hardware/HW_ETH_RGMII.md`。
+
+下面正文保留原始记录（未逐条改写），涉及 V2 的地方请以本节为准。
+
+---
+
 ## 核实项 1 — PH1P35 是否有 IDDR/ODDR 原语
 
 **结论：✅ 具备原生 IDDR/ODDR 原语，无需 PLL 相移 hack。**
@@ -86,7 +108,7 @@ endmodule
 | TXD[1] | P11 | LVCMOS33 | HDIO | PH1P_LOGIC_HD_ODDR | docx §15 |
 | TXD[2] | T10 | LVCMOS33 | HDIO | PH1P_LOGIC_HD_ODDR | docx §15 |
 | TXD[3] | R12 | LVCMOS33 | HDIO | PH1P_LOGIC_HD_ODDR | docx §15 |
-| **RX_CLK** | **V2** | LVCMOS33 | HDIO（推断） | （作为时钟输入，不需 ODDR） | ⚠️ docx 漏列，原理图 P01_FPGA + P09_ETHERNET 核实 |
+| **RX_CLK** | **V3** | LVCMOS33 | HDIO | （作为时钟输入，不需 ODDR） | ⚠️ docx 漏列；M1 实测确认 V3（V2 是 GPIOA0） |
 | RX_CTL (RX_DV) | N8 | LVCMOS33 | HDIO | PH1P_LOGIC_HD_IDDR | docx §15 |
 | RXD[0] | N9 | LVCMOS33 | HDIO | PH1P_LOGIC_HD_IDDR | docx §15 |
 | RXD[1] | T7 | LVCMOS33 | HDIO | PH1P_LOGIC_HD_IDDR | docx §15 |
@@ -100,11 +122,12 @@ endmodule
 - **YT8511 PHY 侧（page 9 P09_ETHERENT）**：pin 31 = `RX_CLK`，pin 30 = `RX_DV`，是 2 根独立 PHY 引脚，分别接 FPGA 网络名 `ETHPHY_RX_CLK` 与 `ETHPHY_RXC_DV`。
 - **FPGA 侧（page 2 P01_FPGA）位置对齐核实**：每个 FPGA 球名与其 ETHPHY 网络名有稳定的 ~2.6 单位 X 偏移规律（`ball_x ≈ net_x − 2.6`）。按此规律逐个验证：
   - V9↔MDC、U10↔MDIO、V8↔RESET_N、U9↔TX_CLK、N9↔RXD0、R11↔TXD0、T7↔RXD1、P11↔TXD1、T8↔RXD2、T10↔TXD2、T9↔RXD3、R12↔TXD3、R10↔TX_EN、N8↔RX_DV —— **14 个全部与 docx 表一致**
-  - **V2 ↔ ETHPHY_RX_CLK**（X 偏移 +2.5，方向相反但稳定；V2 在 FPGA 右侧，其余 14 个在左侧）—— **V2 是漏列的第 15 个以太网引脚**
+  - **V3 ↔ ETHPHY_RX_CLK**（M1 实测修正：偏移 +2.6；V2 实际是 GPIOA0）—— **V3 是漏列的第 15 个以太网引脚**
 
-→ **N8 是 RX_DV（数据有效），不是 RX_CLK**。这就是 TD 之前报"`N8 not clock-capable pad`"警告的根本原因——把数据信号当时钟用了。修正后用 V2 作 RX_CLK，警告应消失（待 syn 重跑结果回填）。
+→ **N8 是 RX_DV（数据有效），不是 RX_CLK**。这就是 TD 之前报"`N8 not clock-capable pad`"警告的根本原因——把数据信号当时钟用了。用 **V3** 作 RX_CLK 后警告消失、RX_CLK 正常。
 
-→ HW_PINMAP.md 把 V2 标为 "J2 GPIOA_0（扩展口）"，实际上板子把 V2 用于以太网 RX_CLK，J2 扩展口 pin 1 不可用。
+→ HW_PINMAP.md 把 V2 标为 "J2 GPIOA_0（扩展口）"，**这一点是对的** —— V2 确实不是以太网信号；
+  以太网 RX_CLK 在 **V3**（M1 实测修正）。
 
 ### 2.3 旁证（其他工程已用的 LVCMOS33 引脚）
 
@@ -116,7 +139,7 @@ endmodule
 - SW3/4：D11/E11（D/E 行）
 - UART：H1（H 行）
 
-V2 在现有 `camera_hdmi_720p/pin.adc` 中**未使用**，本子项目可独占。
+V2/V3 在现有 `camera_hdmi_720p/pin.adc` 中**均未使用**，本子项目可独占。
 
 ## 核实项 3 — TD 项目能否综合 + 布局 IDDR/ODDR + RGMII 引脚
 
@@ -126,7 +149,7 @@ V2 在现有 `camera_hdmi_720p/pin.adc` 中**未使用**，本子项目可独占
 
 ```
 work/camera_eth_720p/
-├── constraints/pin.adc              # 15 RGMII 引脚（含 V2=RX_CLK）+ 系统时钟 + LED + UART，全 LVCMOS33
+├── constraints/pin.adc              # 15 RGMII 引脚（含 V3=RX_CLK）+ 系统时钟 + LED + UART，全 LVCMOS33
 ├── td_project/
 │   ├── bank_check.al                # 最小 .al（无 IP，仅 RTL + pin.adc）
 │   ├── bank_check_top.v             # 顶层：5× HD_ODDR + 5× HD_IDDR 例化（覆盖全部 TXD/TXC/TX_CTL/RX_CLK/RX_DV/RXD）
@@ -177,7 +200,7 @@ Hold  WNS =   171 ps / TNS 0 / NUM_FEPS 0
 
 | Name | Direction | Location | IOStandard | IOType | PackReg |
 |---|---|---|---|---|---|
-| I_rgmii_rxc | INPUT | V2 | LVCMOS33 | HDIO | NONE（时钟输入） |
+| I_rgmii_rxc | INPUT | V3 | LVCMOS33 | HDIO | NONE（时钟输入） |
 | I_rgmii_rx_ctl | INPUT | N8 | LVCMOS33 | HDIO | DDRX1_OPPOSITE |
 | I_rgmii_rxd[0..3] | INPUT | N9/T7/T8/T9 | LVCMOS33 | HDIO | DDRX1_OPPOSITE |
 | O_rgmii_txc | OUTPUT | U9 | LVCMOS33 | HDIO | DDRX1 |
@@ -235,9 +258,9 @@ bgr = cv2.cvtColor(raw_10bit_packed_to_16bit, cv2.COLOR_BayerBG2BGR)
 | 风险 | 状态 | 备注 |
 |---|---|---|
 | #1 PH1P35 IDDR/ODDR | ✅ 已确认 | 原生原语齐备：`PH1P_LOGIC_HD_ODDR` / `PH1P_LOGIC_HD_IDDR` + `IDELAY/ODELAY` 延迟线 |
-| #2 RGMII 引脚 bank | ✅ 已确认 | 全部 15 个 RGMII 引脚（含 V2=RX_CLK）都在 **HDIO** 类型，LVCMOS33 全部可放置、可 bitgen |
+| #2 RGMII 引脚 bank | ✅ 已确认 | 全部 15 个 RGMII 引脚（含 V3=RX_CLK）都在 **HDIO** 类型，LVCMOS33 全部可放置、可 bitgen |
 | #3 RGMII TX clock-data skew | ✅ 缓解手段齐备 | PHY 内部 delay + 原生 `PH1P_LOGIC_DYNAMIC_HD_IDELAY/ODELAY` 双保险，M1 实施时再调 |
-| RXC_DV 引脚歧义 | ✅ 已彻底厘清 | **N8 = RX_DV**，**V2 = RX_CLK**（原理图 P09+P01 位置对齐核实；docx 漏列 V2） |
+| RXC_DV 引脚歧义 | ✅ 已彻底厘清 | **N8 = RX_DV**，**V3 = RX_CLK**（M1 实测确认；docx 把两根合并并漏列 RX_CLK） |
 | 上位机 Bayer 顺序 | ✅ 已确认 | SC520CS = BGGR；M4 用 `cv2.COLOR_BayerBG2BGR` |
 | 综合/布局/bitgen | ✅ 全通过 | syn→phy→bitgen 一气呵成，0 FEP，bit `bank_check.bit`（1.79 MB） |
 
@@ -248,7 +271,7 @@ bgr = cv2.cvtColor(raw_10bit_packed_to_16bit, cv2.COLOR_BayerBG2BGR)
    - RX：`PH1P_LOGIC_HD_IDDR #(.MODE("OPPOSITE_EDGE"))`（5 例：RX_CLK 解 DV + RXD[3:0]）
 2. **引脚分配锁定**（15 个 RGMII 引脚）：
    - `pin.adc` 已在 `work/camera_eth_720p/constraints/pin.adc` 中固化，**M1 起直接复用**
-3. **V2 是 RX_CLK 专用**：HW_PINMAP.md 把 V2 标 J2 扩展口 GPIOA_0，但板子已用于以太网 RX_CLK；J2 pin 1 不可作为用户扩展
+3. **V3 是 RX_CLK 专用**（`IO_BE17P_22,GCLKIOT1`）：M1 实测确认；V2 是 GPIOA0，不是以太网信号
 4. **N8 是 RX_DV 数据**，不要当 RX_CLK 用（否则触发 SYN-6019 clock-capable warning）
 
 ### M0 通过判据

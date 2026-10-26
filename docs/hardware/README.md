@@ -13,6 +13,7 @@
 | [`HW_SC520CS.md`](HW_SC520CS.md) | 摄像头：传感器参数/工作模式/时序/I²C/MIPI + **寄存器表** + 镜头 |
 | [`HW_PINMAP.md`](HW_PINMAP.md) | 引脚总表：FPGA 引脚 ↔ 板网络 ↔ 外设 ↔ 本项目用法 |
 | [`HW_CLOCKS_RESET.md`](HW_CLOCKS_RESET.md) | 时钟方案与复位策略（板源/PLL/各时钟域） |
+| [`HW_ETH_RGMII.md`](HW_ETH_RGMII.md) | **千兆以太网实测笔记**：YT8511/RGMII 引脚、PLL 频率公式、ODDR 语义、TX_CTL 编码、时序与踩坑清单 |
 
 ## 单一真相源（重要）
 

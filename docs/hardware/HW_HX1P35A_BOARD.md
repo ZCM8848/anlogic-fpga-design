@@ -225,17 +225,52 @@ SW6 拨上=数码管工作，拨下=双色 LED 工作。8 个数码管 + 8 组�
 
 ## 15. 千兆以太网（YT8511）
 
+PHY：**Motorcomm YT8511C/H**（U34，QFN40 5×5mm），25 MHz 晶振 Y1，网口 HR911130A（含变压器）。
+RGMII 接口，IO 电压 3.3 V（BANK22 的 VCCIO 由 VCC_3V3 供电）。
+
 | 信号 | FPGA | 信号 | FPGA |
 |---|---|---|---|
-| MDC0 | V9 | MDIO0 | U10 |
-| RESET_N | V8 | TXCLK | U9 |
+| MDC | V9 | MDIO | U10 |
+| RESET_N | V8 | TXCLK (GTX_CLK) | U9 |
 | RXD0 | N9 | TXD0 | R11 |
 | RXD1 | T7 | TXD1 | P11 |
 | RXD2 | T8 | TXD2 | T10 |
 | RXD3 | T9 | TXD3 | R12 |
-| TXEN | R10 | RXC_DV | N8 |
+| TXEN | R10 | RX_DV | N8 |
+| **RX_CLK** | **V3** | | |
 
-> 本项目把 R10（以太网 TXEN）**不用于以太网**，仅作为可选复位脚位记录；系统复位由 PLL lock 产生。
+> ⚠️ **板手册《HX1P35B开发板引脚分配汇总》此处有误**：它把 RX 侧合并写成一根 `RXC_DV = N8`，
+> 并且**漏掉了 RX_CLK**。原理图 page2 球名↔网络名逐行核对后确认：
+> **RX_CLK = V3（`IO_BE17P_22,GCLKIOT1`，专用时钟输入）**，**V2 是 `GPIOA0`，不是 RX_CLK**。
+> 早期文档按 V2 设计导致完全收不到 RX_CLK。
+>
+> 核对方法（原理图文字坐标不可直接按 y 排序，因为 PDF 页面 rotation=90）：
+> 同一行里 **网络名 x ≈ 球名 x + 2.1**，据此可把 `ETHPHY_*` 网络逐一配到球名。
+> 例：`U4(556.8)→GPIOB32(558.9)`、`V3(561.8)→ETHPHY_RX_CLK(564.4)`、`V2(566.9)→GPIOA0(569.0)`。
+
+> **R10 是真正的 RGMII TX_EN**，不是复位按键（lab 例程的 `pin.adc` 里 R10=I_rst_n、R11=O_screen_pwm 属于其它板型/复用，勿混用）。
+> 系统复位由 PLL lock 产生。
+
+> **TX 侧 4.7K 上拉到 VDDH**：R153/R154 在 TXD0/TXD1，R155 在 ETHPHY_TX_CLK。
+> 如果 FPGA 没驱动，GTX_CLK 会被拉高到 3.3 V；实测到 0 V 说明 FPGA 在主动拉低
+> （该脚 datasheet 标注内部 PD）。调试时这是判断"FPGA 到底有没有输出"的重要依据。
+
+### 15.1 RGMII 实测要点（详见 `HW_ETH_RGMII.md`）
+
+- 全部 15 根 RGMII 引脚都在 **HDIO bank**，必须用 `PH1P_LOGIC_HD_ODDR` / `PH1P_LOGIC_HD_IDDR`；
+  用 `PH1_LOGIC_ODDR` 会报 `SYN-8228 ... can't be mapped into HDIO`。
+- **Anlogic ODDR：`d0` = 上升沿数据，`d1` = 下降沿数据**（TD 原语模板 `ph1p_i_o.v` 原文：
+  `d0 // 1 bit posedge input data`，`d1 // 1 bit negedge input data`，`rst // Reset, high active`）。
+  RGMII 映射：`TXD` 的 `d0` = 低 nibble、`d1` = 高 nibble；
+  `TX_CTL` 的 `d0` = TX_EN、`d1` = **TX_EN XOR TX_ER**（不是 TX_ER 本身）。
+- **GTX_CLK 需要相对数据延迟**：YT8511 的 `TskewR`（接收端 data→clock skew）最小 **1 ns**，
+  而 PHY 内部 `Tx_clk_delay_sel`（EXT 0x0C bit[7:4]）默认只有 **0.75~1.25 ns**。
+  用 0° 时钟会处于临界 → PHY 采样踩在数据跳变沿 → 帧内字节重复/回卷。
+  解决：给 `O_rgmii_txc` 加 **`OUTDEL = 2`**（TD 的 OUTDEL 合法范围 1-4）。
+- **PHY 不响应 MDIO 也能工作**：YT8511 上电靠 strap 自协商，厂商例程也不用 MDIO。
+  本板实测 MDIO 读不到 ACK（PHYAD 0..31 全试过），但链路与收发正常，不必纠缠。
+- **前导码必须正好 `7×0x55 + 0xD5`**。用寄存器输出时注意一拍延迟：
+  在 `S_PRE` 里数到 5 就跳转、由 `S_SFD` 那拍补第 7 个 0x55，否则会多发一个 0x55。
 
 ## 16. DDR2 内存
 

@@ -25,8 +25,12 @@ set_pin_assignment { O_uart_tx }     { LOCATION = H1;  IOSTANDARD = LVCMOS33; DR
 # ============================================================================
 
 # ---- RGMII TX 方向（FPGA → PHY）----
-# GTX_CLK：发送时钟，PHY 侧内部可加 delay（写 0x9 bit[8]）
-set_pin_assignment { O_rgmii_txc }   { LOCATION = U9;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+# GTX_CLK：发送时钟。
+#   ⚠️ YT8511 要求接收端 data→clock skew ≥1ns（datasheet TskewR），而 PHY 内部
+#      Tx_clk_delay_sel(EXT 0x0C bit[7:4]) 默认只有 0.75~1.25ns。
+#      用 0° 时钟会临界 → PHY 采样踩在跳变沿 → 帧内字节重复/回卷。
+#      eth_smoke 实测给本脚加 OUTDEL=2 后完全正常。TD 的 OUTDEL 合法范围 1-4。
+set_pin_assignment { O_rgmii_txc }   { LOCATION = U9;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; OUTDEL = 2; }
 # TX_CTL（TXEN + TXER 双沿复用；此处仅命名 TXEN 兼容板手册）
 set_pin_assignment { O_rgmii_tx_ctl } { LOCATION = R10; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
 # TXD[3:0]：4 位 DDR 发送数据
@@ -36,10 +40,12 @@ set_pin_assignment { O_rgmii_txd[2] } { LOCATION = T10; IOSTANDARD = LVCMOS33; D
 set_pin_assignment { O_rgmii_txd[3] } { LOCATION = R12; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
 
 # ---- RGMII RX 方向（PHY → FPGA）----
-# RX_CLK：RGMII 接收时钟；原理图 P09 标 ETHPHY_RX_CLK，在 P01_FPGA 上对应 FPGA 球 V2
-#          （docx 引脚分配汇总漏列；本核实由原理图 page 2/9 + 位置对齐确认）
-set_pin_assignment { I_rgmii_rxc }    { LOCATION = V2;  IOSTANDARD = LVCMOS33; PULLTYPE = NONE; }
-# RX_DV：RGMII 接收数据有效（板手册合并标注为"RXC_DV" → 实际只是 RX_DV；与 RX_CLK 是 2 根独立信号）
+# RX_CLK：RGMII 接收时钟。原理图 page2 球名↔网络名严格核对：
+#          V3(561.8) → ETHPHY_RX_CLK(564.4)，功能名 IO_BE17P_22,GCLKIOT1（专用时钟输入）
+#          ⚠️ 之前误写 V2 —— V2(566.9) 实际是 GPIOA0(569.0)，完全收不到 RX_CLK！
+#          ⚠️ 板手册《引脚分配汇总》漏列了 RX_CLK，只写了 "RXC_DV = N8"。
+set_pin_assignment { I_rgmii_rxc }    { LOCATION = V3;  IOSTANDARD = LVCMOS33; PULLTYPE = NONE; }
+# RX_DV：RGMII 接收数据有效（板手册把 RX_DV 与 RX_CLK 合并标成 "RXC_DV"，实际是两根独立信号）
 set_pin_assignment { I_rgmii_rx_ctl } { LOCATION = N8;  IOSTANDARD = LVCMOS33; PULLTYPE = NONE; }
 # RXD[3:0]：4 位 DDR 接收数据
 set_pin_assignment { I_rgmii_rxd[0] } { LOCATION = N9;  IOSTANDARD = LVCMOS33; PULLTYPE = NONE; }

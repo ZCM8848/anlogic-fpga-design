@@ -45,10 +45,14 @@ CLKC1_DIV  = 12, CPHASE = 3     →  C1 = 125MHz, 90°
 另外 YT8511 的 RGMII 时序要求 `TskewR ≥ 1ns`，而 PHY 内部 `Tx_clk_delay_sel` 默认只有 0.75~1.25ns，
 所以 GTX_CLK 引脚加了 `OUTDEL = 2`（TD 合法范围 1-4）把采样点推进数据眼中心。
 
-本工程把这三处全部改掉：
-- `rgmii_tx_phy.v` 按厂商映射：`d0 = 低 nibble / TX_EN`，`d1 = 高 nibble / TX_ER`
-- FCS 用 PC 端 `zlib.crc32` **预计算写死**（`0x758BCC29`，线序 `29 CC 8B 75`），完全不用 CRC 逻辑
-- 帧补齐到 64 字节（60 数据 + 4 FCS）
+本工程把上面 6 处全部改掉：
+
+- `rgmii_tx_phy.v` 按厂商映射：`d0`（上升沿）= 低 nibble / TX_EN，`d1`（下降沿）= 高 nibble / TX_EN^TX_ER
+- FCS 用 PC 端 `zlib.crc32` **预计算写死**（不用 CRC 逻辑，避开 `initial` 数组不被综合的坑）
+- 帧 128 字节（124 数据 + 4 FCS），并带自描述填充 `A0 A1 … F1` 便于抓包核对
+- PLL 按 `C0=(FIN/REFCLK_DIV)×FBCLK_DIV` 重算，得到真正的 125 MHz
+- RX_CLK 引脚改到 V3
+- GTX_CLK 加 `OUTDEL=2`
 
 ## 关于「官方例程」
 
@@ -60,7 +64,7 @@ EG4 版 `32_Ethernet_test` 有完整 RTL，但用的是 EG4S20 器件 + TEMAC �
 所以本工程采用「按官方 RGMII 收发结构重写 + 官方引脚表」的方式，
 关键映射直接照抄厂商 `rgmii_interface.v`（这是已经量产的代码）。
 
-## 帧内容（64 字节）
+## 帧内容（128 字节 = 124 数据 + 4 FCS）
 
 ```
 DA   = FF FF FF FF FF FF          (广播)
@@ -69,17 +73,17 @@ Type = 08 06                       (ARP)
 ARP  = 0001 0800 06 04 0001
        SHA 01:23:45:67:89:AB  SPA 192.168.1.200
        THA 00:00:00:00:00:00  TPA 192.168.1.100   ← 问 PC 的 MAC
-Pad  = 00 ×18
-FCS  = 29 CC 8B 75
+Pad  = A0 A1 A2 ... F0 F1          (82 字节，自描述，便于抓包核对错位)
+FCS  = F1 D4 3F 01
 ```
 
 PC 收到后会回 ARP reply，`arp -a` 里就会出现 `192.168.1.200`。
 
-FCS 自检（PC 端已通过）：
+FCS 自检：
 
 ```
-crc = zlib.crc32(前 60 字节) = 0x758BCC29  →  线序 29 CC 8B 75
-zlib.crc32(整帧 64 字节)     = 0x2144DF1C  ← 以太网 CRC 余数魔数，PASS
+crc = zlib.crc32(前 124 字节) = 0x013FD4F1  →  线序 F1 D4 3F 01
+zlib.crc32(整帧 128 字节)     = 0x2144DF1C  ← 以太网 CRC 余数魔数，PASS
 ```
 
 
@@ -89,7 +93,7 @@ zlib.crc32(整帧 64 字节)     = 0x2144DF1C  ← 以太网 CRC 余数魔数，
 |-----|------|------|
 | LED1 | D10 | PLL lock（应常亮） |
 | LED2 | E10 | frame_sent（发过帧后常亮） |
-| LED3 | C6  | **RX_CLK 存在**：PHY 送来 125MHz 则常亮；不亮 = V2 没收到 RX_CLK |
+| LED3 | C6  | **RX_CLK 存在**：PHY 送来 125MHz 则常亮；不亮 = V3 没收到 RX_CLK |
 | LED4 | D6  | 50MHz 心跳（约 0.75Hz） |
 
 ## 构建
