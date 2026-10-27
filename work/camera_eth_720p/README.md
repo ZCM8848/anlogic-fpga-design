@@ -84,7 +84,11 @@ python host/raw10_pcap_decode.py cap.pcapng frame.png
 
 - **M0 ✅ 完成**（2026-10-26）：核实 PH1P35 有 `PH1P_LOGIC_HD_IDDR/HD_ODDR` 原语 + 15 个 RGMII 引脚全部能在 LVCMOS33 下综合/布局/bitgen（0 FEP）+ 厘清 RXC_DV 歧义（**N8=RX_DV，V2=RX_CLK**，docx 漏列 V2）。详见 [`docs/M0_verification.md`](docs/M0_verification.md)。
 - **M1 ✅ 完成**（2026-10-27）：RGMII TX/RX + IPv4/UDP 全部打通。eth_smoke 实测 146,536 包 0 错、60.3fps、581 Mbps；端口到本项目后复测 99,777 包 0 错。ARP 学习到 PC MAC。
-- **M2 🔄 进行中**（2026-10-27）：摄像头前端已接入（D-PHY + CSI 解包 + RAW10 组包 + 异步 FIFO + UDP 发送），
-  综合通过，布局布线中。待上板验证：`S=56C0`（传感器 ID）、`C` ≈ 60/s、PC 端出图。
+- **M2 🔄 进行中**（2026-10-27）：摄像头前端已接入（D-PHY + CSI 解包 + RAW10 组包 + 异步 FIFO + UDP 发送）。
+  构建通过：LUT 1105 / REG 1223 / ERAM 2 / PLL 1，**Setup WNS +1.141ns（0 FEP）**；
+  Hold 有 18 个 FEP（-1.048ns），全部落在 `sid_s1/ok_s` 这两个 CDC 同步器上——
+  是 TD 把 23.8MHz 摄像头配置域并进 clk_in 造成的误模型（TD 不允许在 PLL C1 上建时钟），
+  信号为准静态配置值，不影响功能，详见 `constraints/timing.sdc` 注释。
+  待上板验证：`S=56C0`（传感器 ID）、`C` ≈ 60/s、PC 端出图。
 - **M3 ⏳ 待开工**：每帧一个元数据包（AWB 增益 + 曝光），PC 端复现 FPGA 色彩。
 
