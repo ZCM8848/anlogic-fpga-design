@@ -4,7 +4,8 @@
  * 模式（SW4 主选 + SW3 子选；拨上=1）：
  *   SW4=0            → 彩条测试图案（M1 基准，不退化）
  *   SW4=1, SW3=0     → 边缘提取（Sobel 二值图）
- *   SW4=1, SW3=1     → 彩色摄像头 + OSD（Anlogic logo + 帧计数）
+ *   SW4=1, SW3=1     → 彩色摄像头 + OSD（Anlogic logo + 球计数 + 帧计数）
+ *   SW4=1, KEY2 CV   → 彩色摄像头 + OSD logo/球计数 + 红框/ID（帧计数关闭）
  *
  * 数据通路（SW4=1 时）：
  *   SC520CS → MIPI D-PHY RX(IP) → csi_unpacket_2lane → raw10_unpacket_2lane
@@ -327,6 +328,8 @@ module design_top_wrapper (
     wire        S_hdmi_vsync;
     wire        S_hdmi_window_rd_en;
     wire [23:0] S_video_rd_data;
+    wire [23:0] S_mix_raw_data;    // hdmi_mixer 未叠 OSD 的画面（CV 检测输入）
+    wire [15:0] S_cv_count_bcd;    // 球计数 BCD（送 OSD logo 下方）
 
     // video_in / video_out / mc_to_user_interface 间互连
     wire        S_video_out_rd_busy;
@@ -511,7 +514,8 @@ module design_top_wrapper (
     );
 
     // ============================================================ HDMI mixer（参考件 + osd_on 门控）
-    // osd_on = SW4 & SW3（像素域同步）：1=叠加 OSD，0=纯视频直通（edge 模式不叠 OSD）
+    // osd_on = SW4 & (SW3 | CV)：1=叠加 OSD（logo + 球计数），0=纯视频直通。
+    // edge 模式（SW3=0 且 CV 关）不叠 OSD；CV 开时始终显示 logo/球计数。
     reg  [2:0]  S_sw4_sync_pix;
     reg  [2:0]  S_sw3_sync_pix;
     always @(posedge S_pixel_clk or negedge S_rst_n_pix) begin
@@ -526,7 +530,8 @@ module design_top_wrapper (
     // ============================================================ KEY2 → CV 三态（像素域去抖 + 循环 + 跨域同步）
     // KEY2=A9 板载按键（PULLUP，按下=0）。计数器采样去抖（~14ms），下降沿循环 r_cv_mode：
     // 0=检测关（纯摄像头）→1=真实画面+框→2=掩膜+框→0。
-    // CV 开时强制 edge_on=0 / osd_on=0（让 hdmi_mixer/isp_top 直通纯摄像头画面供检测）。
+    // CV 开时强制 edge_on=0；OSD 保持开启（logo + 球计数），检测改用 hdmi_mixer 的
+    // 未叠 OSD 输出（O_video_raw），logo/文字不会进入检测掩膜。
     reg [20:0] r_key2_cnt;
     reg [2:0]  r_key2_sync;
     reg        r_key2_d;
@@ -546,8 +551,9 @@ module design_top_wrapper (
         end
     end
 
-    // osd_on = SW4&SW3 且 CV 关（CV 开时强制 0，纯摄像头画面）
-    wire S_osd_on = S_sw4_sync_pix[2] & S_sw3_sync_pix[2] & ~r_cv_on;
+    // OSD：SW4 且（OSD 模式或 CV 开）。CV 开时只保留 logo + 球计数，帧计数关闭。
+    wire S_osd_on     = S_sw4_sync_pix[2] & (S_sw3_sync_pix[2] | r_cv_on);
+    wire S_dyn_osd_on = S_sw4_sync_pix[2] & S_sw3_sync_pix[2] & ~r_cv_on;
 
     wire        S_hdmi_out_vsync;
     wire        S_hdmi_out_hsync;
@@ -569,9 +575,12 @@ module design_top_wrapper (
         .I_video_user    ( S_hdmi_user         ),
         .I_video_last    ( S_hdmi_last         ),
         .I_osd_on        ( S_osd_on            ),
+        .I_dyn_osd_on    ( S_dyn_osd_on        ),
+        .I_ball_bcd      ( S_cv_count_bcd      ),
         .I_debug_status  ( 4'd0                ),
         .O_video_rd_en   ( S_hdmi_window_rd_en ),
         .I_video_rd_data ( S_video_rd_data     ),
+        .O_video_raw     ( S_mix_raw_data      ),
         .O_hdmi_vsync    ( S_hdmi_out_vsync    ),
         .O_hdmi_hsync    ( S_hdmi_out_hsync    ),
         .O_hdmi_de       ( S_hdmi_out_de       ),
@@ -579,7 +588,7 @@ module design_top_wrapper (
     );
 
     // ============================================================ CV 叠加（M7 钢珠检测）
-    // 串在 hdmi_mixer → video_mux 之间。组合直通保相位；I_cv_on=1 时叠加白框。
+    // 串在 hdmi_mixer → video_mux 之间。组合直通保相位；I_cv_on=1 时叠加红框/白 ID。
     wire [23:0] S_cv_data;
     wire        S_cv_de;
     wire        S_cv_vs;
@@ -634,13 +643,13 @@ module design_top_wrapper (
         .MIN_BLKN ( 16'd14 ),    // 暗块最小面积(块数)：真球17~38块; 桌沿假块8~13块 -> 滤掉
         .EDGE_MG  ( 12'd4  ),
         .EDGE_THR ( 11'd300 ),
-        .DARK_THR ( 11'd100 ),   // 暗区阈值：w_y<100 视为钢珠(深色实心)
+        .DARK_THR ( 11'd135 ),   // 暗区阈值：钢珠16 实拍用 135
         .ALPHA_Q  ( 8'd128  ),   // 位置增益 0.5
         .BETA_Q   ( 8'd48   ),   // 速度增益 0.1875（快球预测跟得上）
         .MASK_SRC ( 3      ),    // 3=暗区检测（替代 Sobel 边缘；钢珠是深色实心圆盘）
         .GATE     ( 12'd320),    // 配对门限：覆盖快球帧间位移
         .MISS_K   ( 6'd35  ),    // 丢失多少帧后删轨(6位字段); 35 可跨断帧重新接上同一颗球
-        .EXIT_MISS( 6'd10  )     // 出画面即时计数允许的丢失帧数(计时更贴合球离开画面)
+        .EXIT_MISS( 6'd8   )     // 出画面即时计数允许的丢失帧数(计时更贴合球离开画面)
     ) u_cv_top (
         .I_clk          ( S_pixel_clk      ),
         .I_rst_n        ( S_rst_n_pix      ),
@@ -651,6 +660,7 @@ module design_top_wrapper (
         .I_de           ( S_hdmi_out_de    ),
         .I_vs           ( S_hdmi_out_vsync ),
         .I_data         ( S_hdmi_out_data  ),
+        .I_det_data     ( S_mix_raw_data   ),
         .O_de           ( S_cv_de          ),
         .O_vs           ( S_cv_vs          ),
         .O_data         ( S_cv_data        ),
@@ -659,7 +669,8 @@ module design_top_wrapper (
         .O_ccl_busy     ( S_cv_ccl_busy    ),
         .O_run_overflow ( S_cv_run_overflow),
         .O_bin_thr      ( S_cv_bin_thr     ),
-        .O_count        ( S_cv_count       )
+        .O_count        ( S_cv_count       ),
+        .O_count_bcd    ( S_cv_count_bcd   )
     );
 
     // ============================================================ video_mux（自研，彩条 vs 摄像头二选一）

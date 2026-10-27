@@ -13,8 +13,8 @@
 |-----|-----|------|------|----------|
 | 0 | × | × | 彩条测试图案 | test_pattern → video_mux → hdmi_tx |
 | 1 | 0 | 关 | 边缘提取（Sobel 二值图） | camera → ISP(edge_on=1) → DDR → hdmi_mixer → video_mux → hdmi_tx |
-| 1 | 1 | 关 | 彩色摄像头 + OSD | camera → ISP(edge_on=0) → DDR → hdmi_mixer(osd_on=1) → video_mux → hdmi_tx |
-| 1 | × | **按一下→开** | 摄像头 + 钢珠白框（M7） | camera → ISP(edge/osd 关) → DDR → hdmi_mixer → **cv_top(叠加)** → video_mux → hdmi_tx |
+| 1 | 1 | 关 | 彩色摄像头 + OSD（logo + 球计数 + 帧计数） | camera → ISP(edge_on=0) → DDR → hdmi_mixer(osd_on=1) → video_mux → hdmi_tx |
+| 1 | × | **按一下→开** | 摄像头 + OSD logo/球计数 + 钢珠红框（M7） | camera → ISP(edge_on=0) → DDR → hdmi_mixer(osd_on=1) → **cv_top(红框/ID，检测用 raw)** → video_mux → hdmi_tx |
 
 ### 设计决策
 - **整棵搬入厂商 ISP**（demosaic/AWB/edge_detect_96/video_in/video_out/mc_to_user_interface/hdmi_mixer/osd_char_lib/anlogic_logo_rom/uicfgcs520 等），来自两个已验证参考工程 `lab_ex2_edge_SC520`（边缘提取）和 `lab_ex3_osd_SC520`（彩色+OSD）。
@@ -149,16 +149,18 @@
 #### `rtl/common/uart_tx.v` — UART 发送器
 - 115200 8N1，`I_valid` 脉冲接收、单字节发送（起始+8 数据+停止）。
 
-#### `rtl/cv/cv_top.v` — 钢珠亮斑检测 + 白框叠加（M7 Phase A）
-- **角色**：串在 hdmi_mixer→video_mux 间，组合直通保相位；`I_cv_on=1` 时叠加白框。1 帧延迟（本帧 vblank 算框→下一帧叠加）。
+#### `rtl/cv/cv_top.v` — 钢珠亮斑检测 + 红框/ID + 球计数（M7 Phase B）
+- **角色**：串在 hdmi_mixer→video_mux 间，组合直通保相位；`I_cv_on=1` 时叠加红框和白色 ID。1 帧延迟（本帧 vblank 算框→下一帧叠加）。显示用 `I_data`（含 OSD），检测用 `I_det_data`（未叠 OSD 的相机画面）。
 - **算法（简化 CCL，无 union-find）**：
   - 段1 流式 run 提取（active）：`Y=R/4+G/2+B/4 > BIN_THR` → 1-bit → 连续 1-串 → run{y,xs,xe} 写 `run_mem`(BRAM 同步读)。
   - 段2 CCL（vblank）：逐 run 扫 prev 行缓存（双缓冲 rca，仅相邻行 y==prev+1 才用，隔行清空），取【第一个 x 重叠的 prev label】或新 label，直接累加 `feature[label]`{min/max x/y, area}。无 union-find → 无 `parent[parent[..]]` 嵌套异步读（曾致 TD Map Macro coredump）。过滤 feature→overlay 表。
-  - 段3 叠加（下一帧 active）：像素(x,y) 与 overlay 表（≤MAX_BLOBS）并行比较→落边框→白。
+  - 段3 叠加（下一帧 active）：像素(x,y) 与 overlay 表（≤MAX_BLOBS）并行比较→落红色边框；ID 数字为白色。
 - **存储**：`run_mem`=BRAM 同步读；`feature`/`rca`/`ov`=`ram_style="dram"`（分布式 LUTRAM，异步读 1 级地址来自寄存器不嵌套→不崩；写同步单口→无 part-select 写译码爆炸）；`ov` 叠加读常量变址→固定 tap。
-- **调参**：`BIN_THR`/`MIN_AREA`/`MAX_AREA`/`MIN_FILL`/`MIN_RATIO`/`EDGE_MG`/`FBOX_W`/`MAX_BLOBS`(16)/`MAX_LABELS`(32)（编译期 parameter）。详见 README「M7 构建记录」。
-- **时序**：WNS -1.83ns / 1478 FEP，全在 cv_top 组合路径。CV 关时像素路径仅一 mux（干净，等价 M6）；CV 开时叠加路径有违例（白框可能偶有瑕疵）。
-- **CV 开关**：KEY2(A9) 去抖翻转 `r_cv_on`（像素域），同步到 byte/100M；cv_on 强制 `edge_on=0`/`osd_on=0`。
+- **块域检测（`MASK_SRC=3`，`cv_blkdet.v`）**：16×16 块均值低于 5 帧前同块背景得到 80×45 暗块掩膜；CCL 得到的连通块只当碎片，按“并集包围盒不超过 13×13 块”合并任意数量碎片，分组支撑面积≥14 块、短边≥4 块、长边≥7 块后输出固定 160×160 识别框。长边不足 7 块的阴影/纹理小块与 14×14 以上大团块被剔除；长边超过 15 块的分组按接触钢珠拆成 2~4 颗。识别框在 `cv_top` 中始终由轨迹中心生成，残余碎片在中心距离 113px 内不再新建轨迹。
+- **调参**：`BIN_THR`/`MIN_AREA`/`MAX_AREA`/`MIN_FILL`/`MIN_RATIO`/`EDGE_MG`/`FBOX_W`/`MAX_BLOBS`(8)/`MAX_LABELS`(32)（编译期 parameter）。详见 README「M7 构建记录」。
+- **时序**：setup WNS -1.849ns / 782 FEP，负 slack 集中在 `cv_blkdet` 的 DRAM/乘法器、ISP AWB 与 status_report 跨域；新增 OSD 球计数路径不在负 slack 列表。CV 关时像素路径仅一 mux（干净，等价 M6）；CV 开时红框叠加路径有违例（框线可能偶有瑕疵）。
+- **球计数**：红框轨迹预测出画面时 `O_count` +1，同时维护 4 位 BCD `O_count_bcd`（9999 饱和）供 OSD 十进制显示。关闭 CV 时保留累计值，再次开启时清零。
+- **CV 开关**：KEY2(A9) 去抖翻转 `r_cv_on`（像素域），同步到 byte/100M；cv_on 强制 `edge_on=0`，OSD 保持开启（logo + 球计数），检测走 `I_det_data`。
 
 ### 5.2 参考件（整棵搬入，来自 lab_ex2_edge + lab_ex3_osd）
 
@@ -181,7 +183,7 @@
 | `video_in` | `video_in.v` | camera→DDR 写：async FIFO(byte→ddr)，4 帧乒乓（IMAGE_BASE 0/7M/14M/21M），240 字/突发 |
 | `video_out` | `video_out.v` | DDR→显示读：async FIFO(ddr→pixel)，行预取(240 字/突发)，128bit→24bit 解包(3 字→16 像素，S_fifo_rd_cnt 每行 de=0 复位) |
 | `mc_to_user_interface` | `mc_to_user_interface.v` | 用户口↔DDR IP 桥（155bit FIFO） |
-| `hdmi_mixer` | `hdmi_mixer.v` | HDMI 显示混合器：VTC 时序+video_out 数据 → hdmi_tx。**加 `I_osd_on` 门控**（=0 纯视频直通，=1 叠加 OSD）。内置 logo ROM 查找 + 帧计数器文字渲染 + 2 拍视频延迟对齐 |
+| `hdmi_mixer` | `hdmi_mixer.v` | HDMI 显示混合器：VTC 时序+video_out 数据 → hdmi_tx。**加 `I_osd_on` 门控**（=0 纯视频直通，=1 叠加 OSD）。内置 logo ROM 查找 + logo 下方 `BALL:dddd` 球计数（`I_ball_bcd`）+ 帧计数器文字渲染（`I_dyn_osd_on` 门控）+ 2 拍视频延迟对齐；`O_video_raw` 输出未叠 OSD 的画面供 CV 检测 |
 | `osd_char_lib` | `osd_char_lib.v` | 16×16 字符 ROM（A-Z/0-9/冒号/安/路，39 字形） |
 | `anlogic_logo_rom` | `anlogic_logo_rom.v` | 160×160 彩色 logo ROM（左上角，alpha 键控叠加） |
 
@@ -246,7 +248,7 @@
 - SW4/SW3 各自 3FF 同步到 **pixel/byte/100M 三域**（共 6 条同步链）。
 - **video_mux select** = pixel 域 SW4（帧边界门控）。
 - **edge_on** = byte 域 `SW4 & ~SW3`（喂 isp_top）。
-- **osd_on** = pixel 域 `SW4 & SW3`（喂 hdmi_mixer）。
+- **osd_on** = pixel 域 `SW4 & (SW3 | CV)`（喂 hdmi_mixer）：OSD 模式或 CV 开时叠 logo/球计数；**dyn_osd_on** = `SW4 & SW3 & ~CV` 只控制帧计数。
 - 复位默认 SW4=0 → 彩条（安全上电画面）。
 
 ### 帧边界切换原理

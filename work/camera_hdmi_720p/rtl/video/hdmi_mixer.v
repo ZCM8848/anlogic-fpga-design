@@ -14,11 +14,14 @@ module hdmi_mixer #(
     input wire        I_video_user,
     input wire        I_video_last,
     input wire        I_osd_on,
+    input wire        I_dyn_osd_on,        // 1=显示 "安路 CNT:" 帧计数（CV 开时关闭）
+    input wire[15:0]  I_ball_bcd,          // 滚过画面的球计数（4 位 BCD）
 
     input wire[3:0]   I_debug_status,
 
     output wire       O_video_rd_en,
     input wire[23:0]  I_video_rd_data,
+    output reg[23:0]  O_video_raw,         // 未叠 OSD 的原始视频（与 O_hdmi_de 同拍）
 
     output reg        O_hdmi_vsync,
     output reg        O_hdmi_hsync,
@@ -98,6 +101,10 @@ module hdmi_mixer #(
     reg        S_pf_on;
     reg [9:0]  S_pf_scale_x;
     reg [9:0]  S_pf_scale_y;
+    reg [11:0] S_ball_x;
+    reg [11:0] S_ball_y;
+    reg [3:0]  S_ball_idx;
+    reg [3:0]  S_ball_cell_x;
 
     localparam LOGO_X = 12'd0;
     localparam LOGO_Y = 12'd0;
@@ -113,9 +120,17 @@ module hdmi_mixer #(
     localparam DYN_OSD_H         = 12'd24;
     localparam CN_Y_OFFSET       = 12'd2;
     localparam COLOR_DYN_TEXT    = 24'hfff200;
+    localparam BALL_OSD_X        = 12'd0;
+    localparam BALL_OSD_Y        = 12'd164;
+    localparam BALL_OSD_W        = 12'd144;
+    localparam BALL_OSD_H        = 12'd16;
+    localparam COLOR_BALL_TEXT   = 24'hfff200;
     localparam CHAR_AN           = 8'h80;
     localparam CHAR_LU           = 8'h81;
+    localparam CHAR_A            = 8'h41;
+    localparam CHAR_B            = 8'h42;
     localparam CHAR_C            = 8'h43;
+    localparam CHAR_L            = 8'h4c;
     localparam CHAR_N            = 8'h4e;
     localparam CHAR_T            = 8'h54;
     localparam CHAR_0            = 8'h30;
@@ -611,6 +626,10 @@ module hdmi_mixer #(
         S_pf_on = 1'b0;
         S_pf_scale_x = 10'd0;
         S_pf_scale_y = 10'd0;
+        S_ball_x = 12'd0;
+        S_ball_y = 12'd0;
+        S_ball_idx = 4'd0;
+        S_ball_cell_x = 4'd0;
 
         if(S_video_de_2d) begin
             if((S_x_2d >= LOGO_X) && (S_x_2d < (LOGO_X + LOGO_W)) &&
@@ -624,7 +643,55 @@ module hdmi_mixer #(
                 end
             end
 
-            if((!S_osd_hit) &&
+            // 滚过画面的球计数：logo 正下方 "BALL:dddd"（9 个 16x16 字符单元）
+            if((S_x_2d >= BALL_OSD_X) && (S_x_2d < (BALL_OSD_X + BALL_OSD_W)) &&
+               (S_y_2d >= BALL_OSD_Y) && (S_y_2d < (BALL_OSD_Y + BALL_OSD_H))) begin
+                S_ball_x = S_x_2d - BALL_OSD_X;
+                S_ball_y = S_y_2d - BALL_OSD_Y;
+                S_ball_idx = S_ball_x[7:4];
+                S_ball_cell_x = S_ball_x[3:0];
+
+                case(S_ball_idx)
+                    4'd0: S_pf_char = CHAR_B;
+                    4'd1: S_pf_char = CHAR_A;
+                    4'd2: S_pf_char = CHAR_L;
+                    4'd3: S_pf_char = CHAR_L;
+                    4'd4: S_pf_char = CHAR_COLON;
+                    4'd5: S_pf_char = CHAR_0 + {4'd0, I_ball_bcd[15:12]};
+                    4'd6: S_pf_char = CHAR_0 + {4'd0, I_ball_bcd[11:8]};
+                    4'd7: S_pf_char = CHAR_0 + {4'd0, I_ball_bcd[7:4]};
+                    default: S_pf_char = CHAR_0 + {4'd0, I_ball_bcd[3:0]};
+                endcase
+
+                S_pf_row = S_ball_y[3:0];
+                S_pf_col = S_ball_cell_x;
+                case(S_pf_col)
+                    4'd0:  S_pf_on = S_pf_row_bits[15];
+                    4'd1:  S_pf_on = S_pf_row_bits[14];
+                    4'd2:  S_pf_on = S_pf_row_bits[13];
+                    4'd3:  S_pf_on = S_pf_row_bits[12];
+                    4'd4:  S_pf_on = S_pf_row_bits[11];
+                    4'd5:  S_pf_on = S_pf_row_bits[10];
+                    4'd6:  S_pf_on = S_pf_row_bits[9];
+                    4'd7:  S_pf_on = S_pf_row_bits[8];
+                    4'd8:  S_pf_on = S_pf_row_bits[7];
+                    4'd9:  S_pf_on = S_pf_row_bits[6];
+                    4'd10: S_pf_on = S_pf_row_bits[5];
+                    4'd11: S_pf_on = S_pf_row_bits[4];
+                    4'd12: S_pf_on = S_pf_row_bits[3];
+                    4'd13: S_pf_on = S_pf_row_bits[2];
+                    4'd14: S_pf_on = S_pf_row_bits[1];
+                    4'd15: S_pf_on = S_pf_row_bits[0];
+                    default: S_pf_on = 1'b0;
+                endcase
+
+                if(S_pf_on) begin
+                    S_osd_hit = 1'b1;
+                    S_osd_color = COLOR_BALL_TEXT;
+                end
+            end
+
+            if(I_dyn_osd_on &&
                (S_x_2d >= DYN_OSD_X) && (S_x_2d < (DYN_OSD_X + DYN_OSD_W)) &&
                (S_y_2d >= DYN_OSD_Y) && (S_y_2d < (DYN_OSD_Y + DYN_OSD_H))) begin
                 S_dyn_x = S_x_2d - DYN_OSD_X;
@@ -829,6 +896,7 @@ module hdmi_mixer #(
             O_hdmi_hsync     <= 1'b0;
             O_hdmi_de        <= 1'b0;
             O_hdmi_data      <= 24'd0;
+            O_video_raw      <= 24'd0;
         end
         else begin
             S_video_vsync_1d <= I_video_vsync;
@@ -844,6 +912,7 @@ module hdmi_mixer #(
             O_hdmi_de        <= S_video_de_2d;
             S_video_data_1d  <= I_video_rd_data;
             S_video_data_2d  <= S_video_data_1d;
+            O_video_raw      <= S_video_data_2d;
 
             if(DEBUG_MODE == 1) begin
                 if(S_video_de_2d) begin

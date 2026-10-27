@@ -2,8 +2,8 @@
 // tb_cv_blkdet.v — cv_blkdet 5 帧背景差分 + CCL 面积累加的功能验证
 //   帧 0..5：暗块静止在 x=400（背景同位置 -> 不应检出）
 //   帧 6..11：暗块每帧右移 80px（与 5 帧前位置不同 -> 应各检出 1 个）
-//   期望：f0..5 count=0；f7..11 count=1 且 minx=560/640/720/800/880；
-//         f6 与 5 帧前位置有重叠，允许 2 段。
+//   期望：f0..5 count=0；f7..11 count=1 且固定框 minx=552/632/712/792/872；
+//         f6 与 5 帧前位置有重叠，允许 0~1 段。
 module tb_cv_blkdet;
     reg clk = 0;
     reg rst_n = 0;
@@ -20,9 +20,10 @@ module tb_cv_blkdet;
     cv_blkdet #(
         .IMG_W(1280), .IMG_H(720),
         .DARK_THR(100), .CB_DELTA(20),
-        .MIN_BLKN(14), .MAX_BLKN(400),
-        .MIN_FILL(40), .MIN_RATIO(50),
-        .MAX_BLOBS(8)
+        .FRAG_MIN_BLKN(3), .MIN_BLKN(14), .MAX_BLKN(400),
+        .MAX_RAWWH(36), .GROUP_MAXWH(13), .GROUP_MIN_SIDE(4),
+        .GROUP_MIN_LONG(7), .SPLIT_SIDE(15), .SPLIT_MIN_SIDE(6),
+        .BOX_HALF(80), .MAX_BLOBS(8)
     ) dut (
         .clk(clk), .rst_n(rst_n), .de(de), .vs(vs), .rgb(rgb),
         .i_sel(i_sel), .i_wide(1'b0), .o_ready(o_ready), .o_count(o_count), .o_det_box(o_det_box),
@@ -48,7 +49,7 @@ module tb_cv_blkdet;
             vs = 0;
             repeat (20) @(posedge clk);
             // 上一帧掩膜在 vs 上升沿后扫描；等待扫描完成再采样
-            repeat (25000) @(posedge clk);
+            repeat (30000) @(posedge clk);
             #1;
             if (fnum > 0) begin
                 counts[fnum-1] = o_count;
@@ -111,23 +112,25 @@ module tb_cv_blkdet;
         vs = 1; de = 0;
         repeat (3) @(posedge clk); #1;
         vs = 0;
-        repeat (25000) @(posedge clk);
+        repeat (30000) @(posedge clk);
         #1;
         counts[11] = o_count;
         minxs[11] = o_det_box[47:36];
 
         for (f = 0; f <= 5; f = f + 1) check(f, 0, -1);
-        if (counts[6] < 1) begin
-            $display("FAIL f6 count=%0d (exp >=1)", counts[6]);
+        // f6 与 5 帧前位置有 64px 重叠，严格碎片门限下允许暂时 0 个，最多 1 个
+        if (counts[6] > 1) begin
+            $display("FAIL f6 count=%0d (exp <=1)", counts[6]);
             errors = errors + 1;
         end else begin
             $display("PASS f6 count=%0d", counts[6]);
         end
-        check(7, 1, 560);
-        check(8, 1, 640);
-        check(9, 1, 720);
-        check(10, 1, 800);
-        check(11, 1, 880);
+        // 固定框 160x160：minx = 球中心 - 80 = (x+72) - 80 = x - 8
+        check(7, 1, 552);
+        check(8, 1, 632);
+        check(9, 1, 712);
+        check(10, 1, 792);
+        check(11, 1, 872);
 
         // 掩膜视图检查（帧 7..11 显示的是帧 6..10 的掩膜）
         if (mask_center !== 1'b1) begin

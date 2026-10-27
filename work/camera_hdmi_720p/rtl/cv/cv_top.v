@@ -1,14 +1,16 @@
 `timescale 1ns / 1ps
 //=============================================================================
-// cv_top.v — 钢珠亮斑检测 + 多目标跟踪(a-b+贪心NN) + 绿框/ID 叠加（M7 Phase B）
+// cv_top.v — 钢珠亮斑检测 + 多目标跟踪(a-b+贪心NN) + 红框/ID 叠加（M7 Phase B）
 //
 // 串在 hdmi_mixer -> video_mux 间，组合直通保相位。CV 开时显示机器视角
-// （二值掩膜 + 绿色 tracked 框 + ID 数字）。
+// （二值掩膜 + 红色 tracked 框 + ID 数字）。
+// I_data 是送显示的像素（CV 开时含 OSD logo/球计数）；I_det_data 是未叠 OSD 的
+// 相机像素，检测只用 I_det_data，避免 logo/文字进入掩膜。
 //
 // 流水（75MHz；vblank ~49500 周期）：
 //   active: Y->阈值(上帧 Otsu+用户偏置)->mask->run 提取写 run_mem；同步累加 32-bin 直方图
 //   vblank: Otsu(下帧阈值) -> CCL(简化) -> det 表 -> a-b 预测+贪心NN配对 -> 更新/老化/新建 -> track 表
-//   下帧 active: 叠加 track 表（绿框+ID）
+//   下帧 active: 叠加 track 表（红框+ID）
 //
 // 存储：run_mem=BRAM 同步读；feature/rca/det/track/hist=dram（异步读 1 级不嵌套；写同步单口）。
 // 跟踪 FSM 用读->latch->写两段式避免跨拍错乱。
@@ -50,7 +52,8 @@ module cv_top #(
     input  wire        I_thr_dn,
     input  wire        I_de,
     input  wire        I_vs,
-    input  wire [23:0] I_data,
+    input  wire [23:0] I_data,                // 显示像素（可含 OSD）
+    input  wire [23:0] I_det_data,            // 检测像素（未叠 OSD 的相机画面）
     output wire        O_de,
     output wire        O_vs,
     output wire [23:0] O_data,
@@ -59,7 +62,8 @@ module cv_top #(
     output wire        O_ccl_busy,
     output wire        O_run_overflow,
     output wire [7:0]  O_bin_thr,
-    output wire [15:0] O_count          // 累计计数：绿框轨迹出画面时 +1
+    output wire [15:0] O_count,         // 累计计数：红框轨迹出画面时 +1
+    output wire [15:0] O_count_bcd      // 同一计数的 4 位 BCD（OSD 十进制显示用）
 );
     localparam FW  = 65;
     localparam RPW = (MAX_RPR==32)?5:6;
@@ -67,6 +71,54 @@ module cv_top #(
     localparam TW  = 107;  // track: valid[106] id[105:102] cx[101:90] cy[89:78] vx[77:66] vy[65:54]
                            //        missed[53:48](6位) minx[47:36] maxx[35:24] miny[23:12] maxy[11:0]
     localparam NONE_ASG = 6'h3F;
+    localparam [11:0] TRK_BOX_HALF = 12'd80;    // 固定识别框半边长：10x10 块 = 160 px
+    localparam [11:0] TRK_DUP_DIST = 12'd136;   // 同一颗钢珠重复轨迹去重：0.9 x 151 px
+    localparam [11:0] DISP_Y       = 12'd80;    // 仅显示框下移，跟踪和计数仍用真实中心
+
+    // 固定识别框边界（端点包含；贴边裁剪）
+    function [11:0] f_box_lo;
+        input [11:0] c;
+        input [11:0] h;
+        begin
+            f_box_lo = (c > h) ? (c - h) : 12'd0;
+        end
+    endfunction
+
+    function [11:0] f_box_hi;
+        input [11:0] c;
+        input [11:0] h;
+        input [11:0] lim;
+        reg [12:0] t;
+        begin
+            t = {1'b0,c} + {1'b0,h} - 13'd1;
+            f_box_hi = (t > {1'b0,lim}) ? lim : t[11:0];
+        end
+    endfunction
+
+    // 4 位 BCD 加 1（OSD 十进制显示）；9999 饱和
+    function [15:0] f_bcd_inc;
+        input [15:0] b;
+        reg [15:0] r;
+        begin
+            r = b;
+            if (b != 16'h9999) begin
+                if (r[3:0] != 4'd9) r[3:0] = r[3:0] + 4'd1;
+                else begin
+                    r[3:0] = 4'd0;
+                    if (r[7:4] != 4'd9) r[7:4] = r[7:4] + 4'd1;
+                    else begin
+                        r[7:4] = 4'd0;
+                        if (r[11:8] != 4'd9) r[11:8] = r[11:8] + 4'd1;
+                        else begin
+                            r[11:8] = 4'd0;
+                            r[15:12] = r[15:12] + 4'd1;
+                        end
+                    end
+                end
+            end
+            f_bcd_inc = r;
+        end
+    endfunction
 
     // ---------- x/y ----------
     reg [11:0] r_x, r_y; reg r_vs_d;
@@ -83,7 +135,7 @@ module cv_top #(
     end
 
     // ---------- 亮度 + 阈值 ----------
-    wire [7:0] w_y = {2'b0,I_data[23:18]} + {1'b0,I_data[15:9]} + {2'b0,I_data[7:2]};
+    wire [7:0] w_y = {2'b0,I_det_data[23:18]} + {1'b0,I_det_data[15:9]} + {2'b0,I_det_data[7:2]};
     reg  [7:0] r_otsu_thr, r_user_off, r_bin_thr;
     // 当前生效阈值：MASK_SRC=1(边缘)用 EDGE_THR+偏置；=0(亮阈值)用 midpoint+偏置
     // 注意：EDGE_THR 为 11bit（Sobel 幅值 0..~2040）；阈值链路必须够宽，
@@ -157,11 +209,12 @@ module cv_top #(
     localparam S_IDLE=4'd0, S_ADAPTIVE=4'd1, S_CLR=4'd2, S_RD=4'd3, S_SCAN=4'd4,
                S_DCOLLECT=4'd5, S_TK_START=4'd6, S_TK_SCAN=4'd7, S_TK_ASSIGN=4'd8,
                S_TU_START=4'd9, S_TU_W=4'd10, S_TU_NEW=4'd11, S_DONE=4'd12,
-               S_BW=4'd13, S_BC=4'd14;   // MASK_SRC=3：等待 cv_blkdet / 灌入检测框
+               S_BW=4'd13, S_BC=4'd14, S_TU_DEDUP=4'd15;   // MASK_SRC=3：等待/灌入/轨迹去重
     reg [3:0] r_st;
     reg [10:0] r_i;
     reg [6:0]  r_next_label, r_lv;   // 7bit：支持 MAX_LABELS 到 64（含循环哨兵 r_lv==MAX_LABELS）
     reg [5:0]  r_j, r_cur_lbl, r_collect, r_ti, r_dj, r_free;
+    reg [5:0]  r_di, r_dj2;   // 轨迹两两去重扫描
     reg        r_found_any;
     reg        r_prev_sel; reg [5:0] r_prev_len, r_cur_len; reg [11:0] r_cur_row_y;
     // 跟踪工作寄存器
@@ -174,6 +227,7 @@ module cv_top #(
     reg [5:0]  r_assign [0:MAX_BLOBS-1];
     reg [3:0]  r_next_id;
     reg [15:0] r_count;
+    reg [15:0] r_count_bcd;
     reg [7:0]  r_cnt_mask;      // 每位=该 track 槽是否已计过数(去重)
     reg [3:0]  r_hits [0:MAX_BLOBS-1];   // 每个 track 槽被检出的帧数(饱和)
 
@@ -226,6 +280,26 @@ module cv_top #(
     wire [DW-1:0] det_dj_w = det[r_dj];
     wire        d_j_valid=det_dj_w[72];
     wire [11:0] d_jcx=det_dj_w[71:60], d_jcy=det_dj_w[59:48];
+
+    // 同一颗钢珠的残余碎片不再新建轨迹：最近 2 帧有检测且中心距离过近
+    reg         r_new_dup;
+    reg [12:0]  dup_dx, dup_dy;
+    integer     dup_k;
+    always @(*) begin
+        r_new_dup = 1'b0;
+        for (dup_k=0; dup_k<MAX_BLOBS; dup_k=dup_k+1) begin
+            if (track[dup_k][106] && (track[dup_k][53:48] <= 6'd2)) begin
+                dup_dx = (d_jcx > track[dup_k][101:90])
+                       ? ({1'b0,d_jcx} - {1'b0,track[dup_k][101:90]})
+                       : ({1'b0,track[dup_k][101:90]} - {1'b0,d_jcx});
+                dup_dy = (d_jcy > track[dup_k][89:78])
+                       ? ({1'b0,d_jcy} - {1'b0,track[dup_k][89:78]})
+                       : ({1'b0,track[dup_k][89:78]} - {1'b0,d_jcy});
+                if ((dup_dx + dup_dy) < {1'b0,TRK_DUP_DIST}) r_new_dup = 1'b1;
+            end
+        end
+    end
+
     // 代价（predicted track vs det j）
     wire signed [12:0] cdx = $signed({1'b0,d_jcx}) - $signed({1'b0,px});
     wire signed [12:0] cdy = $signed({1'b0,d_jcy}) - $signed({1'b0,py});
@@ -249,10 +323,19 @@ module cv_top #(
     wire [11:0] n_cy=n_cy_s[11:0];
     wire [11:0] n_vx=n_vx_s[11:0], n_vy=n_vy_s[11:0];
     wire [5:0] n_miss = t_miss + 6'd1;
+
+    // 固定识别框（块域检测）：匹配帧跟平滑中心，补位帧跟预测中心，新建帧跟检测中心
+    wire [11:0] mbx0=f_box_lo(n_cx,TRK_BOX_HALF), mbx1=f_box_hi(n_cx,TRK_BOX_HALF,IMG_W-1);
+    wire [11:0] mby0=f_box_lo(n_cy,TRK_BOX_HALF), mby1=f_box_hi(n_cy,TRK_BOX_HALF,IMG_H-1);
+    wire [11:0] cbx0=f_box_lo(px,  TRK_BOX_HALF), cbx1=f_box_hi(px,  TRK_BOX_HALF,IMG_W-1);
+    wire [11:0] cby0=f_box_lo(py,  TRK_BOX_HALF), cby1=f_box_hi(py,  TRK_BOX_HALF,IMG_H-1);
+    wire [11:0] nbx0=f_box_lo(d_jcx,TRK_BOX_HALF), nbx1=f_box_hi(d_jcx,TRK_BOX_HALF,IMG_W-1);
+    wire [11:0] nby0=f_box_lo(d_jcy,TRK_BOX_HALF), nby1=f_box_hi(d_jcy,TRK_BOX_HALF,IMG_H-1);
     wire       t_alive = t_valid && (n_miss <= MISS_K);
     // 预测位置已出画面 -> 该轨迹离开视野（左右边缘与上下边缘分别给命中门限）
-    wire       t_out_x = (px_s >= $signed(13'd1280)) || (px_s < $signed(13'd0));
-    wire       t_out_y = (py_s >= $signed(13'd720))  || (py_s < $signed(13'd0));
+    // 球心越过画面边界再加半径，钢珠完整离开才计数
+    wire       t_out_x = (px_s >= $signed(13'd1360)) || (px_s < $signed(13'd0));
+    wire       t_out_y = (py_s >= $signed(13'd800))  || (py_s < $signed(13'd0));
     wire       t_out   = t_out_x | t_out_y;
     wire       w_shadow = (py > 12'd650) && (px < 12'd700);   // 底部左侧反光带(阴影/倒影)
     wire [3:0] w_need_ex = w_wide ? 4'd2 : MIN_HITS_EX;
@@ -362,10 +445,12 @@ module cv_top #(
     assign blk_det_sel = r_ti[2:0];
     cv_blkdet #(
         .IMG_W(IMG_W), .IMG_H(IMG_H), .DARK_THR(DARK_THR),
-        .MIN_BLKN(MIN_BLKN), .MAX_BLKN(16'd400),   // 单位=块(钢珠约 7x7=49 块；局部对比后放宽下限)
-        .MIN_FILL(MIN_FILL), .MIN_RATIO(MIN_RATIO), .MAX_BLOBS(MAX_BLOBS)
+        .FRAG_MIN_BLKN(16'd3), .MIN_BLKN(MIN_BLKN), .MAX_BLKN(16'd400),
+        .MAX_RAWWH(8'd36), .GROUP_MAXWH(8'd13), .GROUP_MIN_SIDE(8'd4),
+        .GROUP_MIN_LONG(8'd7), .SPLIT_SIDE(8'd15), .SPLIT_MIN_SIDE(8'd6),
+        .BOX_HALF(12'd80), .MAX_BLOBS(MAX_BLOBS)
     ) u_blkdet (
-        .clk(I_clk), .rst_n(I_rst_n), .de(I_de), .vs(I_vs), .rgb(I_data),
+        .clk(I_clk), .rst_n(I_rst_n), .de(I_de), .vs(I_vs), .rgb(I_det_data),
         .i_sel(blk_det_sel), .i_wide(w_wide),
         .o_ready(blk_ready), .o_count(blk_count), .o_det_box(blk_det_box),
         .o_mask_bit(w_mask_bit)
@@ -377,9 +462,10 @@ module cv_top #(
             r_st<=S_IDLE; r_i<=0; r_run_rd<=0; r_next_label<=0; r_prev_sel<=0;
             r_prev_len<=0; r_cur_len<=0; r_cur_row_y<=12'h7FF; r_j<=0; r_cur_lbl<=0;
             r_found_any<=0; r_lv<=0; r_collect<=0; r_ti<=0; r_dj<=0; r_free<=0;
+            r_di<=0; r_dj2<=0;
             r_otsu_thr<=BIN_THR; r_bin_thr<=BIN_THR;   // 阈值归主 FSM 管（S_ADAPTIVE + reset）
             r_trk_i<=0; r_det_j<=0; r_asg<=NONE_ASG; r_min_cost<=0; r_min_j<=0; r_min_valid<=0;
-            r_ndet<=0; r_next_id<=0; r_count<=16'd0; r_cnt_mask<=8'd0;
+            r_ndet<=0; r_next_id<=0; r_count<=16'd0; r_count_bcd<=16'd0; r_cnt_mask<=8'd0;
             r_frame<=8'd0; r_ex_v<=4'd0; r_ex_w<=2'd0; r_cv_on_d<=1'b0;
             // track 表原来从不复位 -> 依赖上电 FF 初值（仿真为 x 会导致不建轨迹）；
             // 这里显式清零 valid（否则 !track[..].valid 判定为 x，新建轨迹分支走不进）。
@@ -387,10 +473,14 @@ module cv_top #(
         end else begin
             r_cv_on_d <= I_cv_on;
             if (vs_rise) r_frame <= r_frame + 8'd1;
-            if (r_cv_on_d && !I_cv_on) begin
-                // 关闭检测：立刻停主状态机，清轨迹/检测表/计数，再开启时从干净状态开始
+            if (!r_cv_on_d && I_cv_on) begin
+                // 开启检测：计数从 0 开始（关闭期间保留上一次的总数供 OSD 显示）
+                r_count <= 16'd0; r_count_bcd <= 16'd0; r_cnt_mask <= 8'd0;
+                r_ex_v <= 4'd0; r_ex_w <= 2'd0;
+            end else if (r_cv_on_d && !I_cv_on) begin
+                // 关闭检测：立刻停主状态机，清轨迹/检测表；累计计数保留
                 r_st <= S_IDLE;
-                r_count <= 16'd0; r_cnt_mask <= 8'd0;
+                r_cnt_mask <= 8'd0;
                 r_ex_v <= 4'd0; r_ex_w <= 2'd0;
                 r_ti <= 0; r_dj <= 0; r_free <= 0; r_lv <= 0; r_collect <= 0; r_ndet <= 0;
                 for (k=0;k<MAX_BLOBS;k=k+1) begin
@@ -423,8 +513,8 @@ module cv_top #(
                 S_BW: if (blk_ready) begin r_ti<=0; r_st<=S_BC; end
                 S_BC: begin
                     det[r_ti] <= (r_ti<blk_count)
-                        ? {1'b1, (blk_det_box[47:36]+blk_det_box[35:24])>>1,
-                                  (blk_det_box[23:12]+blk_det_box[11:0])>>1,
+                        ? {1'b1, (blk_det_box[47:36]+blk_det_box[35:24]+12'd1)>>1,
+                                  (blk_det_box[23:12]+blk_det_box[11:0]+12'd1)>>1,
                                   blk_det_box[47:36], blk_det_box[35:24],
                                   blk_det_box[23:12], blk_det_box[11:0]}
                         : {1'b0,72'd0};
@@ -488,21 +578,29 @@ module cv_top #(
                 S_TU_W: begin
                     if (t_valid) begin
                         if (r_asg!=NONE_ASG) begin
-                            // matched：a-b 更新 + 新 bbox
-                            track[r_ti]<={1'b1,t_id,n_cx,n_cy,n_vx,n_vy,6'd0,a_min_x,a_max_x,a_min_y,a_max_y};
+                            // matched：a-b 更新；块域用固定识别框跟平滑中心
+                            track[r_ti]<={1'b1,t_id,n_cx,n_cy,n_vx,n_vy,6'd0,
+                                          (MASK_SRC==3)?mbx0:a_min_x,
+                                          (MASK_SRC==3)?mbx1:a_max_x,
+                                          (MASK_SRC==3)?mby0:a_min_y,
+                                          (MASK_SRC==3)?mby1:a_max_y};
                             r_hits[r_ti] <= (r_hits[r_ti]==4'hF) ? 4'hF : (r_hits[r_ti] + 4'd1);
                         end else begin
-                            // coast：预测推进 + 老化
+                            // coast：预测推进 + 老化；块域固定框跟预测中心
                             track[r_ti]<={t_alive, t_id, px, py, t_vx[11:0], t_vy[11:0], n_miss,
-                                          t_min_x,t_max_x,t_min_y,t_max_y};
+                                          (MASK_SRC==3)?cbx0:t_min_x,
+                                          (MASK_SRC==3)?cbx1:t_max_x,
+                                          (MASK_SRC==3)?cby0:t_min_y,
+                                          (MASK_SRC==3)?cby1:t_max_y};
                         end
                     end
-                    // 计数：绿框轨迹预测出画面 -> +1（顶/底角区的重复轨迹只计一次）
+                    // 计数：红框轨迹预测出画面 -> +1（顶/底角区的重复轨迹只计一次）
                     if (t_valid && !r_cnt_mask[r_ti[2:0]] &&
                         (t_out && (t_miss<=EXIT_MISS) && (r_hits[r_ti] >= w_need))) begin
                         r_cnt_mask[r_ti[2:0]] <= 1'b1;
                         if (!w_dup_all) begin
                             r_count <= r_count + 16'd1;
+                            r_count_bcd <= f_bcd_inc(r_count_bcd);
                             r_ex_v[r_ex_w] <= 1'b1;
                             case (r_ex_w)
                                 2'd0: begin r_ex_t0<=r_frame; r_ex_x0<=px; r_ex_y0<=py; end
@@ -520,21 +618,56 @@ module cv_top #(
                 // ---- 新建：未占 det 找空 track 槽写入 ----
                 S_TU_NEW: begin
                     if (r_dj>=MAX_BLOBS || r_free>=MAX_BLOBS) begin
-                        r_st<=S_DONE;
+                        r_di<=0; r_dj2<=1; r_st<=S_TU_DEDUP;
                     end else begin
                         // 取 det[r_dj]（async），若有效且未占 -> 找 free 槽
                         if (det[r_dj][72] && !r_det_taken[r_dj]) begin
-                            if (!track[r_free][106]) begin
-                                // 写新轨迹
+                            if ((MASK_SRC==3) && r_new_dup) begin
+                                // 同一颗钢珠的残余碎片：不新建轨迹
+                                r_dj<=r_dj+1;
+                            end else if (!track[r_free][106]) begin
+                                // 写新轨迹；块域用固定识别框跟检测中心
                                 track[r_free]<={1'b1, r_next_id, det[r_dj][71:60], det[r_dj][59:48],
                                                 12'd0, 12'd0, 6'd0,
-                                                det[r_dj][47:36], det[r_dj][35:24], det[r_dj][23:12], det[r_dj][11:0]};
+                                                (MASK_SRC==3)?nbx0:det[r_dj][47:36],
+                                                (MASK_SRC==3)?nbx1:det[r_dj][35:24],
+                                                (MASK_SRC==3)?nby0:det[r_dj][23:12],
+                                                (MASK_SRC==3)?nby1:det[r_dj][11:0]};
                                 r_next_id<=r_next_id+1;
                                 r_cnt_mask[r_free[2:0]]<=1'b0;   // 新轨迹 -> 计数去重标志复位
                                 r_hits[r_free]<=4'd0;            // 新轨迹 -> 命中计数清零
                                 r_dj<=r_dj+1; r_free<=r_free+1;
                             end else r_free<=r_free+1;
                         end else r_dj<=r_dj+1;
+                    end
+                end
+
+                // ---- 同帧轨迹去重：中心相距 <136px 的两条轨迹只留命中多的 ----
+                S_TU_DEDUP: begin
+                    if (r_di >= MAX_BLOBS) begin
+                        r_st<=S_DONE;
+                    end else if (r_dj2 >= MAX_BLOBS) begin
+                        r_di<=r_di+1'b1; r_dj2<=r_di+2'd2;
+                    end else begin
+                        if (track[r_di][106] && track[r_dj2][106] &&
+                            (track[r_di][53:48] <= 6'd2) &&
+                            (track[r_dj2][53:48] <= 6'd2) &&
+                            ((((track[r_di][101:90] > track[r_dj2][101:90])
+                               ? (track[r_di][101:90]-track[r_dj2][101:90])
+                               : (track[r_dj2][101:90]-track[r_di][101:90])) +
+                              ((track[r_di][89:78] > track[r_dj2][89:78])
+                               ? (track[r_di][89:78]-track[r_dj2][89:78])
+                               : (track[r_dj2][89:78]-track[r_di][89:78])))
+                             < TRK_DUP_DIST)) begin
+                            if (r_hits[r_di] >= r_hits[r_dj2]) begin
+                                track[r_dj2] <= {TW{1'b0}};
+                                r_hits[r_dj2] <= 4'd0;
+                            end else begin
+                                track[r_di] <= {TW{1'b0}};
+                                r_hits[r_di] <= 4'd0;
+                            end
+                        end
+                        r_dj2<=r_dj2+1'b1;
                     end
                 end
 
@@ -547,10 +680,10 @@ module cv_top #(
     end
 
     // 注：O_blob_cnt 上报 r_collect（本帧检测数，非轨迹数）——轨迹数需扫 track 表，
-    //     当前简化用检测数；跟踪效果看绿框 ID 连续性（视觉）而非 NB。
+    //     当前简化用检测数；跟踪效果看红框 ID 连续性（视觉）而非 NB。
 
     // ======================================================================
-    // 叠加：track 表（绿框 + ID 数字）
+    // 叠加：track 表（红框 + ID 数字）
     // ======================================================================
     function [4:0] f_digit;
         input [3:0] id; input [2:0] row;
@@ -581,21 +714,26 @@ module cv_top #(
     reg r_border, r_digit;
     reg [4:0] dg_bits;
     reg [11:0] dg_row, dg_col;
+    reg [11:0] dy0, dy1;
     always @(*) begin
         r_border=1'b0; r_digit=1'b0;
         for (oi=0; oi<MAX_BLOBS; oi=oi+1) begin
-            // 只画"最近有真实检测"的轨迹(丢失<=2)；纯预测滑行的不画(否则边缘出幻影框)
-            if (track[oi][106] && (track[oi][53:48] <= 6'd2)) begin
+            dy0 = track[oi][23:12] + DISP_Y;
+            dy1 = track[oi][11:0] + DISP_Y;
+            if (dy0 > IMG_H-1) dy0 = IMG_H-1;
+            if (dy1 > IMG_H-1) dy1 = IMG_H-1;
+            // 丢检最多保留 1 帧，避免闪烁和离场残影
+            if (track[oi][106] && (track[oi][53:48] <= 6'd1)) begin
                 if ((((r_x>=track[oi][47:36])&&(r_x<track[oi][47:36]+FBOX_W)) ||
                      ((r_x<=track[oi][35:24])&&(r_x>track[oi][35:24]-FBOX_W))) &&
-                    (r_y>=track[oi][23:12])&&(r_y<=track[oi][11:0])) r_border=1;
-                if ((((r_y>=track[oi][23:12])&&(r_y<track[oi][23:12]+FBOX_W)) ||
-                     ((r_y<=track[oi][11:0])&&(r_y>track[oi][11:0]-FBOX_W))) &&
+                    (r_y>=dy0)&&(r_y<=dy1)) r_border=1;
+                if ((((r_y>=dy0)&&(r_y<dy0+FBOX_W)) ||
+                     ((r_y<=dy1)&&(r_y>dy1-FBOX_W))) &&
                     (r_x>=track[oi][47:36])&&(r_x<=track[oi][35:24])) r_border=1;
                 // ID 数字（左上角 5x7）：用临时 reg 存函数结果再 bit-select（TD 不允许函数调用直接索引）
                 if (r_x>=track[oi][47:36] && r_x<track[oi][47:36]+5 &&
-                    r_y>=track[oi][23:12] && r_y<track[oi][23:12]+7) begin
-                    dg_row  = r_y - track[oi][23:12];
+                    r_y>=dy0 && r_y<dy0+7) begin
+                    dg_row  = r_y - dy0;
                     dg_col  = r_x - track[oi][47:36];
                     dg_bits = f_digit(track[oi][105:102], dg_row[2:0]);
                     if (dg_bits[4 - dg_col[2:0]]) r_digit=1;
@@ -606,11 +744,12 @@ module cv_top #(
 
     wire [23:0] cv_base = I_mask_view ? (w_mask_bit ? 24'hFFFFFF : 24'h000000) : I_data;
     assign O_de=I_de; assign O_vs=I_vs;
-    assign O_data = (I_cv_on && I_de) ? (r_digit ? 24'hFFFFFF : (r_border ? 24'h00FF00 : cv_base)) : I_data;
+    assign O_data = (I_cv_on && I_de) ? (r_digit ? 24'hFFFFFF : (r_border ? 24'hFF0000 : cv_base)) : I_data;
     assign O_blob_cnt = r_collect;
     assign O_run_cnt = r_run_cnt;
     assign O_run_overflow = r_run_overflow;
     assign O_bin_thr = OTSU_EN ? eff_thr[7:0] : r_bin_thr;
     assign O_count   = r_count;
+    assign O_count_bcd = r_count_bcd;
 
 endmodule

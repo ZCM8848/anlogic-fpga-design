@@ -15,7 +15,7 @@ PH1P35MDG324（HX1P35A 开发板 / TD 6.2.1）上，从零搭建的 **SC500CS / 
 | M4 | 灰度直通出图（行缓存版，暂不接 DDR） | ✅ **上板验收通过**（2026-09-27 11:35）：实时灰度画面、感光正常；串口 `HS=1 … RX=1`（MIPI 链路完好，帧率 **≈59.6fps**）。画面证据 `work/test/M4_00/`。已知（预期）现象：纵向细条纹 = Bayer 网格（M6 去马赛克消）、缓慢自上而下滚动 = 相机帧率 59.6fps 与显示 60Hz 未锁相（相差约 0.4Hz）而行缓存「跟随最新行」的固有现象（M5 帧缓存消）。**注意：串口 F/L/W/G 是 BCD 码（RTL 字段名 `D_fs_bcd` 等），解析勿按 hex。** |
 | M5 | DDR2 帧缓存（自研读写控制器） | 🔨 **①空载校准版 ✅ 上板验收通过**（2026-09-27：串口第三行 `DDR RDY=1 ARDY=1 WRDY=1` 稳定（15/15、28/29）；MIPI 行照旧健康、59.67fps。构建方式与坑见 `tools/td_run/`，证据 `work/test/M5_00/`）；**②完整帧缓存版：实施计划已细化定稿**（`docs/plan.md`「M5-② 实施计划」，接口事实已按 IPUG035 + 厂商 lab + 构建报告三方核对），待开工 |
 | M6 | 三模式重构（彩条 / 边缘提取 / 彩色+OSD，SW4/SW3 切换） | ✅ **上板验收通过**（2026-09-28~29）。整棵搬入厂商 ISP + video_in/out/mc + DDR2 IP + hdmi_mixer/OSD 三件套；自研 hdmi_timing(复刻 uivtc)、test_pattern(2 级流水)、video_mux(帧边界门控)、status_report(握手修复)。经 4 轮调试修复：① status_report 发送 FSM 握手竞态→串口丢字 ② video_mux 两源 de 相位跳变→变量水平回绕 ③ hdmi_timing 与 uivtc 时序差→logo/画面静态偏移 ④ PROBE_PHASE 探针定位（后回滚）。check_rtl 0 错 0 警；bit md5 `B96CCE65`，时序 -1.7ns/9（ISP edge 域，OSD/彩条干净）。详见下「M6 构建记录」 |
-| M7 | 收尾 + 钢珠检测（CV） | ✅ 检测/跟踪/计数完成；**K2 三态**：0=检测关(纯摄像头) → 1=真实画面+绿框/白 ID → 2=80×45 块掩膜+绿框/白 ID → 0，串口 `CV=0/1/2`。离线 9–14 均计数 10。最新 bit/资源/时序见 `work/test/M7_exitbg/NOTES.md`，录像核对见 `work/test/VIDEO_VALIDATION.md`。 |
+| M7 | 收尾 + 钢珠检测（CV） | ✅ 检测/跟踪/计数完成；**K2 三态**：0=检测关(纯摄像头，计数保留) → 1=真实画面+OSD logo/`BALL` 计数+红框/白 ID → 2=80×45 块掩膜+红框/白 ID → 0，串口 `CV=0/1/2`。离线 9–14 均计数 10。最新 bit/资源/时序见 `work/test/M7_redcnt/NOTES.md`，录像核对见 `work/test/VIDEO_VALIDATION.md`。 |
 
 详细计划与调研结论见 `docs/plan.md`。
 
@@ -325,13 +325,13 @@ MIPI HS=1 F=000012 L=0720 W=01280 G=0320 ER=00 HW=2B0640xx PW=xxxx PL=0000 HC=0 
 
 ## M7 构建记录（钢珠检测 + 跟踪计数）
 
-**目标**：CV 开启后在摄像头画面上框出每颗钢珠（绿框 + 白色 5×7 ID），跨帧跟踪，球完全离开画面时计数 +1；另一路调试视图显示检测器内部的 80×45 块掩膜。
+**目标**：CV 开启后在摄像头画面上框出每颗钢珠（红框 + 白色 5×7 ID），跨帧跟踪，球完全离开画面时计数 +1；计数以 `BALL:dddd` 显示在 Anlogic logo 正下方。另一路调试视图显示检测器内部的 80×45 块掩膜。
 
-**K2 三态**：SW4=1（摄像头），按 KEY2(A9) 循环 `r_cv_mode`：0=检测关（纯摄像头，轨迹/计数清零）→ 1=真实画面 + 绿框/ID → 2=上一帧 80×45 块掩膜放大（白=暗块）+ 绿框/ID → 0。CV 开（状态 1/2）时强制 `edge_on=0`/`osd_on=0`。串口行 `CV=<0/1/2> NB=<2hex> TH=<2hex> C=<4hex>`（NB=本帧检测数，TH=阈值，C=累计计数）。**运行期调阈**：CV 开时按 **KEY3(B9)=阈值−1**、**KEY4(C7)=阈值+1**（板载按键，去抖单拍），掩膜即时变化、串口 `TH=` 反映当前值。调好后把 TH 告诉开发者固化进 `DARK_THR` 默认。
+**K2 三态**：SW4=1（摄像头），按 KEY2(A9) 循环 `r_cv_mode`：0=检测关（纯摄像头，轨迹清零，累计计数保留）→ 1=真实画面 + OSD logo/球计数 + 红框/ID → 2=上一帧 80×45 块掩膜放大（白=暗块）+ 红框/ID → 0。CV 开（状态 1/2）时强制 `edge_on=0`；OSD 保持开启（logo + 球计数，帧计数关闭），检测改用 hdmi_mixer 未叠 OSD 的原始画面，logo/文字不进入掩膜。再次从 0 切到 1 时计数清零。串口行 `CV=<0/1/2> NB=<2hex> TH=<2hex> C=<4hex>`（NB=本帧检测数，TH=阈值，C=累计计数）。**运行期调阈**：CV 开时按 **KEY3(B9)=阈值−1**、**KEY4(C7)=阈值+1**（板载按键，去抖单拍），掩膜即时变化、串口 `TH=` 反映当前值。调好后把 TH 告诉开发者固化进 `DARK_THR` 默认。
 
 **当前检测/跟踪实现**：
-- `rtl/cv/cv_blkdet.v`：16×16 块均值 → 与 5 帧前同块背景比较得到 80×45 暗块掩膜；vblank 内做块级 CCL、形状过滤；输出检测框和上一帧掩膜位（`o_mask_bit`）。
-- `rtl/cv/cv_top.v`：检测框关联、轨迹预测（`BETA_Q`/`GATE`）、出画面计数、绿框/白色 ID 叠加、掩膜视图基准选择；K2 关闭时停主状态机并清轨迹/计数。
+- `rtl/cv/cv_blkdet.v`：16×16 块均值 → 与 5 帧前同块背景比较得到 80×45 暗块掩膜；vblank 内做块级 CCL。钢珠直径 151px 对应约 9 个块单元：连通块只当碎片，按“并集包围盒不超过 13×13 块”合并任意数量碎片；分组支撑面积≥14 块、短边≥4 块、长边≥7 块后输出固定 160×160 识别框，剔除长边不足 7 块的阴影/纹理小块与 14×14 以上大团块。长边超过 15 块的分组按接触钢珠拆成 2~4 颗。输出检测框和上一帧掩膜位（`o_mask_bit`）。
+- `rtl/cv/cv_top.v`：检测框关联、轨迹预测（`BETA_Q`/`GATE`）、出画面计数（二进制 `O_count` + BCD `O_count_bcd`）、红框/白色 ID 叠加、掩膜视图基准选择；K2 关闭时停主状态机并清轨迹，累计计数保留到下次开启。
 - `rtl/top/design_top_wrapper.v`：KEY2 去抖 + 三态循环；`r_cv_on` 派生自 `r_cv_mode`，跨域到 byte/100M 域。
 - `rtl/camera/status_report.v`：`CV=0/1/2`。
 
@@ -341,7 +341,7 @@ Phase A 的亮度阈值/run 提取/简化 CCL 路径保留在 `MASK_SRC=1/2` 对
 - `rtl/cv/cv_top.v`：串在 hdmi_mixer→video_mux 间，组合直通保相位。
   - 段1 流式 run 提取（active）：`Y=R/4+G/2+B/4 > BIN_THR` → 1-bit → 连续 1-串打包成 run{y,xs,xe} 写 run_mem（BRAM）。
   - 段2 简化 CCL（vblank）：逐 run 扫 prev 行缓存取【第一个 x 重叠的 prev label】或新 label，直接累加 `feature[label]`{min/max x/y, area}；**无 union-find**（避免 `parent[parent[..]]` 嵌套异步读致 TD coredump，见下）；过滤→overlay 表。
-  - 段3 叠加（下一帧 active）：像素(x,y) 与 overlay 表（≤16 bbox）并行比较→落边框→白。
+  - 段3 叠加（下一帧 active）：像素(x,y) 与 overlay 表（≤MAX_BLOBS bbox）并行比较→落红色边框；ID 数字为白色。
   - 存储：run_mem=BRAM 同步读；feature/rca/ov=`dram`（分布式 LUTRAM，异步读 1 级不嵌套→不崩溃；写同步单口→无 part-select 写译码爆炸）。ov 叠加读为常量变址→固定 tap。
   - 1 帧延迟：本帧 vblank 算的框用于下一帧叠加。
 - `tools/sim/cv_sim.py`：CCL 行为级仿真，7/7 用例（单球/32 随机球/贴边/噪声/近挨/隔行）通过。
@@ -360,15 +360,15 @@ Phase A 的亮度阈值/run 提取/简化 CCL 路径保留在 `MASK_SRC=1/2` 对
 2. **`.prj` 同步**：TD 命令行 `open_project <prj>.prj` 打开的是 `*.prj`（工程运行态二进制），**不是 `.al`（文本）**。往 `.al` 加源文件后，若不在 GUI 重开工程，`.prj` 仍旧清单→综合报 `HDL-8007 ... is a black box`。用 `tools/td_run/sync_prj.py <工程目录>` 把 `.al` 源文件清单同步进各 run 的 `.prj`（幂等，只补缺失项）。
 3. **TD 兼容性教训**：unpacked 数组若被推断为 RAM 异步读口，`f_find` 这类 `mem[mem[x]]` 嵌套异步读会让 Map Macro **coredump**；改 packed reg 向量虽不崩但变址 part-select 写译码致 slice 数 25474 超器件上限 21216。**正确方案**：需异步读的小表用 `ram_style="dram"`（分布式，1 级地址来自寄存器不嵌套），大表用 BRAM 同步读。
 
-**最终构建**（命令行 `tools/td_run/run.bat`，cv_top 重接顶层）：
-- syn：Setup WNS -2.4ns / 1478 FEP（cv_top 组合路径）。
-- phy：**final Setup WNS -1.83ns / Hold +20ps / 1478 FEP**，bit `phy_1/camera_hdmi_720p.bit`（1,789,539B md5 `6D1CC08E9E35A230952A9460269B82AB`）；**无 slice 溢出**（简化版 fit）。
-- 违例全在 cv_top 组合路径（叠加比较器+dram 读 mux）。**CV 关时像素路径只一 mux（时序干净，彩条/OSD/edge 等价 M6）；CV 开时叠加路径 -1.83ns，白框可能偶有瑕疵**。
+**最终构建**（命令行 `tools/td_run/build_full.tcl`，直接编译 `.al`）：
+- syn：Setup WNS -3.095ns / 777 FEP（basic）。
+- phy：**final Setup WNS -1.849ns / Hold +20ps / 782 FEP**，bit `td_project/camera_hdmi_720p.bit`（1,789,539B md5 `58DFA5A3272E381D086524A2D1E88BD1`）；slices 18992/21216（89.52%）、RAM 49、DSP 22，**无 slice 溢出**。
+- 负 slack 路径仍集中在 `cv_blkdet` 的 DRAM/乘法器、ISP AWB 与 status_report 跨域；新增的 hdmi_mixer 球计数/logo OSD 路径未进入负 slack 列表。CV 开时红框叠加路径与上一版同量级。
 
-**上板验证**：①串口 `CV=0 NB=00 TH=.. C=0000` 字段在；②按 KEY2 循环 `CV=0→1→2→0`，状态 1/2 时 logo 消失；③状态 1 真实画面+绿框/ID，状态 2 块掩膜+绿框/ID；④球完全离开画面才 +1，静止暗块不挂框、不计数；⑤关闭（状态 0）后轨迹/计数清零，再开启从干净状态开始；⑥K3/K4 仅在状态 1/2 生效。
+**上板验证**：①串口 `CV=0 NB=00 TH=.. C=0000` 字段在；②按 KEY2 循环 `CV=0→1→2→0`，状态 1/2 时 logo 保持，logo 下方显示 `BALL:dddd`；③状态 1 真实画面+红框/ID，状态 2 块掩膜+红框/ID；④球完全离开画面才 +1，静止暗块不挂框、不计数；⑤关闭（状态 0）后轨迹清零、计数保留，再次开启时计数清零；⑥K3/K4 仅在状态 1/2 生效。
 
 **已知遗留**：
-1. **CV 叠加路径 -1.83ns**：MAX_BLOBS 暂降到 16、MAX_LABELS 降到 32 以控路由时长。可加流水线（寄存 r_border + 同步延迟 test_pattern 保相位）收正，或加 false_path（CV 仅显示用途）。
+1. **CV 叠加路径 -1.849ns**：MAX_BLOBS 暂降到 8、MAX_LABELS 降到 32 以控路由时长。可加流水线（寄存 r_border + 同步延迟 test_pattern 保相位）收正，或加 false_path（CV 仅显示用途）。
 2. **简化 CCL 过分割**：无 union-find，有内部间隙的 blob 偶尔被分成 2 个框（圆球无间隙→不受影响）。噪声大时可加形态学（开运算）去间隙再 CCL。
 3. **1 帧延迟**：框比球滞后 1 帧（~16ms），Phase B 跟踪用当前帧预测对齐。
 4. edge 模式 -1.7ns、OSD 左 5px 重复（M6 遗留，未动）。

@@ -2,7 +2,7 @@
 
 > 把 `Python/impl_hw/`（硬件可实现版定点算法）迁移为可综合 RTL，落在
 > `work/camera_hdmi_720p/rtl/cv/`。现有 `rtl/cv/cv_top.v` 已实现
-> 「阈值/Sobel → run-length CCL → 贪心 NN 跟踪 → 绿框/ID 叠加」，本迁移补齐其**前端**：
+> 「阈值/Sobel → run-length CCL → 贪心 NN 跟踪 → 红框/ID 叠加」，本迁移补齐其**前端**：
 > **灰度 → 光照归一化 → IIR 背景 → 形态学 → (计数线)**。
 
 ## 1. 新增文件与映射
