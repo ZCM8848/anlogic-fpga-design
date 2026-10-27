@@ -64,19 +64,14 @@ SC520CS (MIPI 2lane 828Mbps, RAW10 720p60)
   8KB 级 FIFO 只用来吸收「每行 1600B / 7.7µs」的 MIPI 突发。
 - 包边界会跨行，FIFO 按**连续字节流**处理，不做行对齐。
 
-## 上位机用法
+## 上位机用法（速查）
 
 ```powershell
-# 每秒一行：N=主机帧数 T=已发视频帧 C=摄像头帧 S=传感器ID V=状态位
-python host/cam_monitor.py COM4
-
-# 抓包（另开窗口）
+python host/cam_monitor.py COM4            # 串口状态
+python host/cam_view.py                    # 实时显示（推荐）
+python host/cam_view.py --record out.mp4   # 实时 + 录像
 & "D:\Program Files\Wireshark\dumpcap.exe" -i "\Device\NPF_{...}" -w cap.pcapng -a duration:10
-
-# 统计帧完整性 / 帧率 / 带宽
 python host/cam_stream_check.py cap.pcapng
-
-# 解出第一帧完整图像（BGGR demosaic）
 python host/raw10_pcap_decode.py cap.pcapng frame.png
 ```
 
@@ -96,6 +91,39 @@ python host/raw10_pcap_decode.py cap.pcapng frame.png
 
 > 如果换成别的光照条件，只改 `cam_raw10_rx.v` 里的 `CAM_AG_INIT` 一个常数即可。
 > PC 端 `host/raw10_pcap_decode.py` 已内置灰世界 AWB + 自动拉伸，RAW 直出不会偏紫。
+
+## 每帧元数据包（M3）
+
+每帧先发 1 个 `pkt_idx = 0xFFFF` 的 UDP 包（与数据包同端口 4660、同 1440B 长度），
+前 32 字节有效：
+
+| 偏移 | 内容 |
+|---|---|
+| 0-1 | `A5 5A` 魔数（数据包是 `AA 55`） |
+| 2-3 | frame_id |
+| 4-5 | 曝光（半行，当前 1991） |
+| 6-7 | 模拟增益档位（当前 48 = 2x） |
+| 8-9 | 传感器 ID（0xEE4B） |
+| 10 | 状态 [0]=cfg_done [1]=sensor_ok [2]=fifo_ovf [3]=lane_err |
+| 11 | 版本 = 1 |
+| 12-23 | 上一完整传感器帧的 B/G/R 累加和（各 32bit，含黑电平） |
+| 24-27 | 总像素数 0x000E1000 |
+| 28-31 | `5A 5A A5 A5` |
+
+FPGA 在 125MHz 域按 sensor 帧统计 B/G/R（偶行 P0/P2=B、P1/P3=G；奇行 P0/P2=G、P1/P3=R），
+PC 端 `awb_gains_from_meta()` 扣黑电平后算灰世界增益 —— 这样每帧 AWB 用的是
+**与传感器帧对齐的统计**，比单帧现算更稳。
+
+## 上位机工具
+
+| 脚本 | 用途 |
+|---|---|
+| `cam_monitor.py COM4` | 串口状态（N/T/C/S/V），带帧率增量 |
+| `cam_stream_check.py cap.pcapng` | 帧完整性 / 帧率 / 带宽 |
+| `raw10_pcap_decode.py cap.pcapng out.png` | 解一帧 → AWB（优先用元数据）→ PNG |
+| `cam_view.py` | **实时显示**：UDP 4660 → AWB → 列噪声校正 → 双边降噪 → 窗口；`s` 存图，`r` 录像 |
+| `make_video.py cap.pcapng out.mp4` | 抓包 → mp4（AWB/列校正/拉伸全片固定，不闪烁） |
+| `cam_gain_scan.py` / `cam_frame_grab.py` / `cam_phase_analysis.py` | 调试：按帧统计亮度 / 按帧号抓图 / 分档对比 |
 
 ## 当前状态
 

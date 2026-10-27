@@ -28,6 +28,7 @@ def main():
     t_first = t_last = None
     n_video = 0
     n_bad_len = 0
+    n_meta = 0
 
     for ts, p in pkts:
         if len(p) < 42 or p[12:14] != b"\x08\x00" or p[23] != 17:
@@ -45,6 +46,9 @@ def main():
             n_bad_len += 1
             continue
         body = payload[8:]
+        if pidx == 0xFFFF:
+            n_meta += 1
+            continue
         if len(body) != PKT_BYTES:
             n_bad_len += 1
             continue
@@ -57,7 +61,8 @@ def main():
             t_first = ts
         t_last = ts
 
-    print(f"[video] {n_video} 个视频包" + (f"，{n_bad_len} 个长度异常" if n_bad_len else ""))
+    print(f"[video] {n_video} 个视频包，{n_meta} 个元数据包"
+          + (f"，{n_bad_len} 个长度异常" if n_bad_len else ""))
 
     if not frames:
         print("[error] 没有解出任何视频帧")

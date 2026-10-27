@@ -48,7 +48,14 @@ module cam_raw10_rx (
     output wire        O_sensor_ok,
     output wire [15:0] O_sensor_id,
     output wire        O_ovf,            // FIFO 溢出（粘滞）
-    output wire        O_lane_err
+    output wire        O_lane_err,
+
+    // ---- 元数据（每帧一个包用）----
+    output wire [15:0] O_ae,             // 当前曝光值（半行）
+    output wire [15:0] O_ag,             // 当前模拟增益档位（16..176）
+    output wire [31:0] O_awb_b,          // 上一完整传感器帧的 B/G/R 累加和
+    output wire [31:0] O_awb_g,
+    output wire [31:0] O_awb_r
 );
 
     // ==================================================================
@@ -233,6 +240,16 @@ module cam_raw10_rx (
     wire [10:0] fifo_used;
     wire        fifo_rinc;
 
+    // 帧起始标记：raw_fs 是 1 拍脉冲，未必和 raw_valid 同拍，先挂起，
+    // 等下一个有效字一起写进 FIFO（最多晚 1 个字）
+    reg fs_pend;
+    always @(posedge csi_rx_clk or negedge rst_n_rx) begin
+        if (!rst_n_rx)      fs_pend <= 1'b0;
+        else if (raw_fs)    fs_pend <= ~raw_valid;
+        else if (raw_valid) fs_pend <= 1'b0;
+    end
+    wire fs_word = raw_fs | fs_pend;
+
     async_fifo #(
         .DW ( 41 ),
         .AW ( 10 )
@@ -240,7 +257,7 @@ module cam_raw10_rx (
         .wclk   ( csi_rx_clk            ),
         .wrst_n ( rst_n_rx              ),
         .winc   ( raw_valid             ),
-        .wdata  ( { raw_fs, raw_data }  ),
+        .wdata  ( { fs_word, raw_data } ),
         .wfull  ( fifo_full             ),
         .rclk   ( I_clk_sys             ),
         .rrst_n ( I_rst_n_sys           ),
@@ -249,6 +266,80 @@ module cam_raw10_rx (
         .rempty ( fifo_empty            ),
         .rused  ( fifo_used             )
     );
+
+    // ==================================================================
+    // AWB 统计：按 sensor 帧累加 Bayer 三通道和（供元数据包 / PC 端 AWB 用）
+    //   BGGR：偶行 P0/P2=B, P1/P3=G；奇行 P0/P2=G, P1/P3=R
+    //   320 个字 = 一行（1280 像素 / 4），帧起始标记把行列计数器归零
+    // ==================================================================
+    reg [8:0]  awb_col;      // 0..319
+    reg [9:0]  awb_row;      // 0..719
+    reg [31:0] sum_b, sum_g, sum_r;
+    reg [31:0] awb_b, awb_g, awb_r;
+
+    // 先打一拍再累加：FIFO 输出只进寄存器（有助于 ERAM 推断），加法器时序也更松
+    reg        aws_v;
+    reg        aws_fs;
+    reg [9:0]  aws_p0, aws_p1, aws_p2, aws_p3;
+
+    always @(posedge I_clk_sys or negedge I_rst_n_sys) begin
+        if (!I_rst_n_sys) begin
+            aws_v  <= 1'b0;
+            aws_fs <= 1'b0;
+            aws_p0 <= 10'd0;
+            aws_p1 <= 10'd0;
+            aws_p2 <= 10'd0;
+            aws_p3 <= 10'd0;
+        end else begin
+            aws_v <= fifo_rinc;
+            if (fifo_rinc) begin
+                aws_fs <= fifo_dout[40];
+                aws_p0 <= fifo_dout[39:30];
+                aws_p1 <= fifo_dout[29:20];
+                aws_p2 <= fifo_dout[19:10];
+                aws_p3 <= fifo_dout[9:0];
+            end
+        end
+    end
+
+    always @(posedge I_clk_sys or negedge I_rst_n_sys) begin
+        if (!I_rst_n_sys) begin
+            awb_col <= 9'd0;
+            awb_row <= 10'd0;
+            sum_b   <= 32'd0;
+            sum_g   <= 32'd0;
+            sum_r   <= 32'd0;
+            awb_b   <= 32'd0;
+            awb_g   <= 32'd0;
+            awb_r   <= 32'd0;
+        end else if (aws_v) begin
+            if (aws_fs) begin                   // 新的一帧，锁存上一帧结果
+                awb_col <= 9'd0;
+                awb_row <= 10'd0;
+                awb_b   <= sum_b;
+                awb_g   <= sum_g;
+                awb_r   <= sum_r;
+                sum_b   <= 32'd0;
+                sum_g   <= 32'd0;
+                sum_r   <= 32'd0;
+            end else begin
+                if (awb_col == 9'd319) begin
+                    awb_col <= 9'd0;
+                    awb_row <= awb_row + 10'd1;
+                end else begin
+                    awb_col <= awb_col + 9'd1;
+                end
+
+                if (!awb_row[0]) begin
+                    sum_b <= sum_b + {22'd0, aws_p0} + {22'd0, aws_p2};
+                    sum_g <= sum_g + {22'd0, aws_p1} + {22'd0, aws_p3};
+                end else begin
+                    sum_g <= sum_g + {22'd0, aws_p0} + {22'd0, aws_p2};
+                    sum_r <= sum_r + {22'd0, aws_p1} + {22'd0, aws_p3};
+                end
+            end
+        end
+    end
 
     // 溢出检测：fifo_full 是写域电平，跨到读域后做粘滞（避免在 D-PHY 恢复时钟域里
     // 写带使能的寄存器——TD 6.2 对这种结构会报 SYN-8613）
@@ -324,6 +415,11 @@ module cam_raw10_rx (
     assign O_frame_start = v0 & fs0 & (bi == 3'd0) & I_byte_rd;
     assign O_avail_words = fifo_used;      // 已用字数（0..1024），×5 = 字节数
     assign O_frame_cnt   = cam_frame_cnt;
+    assign O_ae          = CAM_AE_INIT;
+    assign O_ag          = CAM_AG_INIT;
+    assign O_awb_b       = awb_b;
+    assign O_awb_g       = awb_g;
+    assign O_awb_r       = awb_r;
 
     // 溢出标志跨到 sys 域（调试用）
     reg       ovf_sticky;

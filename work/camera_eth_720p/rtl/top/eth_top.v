@@ -116,6 +116,8 @@ module eth_top (
     wire        cam_cfg_done, cam_sensor_ok;
     wire [15:0] cam_sensor_id;
     wire        cam_ovf, cam_lane_err;
+    wire [15:0] cam_ae, cam_ag;
+    wire [31:0] cam_awb_b, cam_awb_g, cam_awb_r;
 
     cam_raw10_rx u_cam (
         .I_clk_24m       ( clk_24m        ),
@@ -140,16 +142,94 @@ module eth_top (
         .O_sensor_ok     ( cam_sensor_ok  ),
         .O_sensor_id     ( cam_sensor_id  ),
         .O_ovf           ( cam_ovf        ),
-        .O_lane_err      ( cam_lane_err   )
+        .O_lane_err      ( cam_lane_err   ),
+        .O_ae            ( cam_ae         ),
+        .O_ag            ( cam_ag         ),
+        .O_awb_b         ( cam_awb_b      ),
+        .O_awb_g         ( cam_awb_g      ),
+        .O_awb_r         ( cam_awb_r      )
     );
 
     // ==================================================================
     // UDP 视频流
     // ==================================================================
     wire        vid_req, vid_busy, vid_done;
+    wire        vid_meta;
+    wire        vid_pay_rd;
     wire [15:0] vid_frame_id, vid_pkt_idx, vid_pkt_total;
     wire [7:0]  txd_gmii;
     wire        tx_en;
+
+    // 元数据包载荷：前 32 字节有用，其余填 0（整包仍 1440B，复用 eth_udp_tx）
+    //   0-1   A5 5A            魔数（区别于数据包的 AA 55）
+    //   2-3   frame_id
+    //   4-5   曝光（半行）
+    //   6-7   模拟增益档位（16..176）
+    //   8-9   传感器 ID
+    //   10    状态位 [0]=cfg_done [1]=sensor_ok [2]=fifo_ovf [3]=lane_err
+    //   11    版本 = 1
+    //   12-23 B/G/R 累加和（各 32bit，上一完整传感器帧）
+    //   24-27 总像素数 = 921600 = 0x000E1000（B/R 各 1/4，G 1/2）
+    //   28-31 5A 5A A5 A5
+    reg [10:0] meta_idx;
+    always @(posedge clk_125 or negedge rst_125_n) begin
+        if (!rst_125_n)       meta_idx <= 11'd0;
+        else if (!vid_busy)   meta_idx <= 11'd0;
+        else if (vid_pay_rd)  meta_idx <= meta_idx + 11'd1;
+    end
+
+    // 慢速状态跨到 125MHz
+    reg [1:0] mcfg_s, mok_s, movf_s;
+    reg [15:0] msid_s1, msid_s2;
+    always @(posedge clk_125) begin
+        mcfg_s  <= {mcfg_s[0],  cam_cfg_done};
+        mok_s   <= {mok_s[0],   cam_sensor_ok};
+        movf_s  <= {movf_s[0],  cam_ovf};
+        msid_s1 <= cam_sensor_id;
+        msid_s2 <= msid_s1;
+    end
+
+    reg [7:0] meta_byte;
+    always @(*) begin
+        case (meta_idx)
+            11'd0:   meta_byte = 8'hA5;
+            11'd1:   meta_byte = 8'h5A;
+            11'd2:   meta_byte = vid_frame_id[15:8];
+            11'd3:   meta_byte = vid_frame_id[7:0];
+            11'd4:   meta_byte = cam_ae[15:8];
+            11'd5:   meta_byte = cam_ae[7:0];
+            11'd6:   meta_byte = cam_ag[15:8];
+            11'd7:   meta_byte = cam_ag[7:0];
+            11'd8:   meta_byte = msid_s2[15:8];
+            11'd9:   meta_byte = msid_s2[7:0];
+            11'd10:  meta_byte = {4'b0, cam_lane_err, movf_s[1], mok_s[1], mcfg_s[1]};
+            11'd11:  meta_byte = 8'h01;
+            11'd12:  meta_byte = cam_awb_b[31:24];
+            11'd13:  meta_byte = cam_awb_b[23:16];
+            11'd14:  meta_byte = cam_awb_b[15:8];
+            11'd15:  meta_byte = cam_awb_b[7:0];
+            11'd16:  meta_byte = cam_awb_g[31:24];
+            11'd17:  meta_byte = cam_awb_g[23:16];
+            11'd18:  meta_byte = cam_awb_g[15:8];
+            11'd19:  meta_byte = cam_awb_g[7:0];
+            11'd20:  meta_byte = cam_awb_r[31:24];
+            11'd21:  meta_byte = cam_awb_r[23:16];
+            11'd22:  meta_byte = cam_awb_r[15:8];
+            11'd23:  meta_byte = cam_awb_r[7:0];
+            11'd24:  meta_byte = 8'h00;          // 总像素数 921600 = 0x000E1000
+            11'd25:  meta_byte = 8'h0E;
+            11'd26:  meta_byte = 8'h10;
+            11'd27:  meta_byte = 8'h00;
+            11'd28:  meta_byte = 8'h5A;
+            11'd29:  meta_byte = 8'h5A;
+            11'd30:  meta_byte = 8'hA5;
+            11'd31:  meta_byte = 8'hA5;
+            default: meta_byte = 8'h00;
+        endcase
+    end
+
+    wire [7:0] vid_pay_data = vid_meta ? meta_byte : cam_byte;
+    assign cam_byte_rd = vid_pay_rd & ~vid_meta;   // 元数据包不消耗摄像头数据
 
     vid_udp_src #(
         .START_WORDS ( 11'd292      ),   // ≥1460 字节
@@ -160,6 +240,7 @@ module eth_top (
         .avail_words ( cam_avail    ),
         .frame_start ( cam_fs       ),
         .req         ( vid_req      ),
+        .meta        ( vid_meta     ),
         .frame_id    ( vid_frame_id ),
         .pkt_idx     ( vid_pkt_idx  ),
         .pkt_total   ( vid_pkt_total),
@@ -181,8 +262,8 @@ module eth_top (
         .frame_id   ( vid_frame_id ),
         .pkt_idx    ( vid_pkt_idx  ),
         .pkt_total  ( vid_pkt_total),
-        .pay_data   ( cam_byte     ),
-        .pay_rd     ( cam_byte_rd  ),
+        .pay_data   ( vid_pay_data ),
+        .pay_rd     ( vid_pay_rd   ),
         .busy       ( vid_busy     ),
         .done       ( vid_done     ),
         .gmii_tx_en ( tx_en        ),

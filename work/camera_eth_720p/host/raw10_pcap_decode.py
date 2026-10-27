@@ -20,6 +20,9 @@ import struct
 import numpy as np
 from collections import defaultdict
 
+from cam_proc import (META_IDX, parse_meta, awb_gains, awb_gains_from_meta,
+                      apply_awb)
+
 W, H = 1280, 720
 PKT_BYTES = 1440
 PKT_TOTAL = 800
@@ -89,6 +92,7 @@ def main():
     print(f"[load] {len(pkts)} packets")
 
     frames = defaultdict(dict)
+    metas = {}
     for ts, p in pkts:
         if len(p) < 14 + 20 + 8 + 8:
             continue
@@ -101,6 +105,11 @@ def main():
             continue
         fid, pidx, ptot = struct.unpack(">HHH", payload[2:8])
         body = payload[8:]
+        if pidx == META_IDX:
+            m = parse_meta(body)
+            if m:
+                metas[m["frame_id"]] = m
+            continue
         if len(body) != PKT_BYTES:
             continue
         frames[fid][pidx] = body
@@ -127,34 +136,27 @@ def main():
     px = unpack_raw10(buf)[: W * H].reshape(H, W)
     print(f"[raw] min={px.min()} max={px.max()} mean={px.mean():.1f}")
 
-    # ---- 灰世界 AWB（BGGR：00=B, 01=G1, 10=G2, 11=R）+ 黑电平 + 自动拉伸 ----
-    # RAW10 直出不带 ISP，颜色会严重偏色（补光灯下偏紫），必须先白平衡再转 8bit。
-    pf = px.astype(np.float32)
-    mb = pf[0::2, 0::2].mean()
-    mg1 = pf[0::2, 1::2].mean()
-    mg2 = pf[1::2, 0::2].mean()
-    mr = pf[1::2, 1::2].mean()
-    mg = 0.5 * (mg1 + mg2)
-
-    # 黑电平：SC520CS 约 64
+    # ---- 灰世界 AWB（BGGR）+ 黑电平 + 自动拉伸 ----
+    # 优先用 FPGA 元数据包里的 B/G/R 累加和（与传感器帧对齐、更稳）；
+    # 没有元数据包时退化为对本帧统计。
     bl = 64.0
-    mb = max(mb - bl, 1e-3)
-    mg = max(mg - bl, 1e-3)
-    mr = max(mr - bl, 1e-3)
+    m = metas.get(fid)
+    if m:
+        gb, gr = awb_gains_from_meta(m)
+        print(f"[meta] frame {fid}: ae={m['ae']} ag={m['ag']} "
+              f"sid={m['sensor_id']:04X} status={m['status']:X} "
+              f"sum B/G/R={m['sum_b']}/{m['sum_g']}/{m['sum_r']}")
+    else:
+        gb, gr = awb_gains(px)
+        print(f"[meta] 本帧没有元数据包，用本帧统计算 AWB")
 
-    bal = np.empty_like(pf)
-    bal[0::2, 0::2] = (pf[0::2, 0::2] - bl) * (mg / mb)
-    bal[0::2, 1::2] = (pf[0::2, 1::2] - bl)
-    bal[1::2, 0::2] = (pf[1::2, 0::2] - bl)
-    bal[1::2, 1::2] = (pf[1::2, 1::2] - bl) * (mg / mr)
-    np.clip(bal, 0, 1023, out=bal)
+    bal = apply_awb(px, gb, gr)
 
     lo = float(np.percentile(bal, 0.5))
     hi = float(np.percentile(bal, 99.5))
     if hi - lo < 16:
         hi = lo + 16
-    print(f"[awb] B/G/R mean = {mb+bl:.1f}/{mg+bl:.1f}/{mr+bl:.1f}  "
-          f"gain B={mg/mb:.2f} R={mg/mr:.2f}")
+    print(f"[awb] gain B={gb:.2f} R={gr:.2f}")
     print(f"[level] stretch {lo:.0f}..{hi:.0f} -> 0..255")
 
     img8 = np.clip((bal - lo) * 255.0 / (hi - lo), 0, 255).astype(np.uint8)
