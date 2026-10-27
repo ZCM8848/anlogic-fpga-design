@@ -62,6 +62,9 @@ async function tick() {
   $("#hud-ag").textContent = s.live.ag ? `${s.live.ag} (${s.live.ag === 48 ? "2X" : s.live.ag === 16 ? "1X" : "?"})` : "—";
   $("#hud-pkts").textContent = s.live.packets.toLocaleString();
 
+  const base = updateAwbUI(s.live.awb);
+  $("#awb-hint").textContent = `${base} · B ${s.live.gb.toFixed(2)} / R ${s.live.gr.toFixed(2)}`;
+
   setChip("#chip-link", s.live.ok);
   setChip("#chip-cam", s.uart.ok && s.uart.c > 0);
   setChip("#chip-rec", s.rec.on);
@@ -149,6 +152,28 @@ function renderSessions(list) {
     box.appendChild(el);
   }
 }
+
+/* ------------------------------------------------------------------- AWB */
+function awbBaseText(mode) {
+  if (mode === "auto") return "灰世界 · 逐帧";
+  if (mode === "lock") return "冻结当前增益";
+  return "不校正 · 原始通道";
+}
+
+function updateAwbUI(mode) {
+  $$("#awb-seg button").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
+  return awbBaseText(mode);
+}
+
+async function setAwb(mode) {
+  const r = await api("/api/awb", { mode });
+  if (r.ok) updateAwbUI(mode);
+  else pushLocal(`[error] AWB: ${r.msg}`);
+}
+
+$$("#awb-seg button").forEach((b) => {
+  b.addEventListener("click", () => setAwb(b.dataset.mode));
+});
 
 /* ------------------------------------------------------------------- jobs */
 function currentOptions() {

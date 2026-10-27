@@ -63,6 +63,7 @@ LOG = deque(maxlen=4000)
 LOG_TOTAL = 0
 AUTO_PROCESS = {"on": True,
                 "opts": {"meta": True, "png": True, "mp4": True, "raw": False}}
+AWB_MODE = {"mode": "auto"}      # auto = 逐帧灰世界 / lock = 冻结当前增益 / off = 不校正
 
 
 def log(msg):
@@ -179,6 +180,8 @@ class Preview(threading.Thread):
         self._hi = None
         self._t_prev = 0.0
         self._t_last = 0.0
+        self._gb = 1.0
+        self._gr = 1.0
         self._need = 0
 
     def run(self):
@@ -239,7 +242,16 @@ class Preview(threading.Thread):
         try:
             px = unpack_raw10(b"".join(fr)[: W * H * 10 // 8])[: W * H].reshape(H, W)
             m = self._metas.get(fid)
-            gb, gr = awb_gains_from_meta(m) if m else awb_gains(px)
+
+            mode = AWB_MODE["mode"]
+            if mode == "auto":
+                gb, gr = awb_gains_from_meta(m) if m else awb_gains(px)
+                self._gb, self._gr = gb, gr          # 记住最后一次，供 lock 用
+            elif mode == "lock":
+                gb, gr = self._gb, self._gr
+            else:                                    # off
+                gb, gr = 1.0, 1.0
+
             bal = apply_awb(px, gb, gr)
 
             cp = column_profile(bal)
@@ -561,6 +573,13 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/api/record/stop":
             ok = REC.stop()
             return self._json({"ok": ok})
+        if u.path == "/api/awb":
+            mode = str(body.get("mode", "auto"))
+            if mode not in ("auto", "lock", "off"):
+                return self._json({"ok": False, "msg": "mode 必须是 auto/lock/off"}, 400)
+            AWB_MODE["mode"] = mode
+            log(f"[awb] 模式切换为 {mode}")
+            return self._json({"ok": True, "mode": mode})
         if u.path == "/api/session/render":
             sess = body.get("session") or ""
             opts = body.get("options", {})
@@ -618,6 +637,8 @@ class Handler(BaseHTTPRequestHandler):
                 "live": {"ok": (now - PREVIEW.last_rx) < 3 if PREVIEW.last_rx else False,
                          "fps": round(PREVIEW.fps, 1), "frame": PREVIEW.frame_id,
                          "ae": PREVIEW.ae, "ag": PREVIEW.ag,
+                         "awb": AWB_MODE["mode"],
+                         "gb": round(PREVIEW._gb, 3), "gr": round(PREVIEW._gr, 3),
                          "packets": PREVIEW.packets},
                 "rec": {"on": REC.running(), "name": REC.name,
                         "seconds": round(now - REC.started, 1) if REC.running() else 0,

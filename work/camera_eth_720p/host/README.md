@@ -58,6 +58,7 @@ python console.py
 
 - **LIVE FEED**：实时画面（UDP → AWB → 列校正 → 降噪），HUD 显示帧号/帧率/曝光/增益/包数
 - **DEVICE**：串口 N/T/C/S/V 与状态位（CFG / SENSOR / OVF / RX）
+- **IMAGE**：白平衡三档 —— `AWB AUTO`（逐帧灰世界）/ `LOCK`（冻结当前增益）/ `OFF`（原始通道不校正）
 - **RECORD**：填会话名 → 选时长 → `START`；自动调 dumpcap 录到 `captures/<名字>/raw.pcapng`
 - **OUTPUT**：勾选要生成的产物（meta / png / mp4 / raw），录制结束自动跑流水线
 - **SESSIONS**：历史录制列表，可一键 `PROCESS` 或 `DIR` 打开目录
