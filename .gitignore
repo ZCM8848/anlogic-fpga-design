@@ -82,3 +82,9 @@ __pycache__/
 *.fst
 *.fst.hier
 *.vzt
+
+# ---- 摄像头录制素材 / 调试产物（大文件与图片，仅本地保留）----
+*.pcapng
+*.pcap
+work/camera_eth_720p/captures/
+work/camera_eth_720p/host/*.png

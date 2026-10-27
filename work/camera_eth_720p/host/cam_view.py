@@ -71,6 +71,16 @@ def main():
     vw = None
     last_bgr = None
 
+    if args.record:
+        vw = cv2.VideoWriter(args.record, cv2.VideoWriter_fourcc(*"mp4v"),
+                             args.fps, (W, H))
+        if vw.isOpened():
+            print(f"[record] {args.record}  ({args.fps} fps, 按 r 停止)")
+            writer = args.record
+        else:
+            print(f"[warn] 无法创建录像文件 {args.record}")
+            vw = None
+
     def render(fid, d):
         nonlocal prof_ema, lo, hi, shown, writer, vw, last_bgr
         buf = b"".join(d[i] for i in range(PKT_TOTAL))
@@ -178,7 +188,7 @@ def main():
             elif key == ord("r"):
                 if writer is None and args.record:
                     vw = cv2.VideoWriter(args.record, cv2.VideoWriter_fourcc(*"mp4v"),
-                                         30.0, (W, H))
+                                         args.fps, (W, H))
                     print(f"[record] {args.record}")
                     writer = args.record
                 elif writer is not None:
