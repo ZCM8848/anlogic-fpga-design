@@ -80,6 +80,23 @@ python host/cam_stream_check.py cap.pcapng
 python host/raw10_pcap_decode.py cap.pcapng frame.png
 ```
 
+## 图像参数（实测，2026-10-27）
+
+| 项 | 值 | 说明 |
+|---|---|---|
+| 曝光 | `1991`（= 995 行 ≈ 16.6ms） | 原厂表就是最大值，改动见 `cam_raw10_rx.v` 的 `CAM_AE_INIT` |
+| 模拟增益 | `ag=48` → `0x3e09=0x08`（2x） | 补光灯下均值 ≈ 290/1023，高光不削顶 |
+| 帧率 / 带宽 | 59.6 fps / 551.6 Mbps | 800 包 × 1440B，抓包 0 丢包 |
+| 传感器 ID | `0xEE4B` | `V` 的 bit1 = 1 表示 ID 校验通过 |
+| Bayer | BGGR | PC 端 `cv2.COLOR_BayerBG2BGR` |
+| 列固定图案噪声 | ≈ 8.7 LSB @2x | 暗场高增益下会看到竖条纹，属传感器 FPN |
+
+增益档位（`SC520GainTbl`：(16,48,80,112,144,176) → (1x,2x,4x,8x,16x,32x)），
+补光灯下实测全帧均值：**179 / 292 / 503 / 834 / 993 / 1020**（8x 起饱和）。
+
+> 如果换成别的光照条件，只改 `cam_raw10_rx.v` 里的 `CAM_AG_INIT` 一个常数即可。
+> PC 端 `host/raw10_pcap_decode.py` 已内置灰世界 AWB + 自动拉伸，RAW 直出不会偏紫。
+
 ## 当前状态
 
 - **M0 ✅ 完成**（2026-10-26）：核实 PH1P35 有 `PH1P_LOGIC_HD_IDDR/HD_ODDR` 原语 + 15 个 RGMII 引脚全部能在 LVCMOS33 下综合/布局/bitgen（0 FEP）+ 厘清 RXC_DV 歧义（**N8=RX_DV，V2=RX_CLK**，docx 漏列 V2）。详见 [`docs/M0_verification.md`](docs/M0_verification.md)。

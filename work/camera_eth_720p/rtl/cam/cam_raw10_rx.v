@@ -84,19 +84,46 @@ module cam_raw10_rx (
     // ==================================================================
     wire [15:0] cfg_sensor_id;
     wire        cfg_done, cfg_id_ok, cfg_iic_err;
+    wire        ae_cfg_done;
+
+    // ---- AE/AG 一次性初始化 ----
+    // SC520CS 原厂寄存器表只写了最大曝光（1991 = 1991 半行 ≈ 16.6ms），
+    // 模拟增益 0x3e09 是 0（1x），暗环境下画面几乎全黑。
+    // 实测补光灯下 2x（ag=48 → 0x3e09=0x08）均值 ~290/1023，高光不削顶，故选 2x。
+    // 想改亮度只改下面这个 16'd48：16=1x, 48=2x, 80=4x, 112=8x, 144=16x, 176=32x。
+    localparam [15:0] CAM_AG_INIT = 16'd48;
+    localparam [15:0] CAM_AE_INIT = 16'd1991;
+
+    reg [4:0] ae_wait;
+    reg       ae_req_r;
+
+    always @(posedge I_clk_24m or negedge I_rst_n_24m) begin
+        if (!I_rst_n_24m) begin
+            ae_wait  <= 5'd0;
+            ae_req_r <= 1'b0;
+        end else if (!cfg_done) begin
+            ae_wait  <= 5'd0;
+            ae_req_r <= 1'b0;
+        end else if (ae_wait < 5'd16) begin
+            ae_wait  <= ae_wait + 5'd1;
+            ae_req_r <= (ae_wait == 5'd15);     // 配置完成后约 0.7µs 触发一次
+        end else begin
+            ae_req_r <= 1'b0;
+        end
+    end
 
     uicfgcs520 #(
         .CLK_DIV ( 23809524 / 100000 - 1 )      // 100 kHz @23.81MHz
     ) u_cfg (
         .I_clk          ( I_clk_24m      ),
         .I_rst_n        ( cam_i2c_ready  ),
-        .I_ae_req       ( 1'b0           ),
-        .I_ae           ( 16'd0          ),
-        .I_ag           ( 16'd0          ),
+        .I_ae_req       ( ae_req_r       ),
+        .I_ae           ( CAM_AE_INIT    ),
+        .I_ag           ( CAM_AG_INIT    ),
         .O_cam_scl      ( O_cam_scl      ),
         .IO_cam_sda     ( IO_cam_sda     ),
         .O_cfg_done     ( cfg_done       ),
-        .O_ae_cfg_done  (                ),
+        .O_ae_cfg_done  ( ae_cfg_done    ),
         .O_sensor_id    ( cfg_sensor_id  ),
         .O_sensor_id_ok ( cfg_id_ok      ),
         .O_iic_error    ( cfg_iic_err    )
