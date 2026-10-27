@@ -67,9 +67,9 @@ SC520CS (MIPI 2lane 828Mbps, RAW10 720p60)
 ## 上位机用法（速查）
 
 ```powershell
+python host/console.py                     # Web 控制台（推荐：预览 + 录制 + 一键处理）
 python host/cam_monitor.py COM4            # 串口状态
-python host/cam_view.py                    # 实时显示（推荐）
-python host/cam_view.py --record out.mp4   # 实时 + 录像
+python host/cam_view.py                    # 实时显示（命令行版）
 & "D:\Program Files\Wireshark\dumpcap.exe" -i "\Device\NPF_{...}" -w cap.pcapng -a duration:10
 python host/cam_stream_check.py cap.pcapng
 python host/raw10_pcap_decode.py cap.pcapng frame.png
@@ -84,13 +84,32 @@ python host/raw10_pcap_decode.py cap.pcapng frame.png
 | 帧率 / 带宽 | 59.6 fps / 551.6 Mbps | 800 包 × 1440B，抓包 0 丢包 |
 | 传感器 ID | `0xEE4B` | `V` 的 bit1 = 1 表示 ID 校验通过 |
 | Bayer | BGGR | PC 端 `cv2.COLOR_BayerBG2BGR` |
-| 列固定图案噪声 | ≈ 8.7 LSB @2x | 暗场高增益下会看到竖条纹，属传感器 FPN |
+| 列固定图案噪声 | **< 0.02 LSB** | 暗场/平场标定实测：传感器本身没有列条纹（见下） |
 
 增益档位（`SC520GainTbl`：(16,48,80,112,144,176) → (1x,2x,4x,8x,16x,32x)），
 补光灯下实测全帧均值：**179 / 292 / 503 / 834 / 993 / 1020**（8x 起饱和）。
 
 > 如果换成别的光照条件，只改 `cam_raw10_rx.v` 里的 `CAM_AG_INIT` 一个常数即可。
 > PC 端 `host/raw10_pcap_decode.py` 已内置灰世界 AWB + 自动拉伸，RAW 直出不会偏紫。
+
+### 图像质量结论（2026-10-27 暗场 / 平场标定）
+
+| 标定 | 指标 | 结果 |
+|---|---|---|
+| 暗场（盖镜头 166 帧） | 逐像素 std / 列剖面 hf_std | **0.09 LSB / 0.011 LSB** → 无 offset FPN、无列偏移 |
+| 平场（白纸 159 帧） | 相位分离后逐像素残差 | **0.38 LSB ≈ 1% PRNU**，空间不相关（lag1 0.08） |
+| 平场 | 残差列剖面 hf_std | **0.04 LSB** → 无列条纹 |
+
+结论（已用 3D 打印件 / 橡皮 / 白纸三种目标交叉验证）：
+
+- **3D 打印件画面里的「竖条纹」是零件表面的打印层纹**（周期 ≈4.6 px），不是采集链路问题。
+- **白色物体（橡皮）上的细密条纹是 2 px 的 Bayer 棋盘格**：2x 增益下白色区域 35% 削顶（≥1000），
+  三个通道各自饱和，AWB 无法恢复 —— 属于曝光问题，不是 FPN。
+- 因此可以排除：MIPI 时序/字节错位、RAW10 打包、UDP 推流丢包、传感器 FPN。
+- 标定数据在 `captures/dark_calib/`、`captures/flat_calib/`（不入库，需要时可直接用）。
+
+> 已知限制：固定 2x 增益覆盖不了「关灯暗场」和「亮白物体」两种极端；如需自动适应，
+> 可后续加 AE（按帧均值调 `CAM_AG_INIT` 对应的增益档位）。
 
 ## 每帧元数据包（M3）
 
