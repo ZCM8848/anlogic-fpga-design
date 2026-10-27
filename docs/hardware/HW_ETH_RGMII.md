@@ -205,6 +205,10 @@ zlib.crc32(全128字节) = 0x2144DF1C  ✅
 | SDC | 不加 SDC 时 TD 只会派生一个 50 MHz 时钟，125 MHz 逻辑不会被真正约束；加 `create_generated_clock` 后才可信 |
 | 时钟报告 | `report_clock_utilization` 的 waveform（如 `{2.000 6.000}`）只反映**约束/推导**，不代表 PLL 真的在振 |
 | **逻辑被静默优化** | 综合器会顺着「常量传播」把整条上游链路删掉。实测案例：UART 打印的握手写错 → `ci` 永不前进 → `msg_char` 变成常量 → `lat_*` 无用 → ARP 解析器 → RX MAC → IDDR 全被删。**判断方法：看 timing report 里的时钟 fanout**（那次 `rgmii_rxc` fanout = **0**，而正常是 158），或看 `#reg`/`#lut6` 数量是否异常变小 |
+| **`.sv` 必须放对 section** | `m1.prj` 里 Verilog 与 SystemVerilog 是两个独立段：`<Verilog>` 与 `<System_Verilog>`。把 `.sv`（含加密的 `.enc.sv`）写进 `<Verilog>` 会按 Verilog-2001 解析，解包 array 端口直接报 `HDL-8007 ERROR: cannot access memory 'S_xxx_data' directly` |
+| **异步 FIFO 的 full 要打拍** | `wfull = (wgray_nx == ...)` 会形成 `wfull→do_wr→wbin_nx→wgray_nx→wfull` 组合环；TD 先报 `SYN-5033 unstable comb loops`，再报 `SYN-8613 Couldn't find D_NET/EN_NET net "..."`。改成 Cummings 写法（`wfull_r` 寄存）即可 |
+| **D-PHY 恢复时钟要约束** | 不写 SDC 会报 `USR-6113 clock pin hs_c16_in is not driven by any clock`。加 `create_clock ... [get_pins {u_cam/u_dphy/O_hs_rx_clk}]`（103.5MHz）并放进 `set_clock_groups -asynchronous` |
+| **恢复时钟域少写带使能寄存器** | 在 `csi_rx_clk`（D-PHY 恢复时钟）域里写「带复杂使能的寄存器」时 TD 6.2 偶发 `SYN-8613`。把粘滞/统计逻辑挪到 125MHz 域做，或者换成外层单条件使能 |
 
 ---
 

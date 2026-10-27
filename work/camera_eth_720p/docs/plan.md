@@ -1,5 +1,10 @@
 # 详细拆解计划：720P@60 RAW10 Bayer 千兆网口实时上行
 
+> **状态（2026-10-27）**：计划里的 M1/M2 已合并完成（RGMII TX/RX + IPv4/UDP 全线打通），
+> M3 由「CSI-2 tap + DDR2 缓存」简化为「D-PHY → RAW10 → 异步 FIFO → 直接 UDP」——
+> 实测带宽 553 Mbps 只占 GMII 58%，不需要 DDR2 帧缓存。当前实现与进度见
+> [`../README.md`](../README.md)。
+
 > 子项目：`work/camera_eth_720p`
 > 决策定稿：RAW10 Bayer 透传 + UDP 丢帧模型
 > 来源：硬件能力评估（见同仓 docs/hardware/HW_HX1P35A_BOARD.md §15、HW_SC520CS.md、HW_PH1P35.md）

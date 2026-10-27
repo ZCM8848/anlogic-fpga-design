@@ -19,25 +19,72 @@
 - **RGB888（1327 Mbps）超线速，不可行**；本项目只送 RAW10 Bayer，上位机做 demosaic。
 - UDP 丢包 → 直接丢帧，视觉算法迭代不在乎丢几帧。
 
-## 目录结构（规划）
+## 目录结构
 
 ```
 work/camera_eth_720p/
 ├── README.md                  # 本文件
 ├── docs/
-│   ├── plan.md                 # 详细拆解计划（M0~M5）
-│   └── M0_verification.md      # M0 前置核实结果（IDDR/ODDR、bank、引脚占位）
+│   ├── plan.md                # 详细拆解计划（M0~M5）
+│   └── M0_verification.md     # M0 前置核实结果（IDDR/ODDR、bank、引脚占位）
 ├── constraints/
-│   └── pin.adc                 # 待 M0 通过后写入 RGMII 引脚占位
+│   ├── pin.adc                # RGMII + 摄像头控制脚
+│   └── timing.sdc             # 4 个异步时钟域（50M / 125M / RGMII_RXC / MIPI 字节时钟）
 ├── rtl/
-│   ├── eth/                    # rgmii_mac / mdio / arp / icmp / udp_tx
-│   ├── net/                    # tap_raw10 / video_in_net / video_out_net / net_packetizer
-│   └── top/                    # design_top_wrapper（新顶层，不含 HDMI/CV）
+│   ├── cam/                   # cam_raw10_rx.v（D-PHY→CSI→RAW10→FIFO→字节流）+ async_fifo.v
+│   ├── camera/                # SC520CS I2C 初始化（uicfgcs520 / uics520reg_720p60 / uii2c …）
+│   ├── isp/                   # csi_unpacket_2lane.v / raw10_unpacket_2lane.v
+│   ├── eth/                   # eth_udp_tx / vid_udp_src / eth_rx_mac / arp_rx / dbg_uart_report
+│   └── top/                   # eth_top.v
+├── ip/
+│   ├── pll/                   # C0=125MHz（以太网）/ C1=23.81MHz（摄像头 XCLK）
+│   └── mipi_dphy_rx/          # D-PHY RX 硬核 IP（.sv 必须放 prj 的 <System_Verilog> 段）
 └── host/
-    └── host_recv.py            # 上位机 UDP 接收 + demosaic + imshow + 落盘
+    ├── cam_monitor.py         # 串口状态行解析（N/T/C/S/V）
+    ├── cam_stream_check.py    # 抓包统计：帧完整性 / 帧率 / 带宽
+    └── raw10_pcap_decode.py   # 抓包 → RAW10 解包 → demosaic → PNG
+```
+
+## 数据通路
+
+```
+SC520CS (MIPI 2lane 828Mbps, RAW10 720p60)
+  → D-PHY 硬核 (DPHY0)
+  → csi_unpacket_2lane      (16bit 双 lane → 32bit CSI 字)
+  → raw10_unpacket_2lane    (40bit = 4 × 10bit 像素)
+  → async_fifo 41bit×1024   (写 = MIPI 字节时钟 ~103.5MHz，读 = 125MHz)
+  → 展开器 40bit → 5 字节   (1 字节/周期，MIPI RAW10 打包)
+  → vid_udp_src             (够 1460 字节就发，800 包 × 1440B = 1,152,000B = 一帧)
+  → eth_udp_tx              (Ethernet + IPv4 + UDP + CRC32)
+  → rgmii_tx_phy (HD_ODDR)
+```
+
+- 帧大小：1280×720×10bit = **1,152,000 B**，正好 **800 × 1440 B**，帧号天然对齐包边界。
+- 不需要 DDR2 帧缓存：TX 能力 125 MB/s，摄像头平均 69 MB/s（1.8× 余量），
+  8KB 级 FIFO 只用来吸收「每行 1600B / 7.7µs」的 MIPI 突发。
+- 包边界会跨行，FIFO 按**连续字节流**处理，不做行对齐。
+
+## 上位机用法
+
+```powershell
+# 每秒一行：N=主机帧数 T=已发视频帧 C=摄像头帧 S=传感器ID V=状态位
+python host/cam_monitor.py COM4
+
+# 抓包（另开窗口）
+& "D:\Program Files\Wireshark\dumpcap.exe" -i "\Device\NPF_{...}" -w cap.pcapng -a duration:10
+
+# 统计帧完整性 / 帧率 / 带宽
+python host/cam_stream_check.py cap.pcapng
+
+# 解出第一帧完整图像（BGGR demosaic）
+python host/raw10_pcap_decode.py cap.pcapng frame.png
 ```
 
 ## 当前状态
 
 - **M0 ✅ 完成**（2026-10-26）：核实 PH1P35 有 `PH1P_LOGIC_HD_IDDR/HD_ODDR` 原语 + 15 个 RGMII 引脚全部能在 LVCMOS33 下综合/布局/bitgen（0 FEP）+ 厘清 RXC_DV 歧义（**N8=RX_DV，V2=RX_CLK**，docx 漏列 V2）。详见 [`docs/M0_verification.md`](docs/M0_verification.md)。
-- **M1 ⏳ 待开工**：MDIO + RGMII MAC 自环。
+- **M1 ✅ 完成**（2026-10-27）：RGMII TX/RX + IPv4/UDP 全部打通。eth_smoke 实测 146,536 包 0 错、60.3fps、581 Mbps；端口到本项目后复测 99,777 包 0 错。ARP 学习到 PC MAC。
+- **M2 🔄 进行中**（2026-10-27）：摄像头前端已接入（D-PHY + CSI 解包 + RAW10 组包 + 异步 FIFO + UDP 发送），
+  综合通过，布局布线中。待上板验证：`S=56C0`（传感器 ID）、`C` ≈ 60/s、PC 端出图。
+- **M3 ⏳ 待开工**：每帧一个元数据包（AWB 增益 + 曝光），PC 端复现 FPGA 色彩。
+

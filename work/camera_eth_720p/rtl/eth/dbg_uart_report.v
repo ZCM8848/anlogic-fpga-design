@@ -1,13 +1,11 @@
-// dbg_uart_report.v — 每秒打印一行 RX 状态（COM4, 115200 8N1）
+// dbg_uart_report.v — 每秒打印一行状态（COM4, 115200 8N1）
 //
-//   格式：  N=XXXX A=XXXX M=XXXXXXXXXXXX\r\n
-//     N = 收到的帧总数（16 位 hex）
-//     A = 命中 ARP reply 的次数（16 位 hex）
-//     M = 学到的对端 MAC（12 位 hex，A8-2B-DD-29-A4-CE → A82BDD29A4CE）
-//
-// 例：  N=0123 A=0045 M=A82BDD29A4CE
-//
-// 用 50 MHz 域时钟；mac 由上层做好跨时钟域（静态 + toggle 握手）。
+//   N=XXXX T=XXXX C=XXXX S=XXXX V=X\r\n        （33 字符）
+//     N = 以太网 RX 收帧数
+//     T = 已发送的视频帧数（frame_id）
+//     C = 摄像头 RAW10 帧计数
+//     S = 传感器 ID（I2C 读回，0x56C0 之类；0 表示没读到）
+//     V = 状态位  bit0=cfg_done  bit1=sensor_ok  bit2=fifo_ovf  bit3=rx_alive
 //
 `timescale 1ns/1ps
 
@@ -17,19 +15,19 @@ module dbg_uart_report #(
     input  wire        clk,
     input  wire        rst_n,
 
-    input  wire [15:0] frames,
+    input  wire [15:0] rx_frames,
     input  wire [15:0] tx_frames,
-    input  wire [47:0] mac,
+    input  wire [15:0] cam_frames,
+    input  wire [15:0] sensor_id,
+    input  wire [3:0]  status,
 
     output wire        uart_valid,
     output wire [7:0]  uart_data,
     input  wire        uart_ready
 );
 
-    // ------------------------------------------------------------------
     // 1 秒节拍
-    // ------------------------------------------------------------------
-    localparam integer TICK = CLK_FREQ;      // 50_000_000
+    localparam integer TICK = CLK_FREQ;
     reg [31:0] tick_cnt;
     reg        tick;
     always @(posedge clk or negedge rst_n) begin
@@ -45,16 +43,10 @@ module dbg_uart_report #(
         end
     end
 
-    // ------------------------------------------------------------------
-    // 锁存本次要打印的值
-    // ------------------------------------------------------------------
-    reg [15:0] lat_n, lat_a;
-    reg [47:0] lat_m;
+    reg [15:0] lat_n, lat_t, lat_c, lat_s;
+    reg [3:0]  lat_v;
 
-    // ------------------------------------------------------------------
-    // 字符生成
-    // ------------------------------------------------------------------
-    localparam [5:0] MSG_LEN = 6'd30;
+    localparam [5:0] MSG_LEN = 6'd33;
 
     function [7:0] hexc(input [3:0] v);
         begin
@@ -74,35 +66,35 @@ module dbg_uart_report #(
                 6'd6 : msg_char = " ";
                 6'd7 : msg_char = "T";
                 6'd8 : msg_char = "=";
-                6'd9 : msg_char = hexc(lat_a[15:12]);
-                6'd10: msg_char = hexc(lat_a[11:8]);
-                6'd11: msg_char = hexc(lat_a[7:4]);
-                6'd12: msg_char = hexc(lat_a[3:0]);
+                6'd9 : msg_char = hexc(lat_t[15:12]);
+                6'd10: msg_char = hexc(lat_t[11:8]);
+                6'd11: msg_char = hexc(lat_t[7:4]);
+                6'd12: msg_char = hexc(lat_t[3:0]);
                 6'd13: msg_char = " ";
-                6'd14: msg_char = "M";
+                6'd14: msg_char = "C";
                 6'd15: msg_char = "=";
-                6'd16: msg_char = hexc(lat_m[47:44]);
-                6'd17: msg_char = hexc(lat_m[43:40]);
-                6'd18: msg_char = hexc(lat_m[39:36]);
-                6'd19: msg_char = hexc(lat_m[35:32]);
-                6'd20: msg_char = hexc(lat_m[31:28]);
-                6'd21: msg_char = hexc(lat_m[27:24]);
-                6'd22: msg_char = hexc(lat_m[23:20]);
-                6'd23: msg_char = hexc(lat_m[19:16]);
-                6'd24: msg_char = hexc(lat_m[15:12]);
-                6'd25: msg_char = hexc(lat_m[11:8]);
-                6'd26: msg_char = hexc(lat_m[7:4]);
-                6'd27: msg_char = hexc(lat_m[3:0]);
-                6'd28: msg_char = 8'h0D;
-                6'd29: msg_char = 8'h0A;
+                6'd16: msg_char = hexc(lat_c[15:12]);
+                6'd17: msg_char = hexc(lat_c[11:8]);
+                6'd18: msg_char = hexc(lat_c[7:4]);
+                6'd19: msg_char = hexc(lat_c[3:0]);
+                6'd20: msg_char = " ";
+                6'd21: msg_char = "S";
+                6'd22: msg_char = "=";
+                6'd23: msg_char = hexc(lat_s[15:12]);
+                6'd24: msg_char = hexc(lat_s[11:8]);
+                6'd25: msg_char = hexc(lat_s[7:4]);
+                6'd26: msg_char = hexc(lat_s[3:0]);
+                6'd27: msg_char = " ";
+                6'd28: msg_char = "V";
+                6'd29: msg_char = "=";
+                6'd30: msg_char = hexc(lat_v);
+                6'd31: msg_char = 8'h0D;
+                6'd32: msg_char = 8'h0A;
                 default: msg_char = 8'h20;
             endcase
         end
     endfunction
 
-    // ------------------------------------------------------------------
-    // 发送序列
-    // ------------------------------------------------------------------
     localparam ST_IDLE = 1'b0,
                ST_SEND = 1'b1;
 
@@ -116,28 +108,29 @@ module dbg_uart_report #(
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            st     <= ST_IDLE;
-            ci     <= 6'd0;
-            vld    <= 1'b0;
-            dat    <= 8'h00;
-            lat_n  <= 16'd0;
-            lat_a  <= 16'd0;
-            lat_m  <= 48'd0;
+            st    <= ST_IDLE;
+            ci    <= 6'd0;
+            vld   <= 1'b0;
+            dat   <= 8'h00;
+            lat_n <= 16'd0;
+            lat_t <= 16'd0;
+            lat_c <= 16'd0;
+            lat_s <= 16'd0;
+            lat_v <= 4'd0;
         end else begin
             if (st == ST_IDLE) begin
                 vld <= 1'b0;
                 if (tick) begin
-                    lat_n <= frames;
-                    lat_a <= tx_frames;
-                    lat_m <= mac;
+                    lat_n <= rx_frames;
+                    lat_t <= tx_frames;
+                    lat_c <= cam_frames;
+                    lat_s <= sensor_id;
+                    lat_v <= status;
                     ci    <= 6'd0;
                     st    <= ST_SEND;
                 end
             end else begin
-                // 握手：valid 一直保持到 uart_ready 变低（UART 已接受），
-                // 然后再撤销 valid 并前进到下一个字符。
-                // 注意：**不能**在这之前无条件写 vld<=0，否则 UART 还没采样
-                //       valid 就被清掉，ci 永远不前进（会把整条上游逻辑优化掉）。
+                // valid 必须保持到 UART 接受（ready 变低）之后再撤销
                 if (!vld && uart_ready) begin
                     dat <= msg_char(ci);
                     vld <= 1'b1;

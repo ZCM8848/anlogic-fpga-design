@@ -22,8 +22,10 @@
 
 module eth_udp_tx #(
     parameter [15:0] DATA_BYTES = 16'd1440,
-    parameter [15:0] IP_TOTAL   = 16'd1476,   // 20 + 8 + 8 + 1440
-    parameter [15:0] UDP_LEN    = 16'd1456    // 8 + 8 + 1440
+    parameter [15:0] IP_TOTAL   = 16'd1476,   // 20 + 8 + 8 + DATA_BYTES
+    parameter [15:0] UDP_LEN    = 16'd1456,   // 8 + 8 + DATA_BYTES
+    parameter [15:0] SRC_PORT   = 16'h1234,
+    parameter [15:0] DST_PORT   = 16'h1234
 )(
     input  wire        clk,
     input  wire        rst_n,
@@ -35,8 +37,8 @@ module eth_udp_tx #(
     input  wire [15:0] pkt_idx,
     input  wire [15:0] pkt_total,
 
-    input  wire [7:0]  pay_data,     // 由 pay_idx 组合返回
-    output wire [10:0] pay_idx,
+    input  wire [7:0]  pay_data,     // 流式载荷：本拍有效（只在数据区被消费）
+    output wire        pay_rd,       // 消费一个载荷字节
 
     output wire        busy,
     output reg         done,         // 包结束 1 拍脉冲（在 IFG 期间）
@@ -48,8 +50,9 @@ module eth_udp_tx #(
     // 字节边界
     // ------------------------------------------------------------------
     localparam [10:0] IDX_ETH  = 11'd8;
-    localparam [10:0] IDX_FCS  = 11'd1498;              // = 58 + 1440
-    localparam [10:0] IDX_END  = 11'd1502;              // = 1498 + 4
+    localparam [10:0] IDX_DATA = 11'd58;
+    localparam [10:0] IDX_FCS  = 11'd58 + DATA_BYTES[10:0];
+    localparam [10:0] IDX_END  = IDX_FCS + 11'd4;
 
     // ------------------------------------------------------------------
     // 状态机寄存器（先声明，后面组合逻辑要用）
@@ -124,10 +127,10 @@ module eth_udp_tx #(
             11'd41 : b = 8'h64;
 
             // ---- UDP ----
-            11'd42 : b = 8'h12;                  // src port 4660
-            11'd43 : b = 8'h34;
-            11'd44 : b = 8'h12;                  // dst port 4660
-            11'd45 : b = 8'h34;
+            11'd42 : b = SRC_PORT[15:8];
+            11'd43 : b = SRC_PORT[7:0];
+            11'd44 : b = DST_PORT[15:8];
+            11'd45 : b = DST_PORT[7:0];
             11'd46 : b = UDP_LEN[15:8];
             11'd47 : b = UDP_LEN[7:0];
             11'd48 : b = 8'h00;                  // checksum = 0（IPv4 允许）
@@ -146,7 +149,7 @@ module eth_udp_tx #(
             default: b = 8'h00;
         endcase
 
-        if (idx >= 11'd58 && idx < IDX_FCS) b = pay_data;   // 58..1497
+        if (idx >= IDX_DATA && idx < IDX_FCS) b = pay_data;   // 数据区
 
         if (idx == IDX_FCS)         b = ~crc[7:0];
         if (idx == IDX_FCS + 11'd1) b = ~crc[15:8];
@@ -154,7 +157,7 @@ module eth_udp_tx #(
         if (idx == IDX_FCS + 11'd3) b = ~crc[31:24];
     end
 
-    assign pay_idx = idx - 11'd58;
+    assign pay_rd = (st == S_TX) && (idx >= IDX_DATA) && (idx < IDX_FCS);
 
     // ------------------------------------------------------------------
     // CRC 实例
