@@ -18,6 +18,7 @@ PH1P35MDG324（HX1P35A 开发板 / TD 6.2.1）上，从零搭建的 **SC500CS / 
 | M7 | 收尾 + 钢珠检测（CV） | 🔨 **①检测+框选（Phase A）编码完成，待上板**：自研 `rtl/cv/cv_top.v`（亮度阈值+run 提取+简化 CCL+bbox 叠加），`tools/sim/cv_sim.py` 7/7 通过；KEY2(A9) CV 开关、串口加 `CV=/NB=` 字段。bit md5 `6D1CC08E`，WNS -1.83ns（cv_top 组合路径，CV 关时干净=等价 M6）。**构建管线修复**：run.bat 改纯 ASCII+正斜杠（中文 rem 在 GBK cmd 失效；Tcl `\a` 吃反斜杠）；发现 TD 命令行开 `*.prj` 非 `.al`，新增源文件须 `tools/td_run/sync_prj.py` 同步否则 black box。详见下「M7 构建记录」。待办：上板验证 CV 框选、edge 模式 -1.7ns、OSD 左 5px 重复（M6 遗留）；Phase B 跟踪+计数已由 M9 转入 MCU 完成 |
 | M8 | MCU 接管串口状态上报（B1–B8） | ✅ **上板验收通过**（2026-10-12）。内嵌 RISC-V 跑固件，经 AHB 从口（`0x80000000`）读板级状态、UART0 上报 H1，输出与原 status_report 逐字符一致。**status_report.v/uart_tx.v 已删**（移 retired/），串口改由 MCU 固件 `mcu_fw/main.c` 驱动。自研 `rtl/mcu/ahb_status_slave.v`（AHB-Lite，状态寄存器）+ `ps_wrapper.v`（MCU 例化）+ `pll_mcu`（50→300MHz core_clk）。iverilog 13/13；syn WNS -2.16ns / Hold +20ps（干净）。详见 `docs/hardware/HW_MCU.md`。待办：CV 动态验证（KEY2 开 CV + 钢珠看 NB/TH 变）、retired/ 清理 status_report.v/uart_tx.v 从 .al 移除 |
 | M9 | CV 后处理转 MCU（CCL/跟踪/exit 计数） | 🔨 **编码+构建+固件编译+上板通过，参数待调**（2026-10-15）。cv_top 重构：删 CCL/跟踪/计数 FSM 与 feature/det/track/rca 表，留 Sobel+阈值+run 写（run_mem 双口 BRAM：A 口 pixel 写 / B 口 ahb 读）+ 叠加（读 overlay 画绿框/ID、读 count 画 4 位 hex）；移除颜色门/line 计数/方向箭头。ahb_status_slave 加 run_mem 间接读口（RUN_IDX/RUN_DAT）+ overlay 寄存器组（8×64bit）+ META_REG + OV_COUNT（VER MCV2）。main.c：CCL(union-find)+形状筛选+a-b 跟踪+exit/death 计数+overlay 写+串口加 CNT。bit md5 `B4C7AF9C`（slice 85%，Setup WNS -1.09ns/Hold +20ps，cv_top/ahb 改动 0 违例，22FEP 全 ISP awb→edge M6 遗留）；MCU ELF md5 `68148597`（bss 9388B，DLM 内）。iverilog 0 语法错；check_rtl 0 真错。上板：串口 `CNT` 增长（38→52），有绿框但未跟住钢珠（GATE=240/ALPHA=0.5/BETA=0.0625/EDGE_THR=80→TH=50 待调）。**观测（2026-10-15）**：固件加 CV 调试流 `D`（≈30Hz，含 bbox+面积分桶）→ 实测 `RUN` **恒 1024**（run_mem 溢出 → 处理被截断在 **y≈330**，钢珠大半没进 CCL）、`NC` 恒 64（label 饱和）、通过筛选的都是 **15~50px 小碎片**（"很多框挤在一颗球上"）。**根因 = run 容量 + 前端噪声，非筛选本身**。详见下「M9 构建记录」。HOLD：DDR2 调试通道（SW2+K2 触发传原图）待开工 |
+| M10 | SW1 RGB888 原图直通（视觉算法开发用） | 🔨 **编码+构建通过，待上板**（2026-10-27）：SW1=A4 最高优先级；`SW1=1` 时 `cv_top.I_cv_on=0`（CV 暂停）、`edge_on=0`、`osd_on=0`、`video_mux` 强制摄像头 → HDMI 输出 ISP 后 RGB888 原图（二值化之前的流，无 OSD/edge/mask/框）；`SW1=0` 现有 M9 行为不变。串口 `CV=` 改为有效 CV（SW1=1 时为 0），无需改 MCU 固件。bit md5 `E09E20F8`，phy Setup WNS -1.454ns / Hold +20ps / 8 FEP（最差仍为 M6 遗留 ISP awb→edge；SW1 RGB 通路无显著违例），slice 84.56% / EBR 41 / DSP 9。 |
 
 详细计划与调研结论见 `docs/plan.md`。
 
@@ -289,13 +290,14 @@ MIPI HS=1 F=000012 L=0720 W=01280 G=0320 ER=00 HW=2B0640xx PW=xxxx PL=0000 HC=0 
 
 **决策**（用户定）：整棵搬入厂商 ISP（不再坚持半净室）——采用 `lab_ex2_edge`+`lab_ex3_osd` 两个已验证参考工程的 demosaic/AWB/edge_detect_96/video_in/video_out/mc_to_user_interface/hdmi_mixer/osd_char_lib/anlogic_logo_rom/uicfgcs520 等全套件 + 所需 IP（divider/BRAM/FIFO）。弃用 M5 自研 fb_wr/fb_rd/ddr_arb/fb_ctrl（有 +208px 错位 bug 未解决）。
 
-**模式真值表**（SW 拨上=1）：
+**模式真值表**（SW 拨上=1；M10 起 **SW1=1 为最高优先级**，下表为 `SW1=0` 时的原三模式）：
 
-| SW4 | SW3 | video_mux | isp_top edge_on | hdmi_mixer osd_on | 画面 |
-|---|---|---|---|---|---|
-| 0 | × | test_pattern | × | × | 彩条（M1 基准） |
-| 1 | 0 | hdmi_mixer | 1 | 0 | 边缘提取（Sobel 二值图） |
-| 1 | 1 | hdmi_mixer | 0 | 1 | 彩色 + OSD（logo + 帧计数） |
+| SW1 | SW4 | SW3 | video_mux | isp_top edge_on | hdmi_mixer osd_on | 画面 |
+|---|---|---|---|---|---|---|
+| 1 | × | × | 强制摄像头 | 0 | 0 | **RGB888 原图直通**（CV 暂停，无 OSD/edge/mask/框） |
+| 0 | 0 | × | test_pattern | × | × | 彩条（M1 基准） |
+| 0 | 1 | 0 | hdmi_mixer | 1 | 0 | 边缘提取（Sobel 二值图） |
+| 0 | 1 | 1 | hdmi_mixer | 0 | 1 | 彩色 + OSD（logo + 帧计数） |
 
 **对参考件的两处最小改动**（仅加门控，非抄实现）：
 1. `isp_top.v`：加 `I_edge_on` + 2:1 mux（awb→edge_detect_96 vs 直通 awb→packer）。edge_detect_96 常驻、OSD 模式输出被丢弃。
@@ -451,6 +453,47 @@ D F=<帧号> RUN=<本帧run数> NC=<连通域数> DET=<通过筛选数> B=<lt100
 1. 调参让框跟住钢珠：`GATE=240` 偏大、`ALPHA_Q=128`/`BETA_Q=16` 增益低（速度收敛慢）、`EDGE_THR=80`（已 K3 调到 TH=50）、`MASK_SRC=1` Sobel 可能换亮度阈值（`MASK_SRC=0`，钢珠在黑背景是亮斑）。
 2. CNT 准确性对照真实钢珠数（当前 4s 涨 14 可能误计）。
 3. **HOLD**：DDR2 调试通道（SW2+K2 触发，MCU 经 AHB→DDR 读桥读 video_in 帧串口传原图），需加 AHB→DDR 读桥 + 跨域 + 仲裁，待开工。
+
+## M10 构建记录（SW1 RGB888 原图直通，视觉算法开发用）
+
+**目标**：`SW1=1` 时 HDMI 直接显示 **ISP 后、二值化之前的 RGB888 彩色原图**（`cv_top.I_data` 本身），无 OSD/edge/mask/框；用于 HDMI 采集到 PC 或肉眼对照算法输入。`SW1=0` 时 M9 行为完全不变。
+
+**关键事实**：当前识别算法二值化前吃的不是 RAW Bayer，而是：
+
+```text
+S_hdmi_out_data[23:0] = {R[7:0], G[7:0], B[7:0]}   // 1280×720，75MHz 像素域
+  → cv_top: w_y = R[7:2] + G[7:1] + B[7:2]（≈0.25R+0.5G+0.25B）
+  → Sobel 3×3 → |gx|+|gy| > EDGE_THR + K3/K4 偏置
+  → 1-bit mask → run{y,xs,xe} → run_mem → MCU CCL/跟踪
+```
+
+因此 SW1 模式直接复用这路 RGB888，不需要 raw packer、不改 ISP、不占额外 BRAM/DSP。
+
+**RTL 改动**：
+- `constraints/pin.adc`：`I_sw1` → A4（LVCMOS33，PULLUP）。
+- `design_top_wrapper.v`：`I_sw1` 3FF 同步到 pixel/byte 域；`S_cv_eff = r_cv_on & ~sw1` 送 `cv_top.I_cv_on`（SW1=1 暂停 CV，`O_data` 自动直通 `I_data`）；`S_edge_on`/`S_osd_on` 增加 `~sw1` 门控；`S_cv_on_sync_100m` 改同步有效 CV（串口 `CV=` 在 SW1=1 时为 0，无需改 MCU 固件）。SW1=1 时另用 `S_run_cnt_hold` 保持上一帧 `run_cnt`，MCU 继续处理同一帧 `run_mem`，避免跟踪老化 / `CNT` 误增；串口 `CAM` 行继续上报，`D` 流按 `CV=0` 停止。
+- `video_mux.v`：新增 `I_force_cam`，`sel_want = sync_sw4 | I_force_cam`，仍在 vsync 帧边界切换；SW1=1 时即使 SW4=0 也强制摄像头。
+
+**模式**：
+
+| SW1 | SW4 | SW3 | KEY2 | HDMI |
+|---|---|---|---|---|
+| 1 | × | × | × | RGB888 原图直通；CV 暂停（`CV=0`，D/CNT 冻结） |
+| 0 | 0 | × | × | 彩条（M1 基准） |
+| 0 | 1 | 0 | 0 | 边缘提取（Sobel 二值图） |
+| 0 | 1 | 1 | 0 | 彩色 + OSD |
+| 0 | 1 | × | 1 | CV mask + 绿框/ID/Count（M9） |
+
+**验证（待上板）**：
+0. `tools/sim/tb_video_mux.v`（iverilog）：SW4/`I_force_cam`/帧边界切换 4 用例全过。
+1. `SW1=0`：彩条/edge/OSD/CV 四态与 M9 一致，不退化。
+2. `SW1=1`：无论 SW4/SW3/KEY2 状态，HDMI 均为无叠加的彩色原图；画面与 CV 关闭时的 `I_data` 一致。
+3. `SW1=1` 且 CV 原本为开：串口 `CV=0`，`D` 流/`CNT` 停止；`SW1=0` 后 CV 自动恢复。
+4. 用 HDMI 采集卡录原图时注意：像素时钟 75.000MHz（标准 720p60 为 74.25MHz，+1.01%），显示器已接受；采集卡兼容性需实测。
+
+**构建**：`check_rtl.py` 仅 6 条已知 IP_FILE 误报（0 真错）；`tb_video_mux` 4/4 通过。TD syn：Setup WNS -2373ps / Hold +114ps / 26 FEP。TD phy final：**Setup WNS -1454ps / TNS -2859ps / 8 FEP；Hold +20ps / HTNS 0**；最差路径仍是 M6 遗留的 ISP `awb→edge_detect_96`（-1.454/-1.209/-0.704/-0.353），像素域最差 -0.052ns（hdmi_mixer，M6 遗留）与 -0.025ns（video_mux），无新增显著违例。资源：LUT6 16273/21216（76.70%）、slice 17941/21216（84.56%）、EBR 41/108、DSP 9/40、PLL 4/6、GCLK 11。bit `phy_1/camera_hdmi_720p.bit`（1,789,539B，md5 `E09E20F8868C372BD6B1DF830DFCD3A3`）。`SYN-8534`=0、`black box`=0、`rtl/` 下 `HDL-5007`=0。
+
+> **烧录注意（重要）**：TD Programmer 必须显式选择 `td_project/camera_hdmi_720p_Runs/phy_1/camera_hdmi_720p.bit`（2026-10-27 22:09，md5 `E09E20F8...`）。`best_result/` 下还有一份 **2026-09-27 的旧 bit**（md5 `A26E05AC...`），若 Programmer 默认用它，SW1 不会有任何反应（那一版还没有 SW1 逻辑）。烧录前用 `Get-FileHash ... -Algorithm MD5` 核对。
 
 
 

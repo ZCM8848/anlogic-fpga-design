@@ -38,6 +38,8 @@ set_pin_assignment { I_key4 }        { LOCATION = C7;  IOSTANDARD = LVCMOS33; PU
 set_pin_assignment { O_uart_tx }     { LOCATION = H1; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
 
 # ---- 模式切换拨码开关（板手册 2-22：拨上=1 拨下=0）----
+# SW1 最高优先级：1=摄像头 RGB888 原图直通（CV 暂停，无 OSD/edge/mask）
 # SW4 主选：0=彩条测试图案，1=摄像头；SW3 子选：0=edge，1=OSD彩色
+set_pin_assignment { I_sw1 }         { LOCATION = A4;  IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
 set_pin_assignment { I_sw4 }         { LOCATION = D11; IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
 set_pin_assignment { I_sw3 }         { LOCATION = E11; IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }

@@ -1,16 +1,18 @@
 /*******************************************************************************
  * camera_hdmi_720p — 板级顶层（M6 三模式重构）
  *
- * 模式（SW4 主选 + SW3 子选；拨上=1）：
- *   SW4=0            → 彩条测试图案（M1 基准，不退化）
- *   SW4=1, SW3=0     → 边缘提取（Sobel 二值图）
- *   SW4=1, SW3=1     → 彩色摄像头 + OSD（Anlogic logo + 帧计数）
+ * 模式（SW1 最高优先级 + SW4 主选 + SW3 子选；拨上=1）：
+ *   SW1=1            → 摄像头 RGB888 原图直通（CV 暂停；无 OSD/edge/mask/框）
+ *   SW1=0, SW4=0     → 彩条测试图案（M1 基准，不退化）
+ *   SW1=0, SW4=1,SW3=0 → 边缘提取（Sobel 二值图）
+ *   SW1=0, SW4=1,SW3=1 → 彩色摄像头 + OSD（Anlogic logo + 帧计数）
  *
- * 数据通路（SW4=1 时）：
+ * 数据通路（SW4=1 或 SW1=1 时）：
  *   SC520CS → MIPI D-PHY RX(IP) → csi_unpacket_2lane → raw10_unpacket_2lane
  *   → uial2axis → isp_top[demosaic→awb→edge_detect_96(edge_on 门控 bypass)→pack]
  *   → video_in(async FIFO,4帧乒乓) → mc_to_user_interface → DDR2 IP
- *   → video_out(async FIFO) → hdmi_mixer[OSD(osd_on 门控)] → video_mux → hdmi_tx
+ *   → video_out(async FIFO) → hdmi_mixer[OSD(osd_on 门控)]
+ *   → cv_top(CV/SW1 门控；SW1=1 时 I_cv_on=0，输出直通 I_data) → video_mux → hdmi_tx
  *
  * 时钟（ip/pll/PLL.v，厂商验证配置）：
  *   C0=100MHz 系统  C1=23.81MHz 摄像头XCLK  C4=75MHz 像素  C5=375MHz 串行
@@ -38,6 +40,7 @@ module design_top_wrapper (
     output wire        O_uart_tx,        // H1
 
     // 模式切换
+    input  wire        I_sw1,            // A4（最高优先级：1=RGB888 原图直通，CV 暂停）
     input  wire        I_sw4,            // D11（主选：0=彩条，1=摄像头）
     input  wire        I_sw3,            // E11（子选：0=edge，1=OSD彩色）
     input  wire        I_key2,           // A9 板载 KEY2（CV 叠加开关：按下切换 CV 开/关）
@@ -281,16 +284,19 @@ module design_top_wrapper (
     wire        S_ISP_O_tuser;
     wire        S_ISP_O_tvalid;
 
-    // edge_on = SW4 & ~SW3（字节域同步）：1=走 edge_detect_96，0=彩色直通(喂 OSD)
+    // edge_on = SW4 & ~SW3 & ~CV & ~SW1（字节域同步）：1=走 edge_detect_96，0=彩色直通(喂 OSD)
     reg  [2:0]  S_sw4_sync_rx;
     reg  [2:0]  S_sw3_sync_rx;
+    reg  [2:0]  S_sw1_sync_rx;
     always @(posedge S_csi_rx_clk or negedge S_rst_n_rx) begin
         if (!S_rst_n_rx) begin
             S_sw4_sync_rx <= 3'd0;
             S_sw3_sync_rx <= 3'd0;
+            S_sw1_sync_rx <= 3'd0;
         end else begin
             S_sw4_sync_rx <= {S_sw4_sync_rx[1:0], I_sw4};
             S_sw3_sync_rx <= {S_sw3_sync_rx[1:0], I_sw3};
+            S_sw1_sync_rx <= {S_sw1_sync_rx[1:0], I_sw1};
         end
     end
     // CV 开关（r_cv_on 在像素域 KEY2 段赋值；此处同步到字节域供 edge_on 门控）
@@ -299,7 +305,7 @@ module design_top_wrapper (
         if (!S_rst_n_rx) r_cv_on_sync_rx <= 3'd0;
         else             r_cv_on_sync_rx <= {r_cv_on_sync_rx[1:0], r_cv_on};
     end
-    wire S_edge_on = S_sw4_sync_rx[2] & ~S_sw3_sync_rx[2] & ~r_cv_on_sync_rx[2];
+    wire S_edge_on = S_sw4_sync_rx[2] & ~S_sw3_sync_rx[2] & ~r_cv_on_sync_rx[2] & ~S_sw1_sync_rx[2];
 
     isp_top u_isp_top (
         .axi4s_video_aclk ( S_csi_rx_clk    ),
@@ -511,21 +517,28 @@ module design_top_wrapper (
     );
 
     // ============================================================ HDMI mixer（参考件 + osd_on 门控）
-    // osd_on = SW4 & SW3（像素域同步）：1=叠加 OSD，0=纯视频直通（edge 模式不叠 OSD）
+    // osd_on = SW4 & SW3 & ~CV & ~SW1（像素域同步）：1=叠加 OSD，0=纯视频直通
     reg  [2:0]  S_sw4_sync_pix;
     reg  [2:0]  S_sw3_sync_pix;
+    reg  [2:0]  S_sw1_sync_pix;
     always @(posedge S_pixel_clk or negedge S_rst_n_pix) begin
         if (!S_rst_n_pix) begin
             S_sw4_sync_pix <= 3'd0;
             S_sw3_sync_pix <= 3'd0;
+            S_sw1_sync_pix <= 3'd0;
         end else begin
             S_sw4_sync_pix <= {S_sw4_sync_pix[1:0], I_sw4};
             S_sw3_sync_pix <= {S_sw3_sync_pix[1:0], I_sw3};
+            S_sw1_sync_pix <= {S_sw1_sync_pix[1:0], I_sw1};
         end
     end
+
+    // SW1=1：RGB888 原图直通，暂停 CV（cv_top 的 I_cv_on 拉低 → O_data 自动直通 I_data）。
+    // r_cv_on 本身保留，SW1 拨回 0 后 CV 自动恢复。
+    wire S_cv_eff = r_cv_on & ~S_sw1_sync_pix[2];
     // ============================================================ KEY2 → CV 开关（像素域去抖 + 翻转 + 跨域同步）
     // KEY2=A9 板载按键（PULLUP，按下=0）。计数器采样去抖（~14ms），下降沿翻转 r_cv_on。
-    // CV 开时强制 edge_on=0 / osd_on=0（让 hdmi_mixer/isp_top 直通纯摄像头画面供检测）。
+    // CV 开或 SW1=1 时强制 edge_on=0 / osd_on=0（让 hdmi_mixer/isp_top 直通纯摄像头画面）。
     reg [20:0] r_key2_cnt;
     reg [2:0]  r_key2_sync;
     reg        r_key2_d;
@@ -545,8 +558,8 @@ module design_top_wrapper (
         end
     end
 
-    // osd_on = SW4&SW3 且 CV 关（CV 开时强制 0，纯摄像头画面）
-    wire S_osd_on = S_sw4_sync_pix[2] & S_sw3_sync_pix[2] & ~r_cv_on;
+    // osd_on = SW4&SW3 且 CV 关且 SW1 关（CV/SW1 开时强制 0，纯摄像头画面）
+    wire S_osd_on = S_sw4_sync_pix[2] & S_sw3_sync_pix[2] & ~r_cv_on & ~S_sw1_sync_pix[2];
 
     wire        S_hdmi_out_vsync;
     wire        S_hdmi_out_hsync;
@@ -636,7 +649,7 @@ module design_top_wrapper (
     ) u_cv_top (
         .I_clk          ( S_pixel_clk      ),
         .I_rst_n        ( S_rst_n_pix      ),
-        .I_cv_on        ( r_cv_on          ),
+        .I_cv_on        ( S_cv_eff         ),
         .I_thr_up       ( R_thr_up         ),
         .I_thr_dn       ( R_thr_dn         ),
         .I_de           ( S_hdmi_out_de    ),
@@ -657,6 +670,15 @@ module design_top_wrapper (
         .O_bin_thr      ( S_cv_bin_thr     )
     );
 
+    // SW1=1 暂停 CV 时保持上一帧 run_cnt：MCU 继续处理同一帧 run_mem，
+    // 避免 run_cnt 归零导致跟踪老化 / CNT 误增；SW1=0 后自动恢复实时值。
+    reg [10:0] S_run_cnt_hold;
+    always @(posedge S_pixel_clk or negedge S_rst_n_pix) begin
+        if (!S_rst_n_pix) S_run_cnt_hold <= 11'd0;
+        else if (!S_sw1_sync_pix[2]) S_run_cnt_hold <= S_cv_run_cnt;
+    end
+    wire [10:0] S_run_cnt_eff = S_sw1_sync_pix[2] ? S_run_cnt_hold : S_cv_run_cnt;
+
     // ============================================================ video_mux（自研，彩条 vs 摄像头二选一）
     wire [23:0] S_vid_data;
     wire        S_vid_de;
@@ -667,6 +689,7 @@ module design_top_wrapper (
         .clk        ( S_pixel_clk      ),
         .rst_n      ( S_rst_n_pix      ),
         .I_sw4      ( I_sw4            ),
+        .I_force_cam( S_sw1_sync_pix[2]),
         .I_pat_data ( S_pat_data       ),
         .I_pat_de   ( S_pat_de         ),
         .I_pat_vs   ( S_pat_vs         ),
@@ -734,7 +757,7 @@ module design_top_wrapper (
         end else begin
             S_sw4_sync_100m <= {S_sw4_sync_100m[1:0], I_sw4};
             S_sw3_sync_100m <= {S_sw3_sync_100m[1:0], I_sw3};
-            S_cv_on_sync_100m <= {S_cv_on_sync_100m[1:0], r_cv_on};
+            S_cv_on_sync_100m <= {S_cv_on_sync_100m[1:0], S_cv_eff};  // 有效 CV（SW1=1 时为 0）
             S_cv_bin_thr_s1  <= S_cv_bin_thr;        // 8bit 慢变（手动调），2FF 同步
             S_cv_bin_thr_s2  <= S_cv_bin_thr_s1;
         end
@@ -813,7 +836,7 @@ module design_top_wrapper (
         .I_cv_on       ( S_cv_on_sync_100m[2]),
         .I_blob_cnt    ( 6'd0              ),   // CCL 转 MCU，无硬件检测数
         .I_bin_thr     ( S_cv_bin_thr_s2    ),
-        .I_run_cnt     ( S_cv_run_cnt       ),   // pixel 域，slave 内 2FF
+        .I_run_cnt     ( S_run_cnt_eff      ),   // SW1=1 时保持上一帧，避免 MCU 跟踪老化
         .I_min_y       ( S_cv_min_y         ),
         .I_max_y       ( S_cv_max_y         ),
         .I_vsync       ( S_hdmi_vsync       ),

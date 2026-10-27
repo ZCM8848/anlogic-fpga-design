@@ -21,6 +21,7 @@ $rtlFiles = @()
 switch ($Tb) {
     "tb_apb_status_slave"  { $rtlFiles += "rtl\mcu\apb_status_slave.v" }
     "tb_ahb_status_slave"  { $rtlFiles += "rtl\mcu\ahb_status_slave.v" }
+    "tb_video_mux"         { $rtlFiles += "rtl\video\video_mux.v" }
     default { Write-Error "Unknown testbench: $Tb (register its RTL in this script)"; exit 2 }
 }
 

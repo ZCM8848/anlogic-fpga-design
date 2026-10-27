@@ -27,6 +27,7 @@
 | **B9** | `I_key3` | KEY3（CV 阈值 −） | LVCMOS33 | PULLUP |
 | **C7** | `I_key4` | KEY4（CV 阈值 +） | LVCMOS33 | PULLUP |
 | **H1** | `O_uart_tx` | USB-UART TXD（115200 8N1） | LVCMOS33 | DS=8 |
+| **A4** | `I_sw1` | SW1（最高优先级：1=RGB888 原图直通，CV 暂停） | LVCMOS33 | PULLUP |
 | **D11** | `I_sw4` | SW4（模式主选：0=彩条,1=摄像头） | LVCMOS33 | PULLUP |
 | **E11** | `I_sw3` | SW3（模式子选：0=edge,1=OSD） | LVCMOS33 | PULLUP |
 
@@ -87,7 +88,7 @@
 | LED1~LED4 | D10 / E10 / C6 / D6（高电平点亮） |
 | 电源指示 LED14 | （板上电源灯，非用户 IO） |
 | KEY1 / KEY2 / KEY3 / KEY4 | D5 / A9 / B9 / C7（按下低电平） |
-| SW1 / SW2 / SW3 / SW4 | A4 / B4 / E11 / D11（拨上=1） |
+| SW1 / SW2 / SW3 / SW4 | A4 / B4 / E11 / D11（拨上=1；SW1/SW3/SW4 已用于本项目，SW2 保留） |
 | 蜂鸣器 BUZZER | C12（低电平响） |
 
 ### 数码管 / 双色 LED（复用，SW6 选择）

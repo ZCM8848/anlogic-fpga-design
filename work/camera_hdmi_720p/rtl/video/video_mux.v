@@ -1,10 +1,12 @@
 /*******************************************************************************
  * camera_hdmi_720p — 视频源选择（自研，M4）
  *
- * 把 M1 的彩条测试图案与 M4 的摄像头灰度画面二选一送 hdmi_tx。
+ * 把 M1 的彩条测试图案与摄像头画面二选一送 hdmi_tx。
  * 开关 SW4（板手册 2-22：SW4 = 引脚 D11，拨上=1、拨下=0）：
  *   SW4 = 1（拨上） → 摄像头画面
  *   SW4 = 0（拨下） → 彩条测试图案（已知正确的基准，便于 A/B 定位）
+ * SW1（A4，最高优先级；I_force_cam 已在顶层同步到 clk）：
+ *   SW1 = 1         → 强制摄像头 RGB888 原图直通（不受 SW4 影响）
  *
  * 接口与 test_pattern 完全一致（data/de_o/vs_o 同为 1 拍寄存、同拍对齐），
  * 因此顶层只需把 test_pattern 的输出改成经过本模块再送 hdmi_tx。
@@ -16,6 +18,7 @@ module video_mux (
     input  wire        rst_n,
 
     input  wire        I_sw4,        // SW4 原始输入（异步，内部同步）
+    input  wire        I_force_cam,  // SW1 同步后：1=强制摄像头（优先级高于 SW4）
 
     // 测试图案源（M1）
     input  wire [23:0] I_pat_data,
@@ -53,7 +56,7 @@ module video_mux (
             vs_d     <= 1'b0;
         end else begin
             sync_sw  <= {sync_sw[1:0], I_sw4};
-            sel_want <= sync_sw[2];
+            sel_want <= sync_sw[2] | I_force_cam;
             vs_d     <= I_cam_vs;
             if (vs_rise) sel <= sel_want;   // 仅帧边界切换
         end
