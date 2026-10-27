@@ -48,6 +48,50 @@ python cam_view.py
 
 ---
 
+## 1.5 Web 控制台（推荐入口）
+
+```powershell
+python console.py
+```
+
+浏览器自动打开 `http://127.0.0.1:8770/`，一个黑底琥珀色的控制台：
+
+- **LIVE FEED**：实时画面（UDP → AWB → 列校正 → 降噪），HUD 显示帧号/帧率/曝光/增益/包数
+- **DEVICE**：串口 N/T/C/S/V 与状态位（CFG / SENSOR / OVF / RX）
+- **RECORD**：填会话名 → 选时长 → `START`；自动调 dumpcap 录到 `captures/<名字>/raw.pcapng`
+- **OUTPUT**：勾选要生成的产物（meta / png / mp4 / raw），录制结束自动跑流水线
+- **SESSIONS**：历史录制列表，可一键 `PROCESS` 或 `DIR` 打开目录
+- **SYSTEM LOG**：dumpcap 与处理脚本的实时输出
+
+一次完整操作：
+
+```
+输入会话名 → 选 10 s → 勾选产物 → ● START → 自动停止 → 自动生成全部产物
+```
+
+### 一次录制会产出什么
+
+| 文件 | 说明 | 大小（10 秒） |
+|---|---|---|
+| `raw.pcapng` | **原始流，始终保留**（完整的 UDP 包 + 时间戳） | ~730 MB |
+| `meta.jsonl` | 每帧一行：帧号 / 曝光 / 增益 / 传感器 ID / BGR 统计 / AWB 增益 | ~25 KB |
+| `run.json` | 录制配方：时长、帧率、带宽、完整性、bit md5、git commit | ~1 KB |
+| `preview.png` | 第一张完整帧（AWB + 拉伸 + demosaic） | ~2 MB |
+| `out_60fps.mp4` | 真 60fps 渲染视频（AWB/列校正全片固定） | ~17 MB |
+| `raw10.npy` | **无损 10bit 原始像素** `(N,720,1280) uint16`，算法可直接 mmap | ~1.84 MB/帧 |
+
+`raw.pcapng` 是母版，`raw10.npy` 是它的像素级展开（方便算法直接吃），
+`out_60fps.mp4` 只是给人看的渲染版本——三者不互相替代。
+
+配置保存在 `host/console.json`（自动生成，记录网卡 GUID 和串口），换机器删掉即可重新探测。
+网卡默认按 **192.168.1.100** 反查，找不到才退回 `dumpcap -D` 的描述匹配。
+
+注意：
+
+- 控制台占用 **UDP 4660** 和 **COM4**，运行时不要再开 `cam_view.py` / `cam_monitor.py`
+- 预览约 10 fps（Python 处理瓶颈），**录制不受影响**，pcap 是完整 60fps
+- 关闭：窗口里 `Ctrl+C`，或任务管理器结束 python
+
 ## 2. 数据格式（必读）
 
 ### 2.1 链路
@@ -112,9 +156,12 @@ P3 = b3<<2 | (b4>>6 & 3)
 
 | 脚本 | 用途 | 需要板子在线 |
 |---|---|---|
+| `console.py` | **Web 控制台**：预览 + 录制 + 一键处理（推荐） | ✅ |
 | `cam_monitor.py` | 串口状态（N/T/C/S/V） | ✅ |
 | `cam_view.py` | 实时显示 / 存图 / 录像 | ✅ |
 | `cam_stream_check.py` | 抓包统计：帧完整性、帧率、带宽 | ❌ |
+| `pcap_meta.py` | 抓包 → `meta.jsonl` + `run.json` | ❌ |
+| `pcap_export_raw.py` | 抓包 → `raw10.npy`（无损 10bit 原始帧） | ❌ |
 | `raw10_pcap_decode.py` | 抓包 → 解一帧 → PNG | ❌ |
 | `make_video.py` | 抓包 → 60fps mp4 | ❌ |
 | `cam_proc.py` | 处理函数库（给算法 import） | — |

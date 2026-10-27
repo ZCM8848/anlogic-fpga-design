@@ -88,3 +88,4 @@ __pycache__/
 *.pcap
 work/camera_eth_720p/captures/
 work/camera_eth_720p/host/*.png
+work/camera_eth_720p/host/console.json
