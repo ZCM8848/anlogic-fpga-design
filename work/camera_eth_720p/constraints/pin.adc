@@ -1,0 +1,69 @@
+# camera_eth_720p — 引脚约束（M0 bank 兼容性占位）
+# 依据：开发板原理图 + 《HX1P35B开发板引脚分配汇总》+ docs/hardware/HW_HX1P35A_BOARD.md §15
+# 目的：M0 验证 RGMII 14 引脚是否都能在 LVCMOS33 下放置（无 bank 冲突）
+# 注：本文件目前仅做 bank 占位 + 原语例化测试，无实际功能
+
+# ---- 系统时钟（板载 50MHz 有源晶振）----
+set_pin_assignment { I_sys_clk }     { LOCATION = C4; IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
+
+# ---- 4 组独立 LED（用作状态指示，便于上板观测）----
+set_pin_assignment { O_led[0] }      { LOCATION = D10; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; }
+set_pin_assignment { O_led[1] }      { LOCATION = E10; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; }
+set_pin_assignment { O_led[2] }      { LOCATION = C6;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; }
+set_pin_assignment { O_led[3] }      { LOCATION = D6;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; }
+
+# ---- 板载 USB-UART（M0 调试打印；可选）----
+set_pin_assignment { O_uart_tx }     { LOCATION = H1;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+
+# ---- 摄像头控制（SC520CS 模组，BANK21 VCCIO=3.3V）----
+# 注意：MIPI 差分对是 D-PHY 硬核 pad（V16/U16、V14/U14、V15/U15…），不写入 adc
+set_pin_assignment { O_cam_xclk }    { LOCATION = L3;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
+set_pin_assignment { O_cam_pwdnb }   { LOCATION = L2;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
+set_pin_assignment { O_cam_scl }     { LOCATION = K3;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
+set_pin_assignment { IO_cam_sda }    { LOCATION = J3;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
+
+# ============================================================================
+# RGMII 千兆以太网（YT8511）— 14 根引脚占位
+# 来源：HW_HX1P35A_BOARD.md §15 + HW_PINMAP.md
+# 接口模式：RGMII v2.0（4 位 DDR，125MHz@1Gbps / 25MHz@100M / 2.5MHz@10M）
+# 注：板手册标注"RXC_DV"为 1 根引脚（N8），但 RGMII 标准下 RX_CLK 与 RX_DV 是
+#     2 根独立信号。M0 先按 1 根占位；M1 实施时需查原理图 HX1P35B_FT.pdf 确认
+#     RX_CLK / RX_DV 实际布线（是 PHY 双 pin 经电平转换合并，还是 N8 仅承载其一）
+# ============================================================================
+
+# ---- RGMII TX 方向（FPGA → PHY）----
+# GTX_CLK：发送时钟。
+#   ⚠️ YT8511 要求接收端 data→clock skew ≥1ns（datasheet TskewR），而 PHY 内部
+#      Tx_clk_delay_sel(EXT 0x0C bit[7:4]) 默认只有 0.75~1.25ns。
+#      用 0° 时钟会临界 → PHY 采样踩在跳变沿 → 帧内字节重复/回卷。
+#      eth_smoke 实测给本脚加 OUTDEL=2 后完全正常。TD 的 OUTDEL 合法范围 1-4。
+set_pin_assignment { O_rgmii_txc }   { LOCATION = U9;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; OUTDEL = 2; }
+# TX_CTL（TXEN + TXER 双沿复用；此处仅命名 TXEN 兼容板手册）
+set_pin_assignment { O_rgmii_tx_ctl } { LOCATION = R10; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+# TXD[3:0]：4 位 DDR 发送数据
+set_pin_assignment { O_rgmii_txd[0] } { LOCATION = R11; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment { O_rgmii_txd[1] } { LOCATION = P11; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment { O_rgmii_txd[2] } { LOCATION = T10; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment { O_rgmii_txd[3] } { LOCATION = R12; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+
+# ---- RGMII RX 方向（PHY → FPGA）----
+# RX_CLK：RGMII 接收时钟。原理图 page2 球名↔网络名严格核对：
+#          V3(561.8) → ETHPHY_RX_CLK(564.4)，功能名 IO_BE17P_22,GCLKIOT1（专用时钟输入）
+#          ⚠️ 之前误写 V2 —— V2(566.9) 实际是 GPIOA0(569.0)，完全收不到 RX_CLK！
+#          ⚠️ 板手册《引脚分配汇总》漏列了 RX_CLK，只写了 "RXC_DV = N8"。
+set_pin_assignment { I_rgmii_rxc }    { LOCATION = V3;  IOSTANDARD = LVCMOS33; PULLTYPE = NONE; }
+# RX_DV：RGMII 接收数据有效（板手册把 RX_DV 与 RX_CLK 合并标成 "RXC_DV"，实际是两根独立信号）
+set_pin_assignment { I_rgmii_rx_ctl } { LOCATION = N8;  IOSTANDARD = LVCMOS33; PULLTYPE = NONE; }
+# RXD[3:0]：4 位 DDR 接收数据
+set_pin_assignment { I_rgmii_rxd[0] } { LOCATION = N9;  IOSTANDARD = LVCMOS33; PULLTYPE = NONE; }
+set_pin_assignment { I_rgmii_rxd[1] } { LOCATION = T7;  IOSTANDARD = LVCMOS33; PULLTYPE = NONE; }
+set_pin_assignment { I_rgmii_rxd[2] } { LOCATION = T8;  IOSTANDARD = LVCMOS33; PULLTYPE = NONE; }
+set_pin_assignment { I_rgmii_rxd[3] } { LOCATION = T9;  IOSTANDARD = LVCMOS33; PULLTYPE = NONE; }
+
+# ---- 管理 / 控制 ----
+# MDC（管理时钟，≤2.5MHz 常用 1MHz；clause 22）
+set_pin_assignment { O_rgmii_mdc }   { LOCATION = V9;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+# MDIO（管理数据，开漏双向）
+set_pin_assignment { IO_rgmii_mdio }  { LOCATION = U10; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
+# PHY 硬复位（低有效，上电拉低 ≥1ms 后拉高）
+set_pin_assignment { O_phy_rst_n }    { LOCATION = V8;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = PULLUP; }
