@@ -236,17 +236,29 @@ zlib.crc32(全128字节) = 0x2144DF1C  ✅
 ## 6. 已验证的最小实现
 
 `work/eth_smoke/`：
-- `rtl/eth_top.v`：PLL（125 MHz）+ PHY 复位 + ARP 帧发生器 + RGMII TX + **RGMII RX + ARP 解析 + UART 状态**
-- `rtl/rgmii_tx_phy.v`：HD_ODDR 映射（d0=上升沿）+ GTX_CLK（0° + OUTDEL）
+- `rtl/eth_top.v`：PLL（125 MHz）+ PHY 复位 + UDP 视频流 TX + RGMII RX + UART 状态
+- `rtl/rgmii_tx_phy.v`：HD_ODDR（d0=上升沿）+ GTX_CLK（0° + `OUTDEL=2`）
 - `rtl/rgmii_rx_phy.v`：5× HD_IDDR，`q0`=上升沿（低 nibble / RX_DV）
-- `rtl/eth_rx_mac.v`：SFD 自适应对齐 + 字节流
-- `rtl/arp_rx.v`：解析 ARP reply，学习对端 MAC/IP
-- `rtl/dbg_uart_report.v` + `rtl/uart_tx.v`：每秒打印 `N=xxxx A=xxxx M=xxxxxxxxxxxx`
-- `constraints/pin.adc` + `constraints/timing.sdc`
+- `rtl/eth_rx_mac.v` / `rtl/arp_rx.v`：SFD 自适应对齐 + ARP reply 解析
+- `rtl/crc32_eth_nib.v`：CRC-32 半字节查表（组合 next）
+- `rtl/eth_udp_tx.v`：Ethernet + IPv4 + UDP 帧拼装 + FCS
+- `rtl/udp_test_gen.v`：800 包/帧 × 60fps 测试图案源
+- `rtl/dbg_uart_report.v` + `rtl/uart_tx.v`：每秒打印 `N=xxxx T=xxxx M=xxxxxxxxxxxx`
+- `host/{rx_monitor.py, udp_pcap_check.py}`
 
 **实测结果**：
-- TX：200 ms 一帧、124 字节、`0x0806`，PC `arp -a` 正确出现 `192.168.1.200 → 01-23-45-67-89-ab`
-- RX：`A` 每 5 秒 +25（5 帧/秒，与 200 ms 请求严格对应），学到的 MAC = `A8:2B:DD:29:A4:CE`（与 Wireshark 一致）
+- ARP：PC `arp -a` 出现 `192.168.1.200 → 01-23-45-67-89-ab`
+- RX：学到 PC MAC `A8:2B:DD:29:A4:CE`（与 Wireshark 一致）
+- **UDP 视频流**：146,536 包 0 错、183/184 帧完整（缺的是抓包边界半帧）、
+  **60.3 fps、581.4 Mbps（72.7 MB/s）**，dumpcap 统计 0 丢包。
+
+### UDP 帧参数（720p60 RAW10）
+
+```
+数据 1440 B/包 × 800 包 = 1,152,000 B = 1280×720×10bit（正好整除）
+IP 总长 1476，UDP 长度 1456，IP 校验和 0xF0AC，端口 4660
+在线每包 1514 B（含前导/IFG/FCS）→ 800×1514×60 = 581 Mbps
+```
 
 ### 后续要做的事
 

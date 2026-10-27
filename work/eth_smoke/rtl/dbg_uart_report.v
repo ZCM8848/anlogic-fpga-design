@@ -18,7 +18,7 @@ module dbg_uart_report #(
     input  wire        rst_n,
 
     input  wire [15:0] frames,
-    input  wire [15:0] arps,
+    input  wire [15:0] tx_frames,
     input  wire [47:0] mac,
 
     output wire        uart_valid,
@@ -72,7 +72,7 @@ module dbg_uart_report #(
                 6'd4 : msg_char = hexc(lat_n[7:4]);
                 6'd5 : msg_char = hexc(lat_n[3:0]);
                 6'd6 : msg_char = " ";
-                6'd7 : msg_char = "A";
+                6'd7 : msg_char = "T";
                 6'd8 : msg_char = "=";
                 6'd9 : msg_char = hexc(lat_a[15:12]);
                 6'd10: msg_char = hexc(lat_a[11:8]);
@@ -128,7 +128,7 @@ module dbg_uart_report #(
                 vld <= 1'b0;
                 if (tick) begin
                     lat_n <= frames;
-                    lat_a <= arps;
+                    lat_a <= tx_frames;
                     lat_m <= mac;
                     ci    <= 6'd0;
                     st    <= ST_SEND;

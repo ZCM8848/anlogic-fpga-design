@@ -90,25 +90,61 @@ module eth_top (
     );
 
     // ==================================================================
-    // TX：ARP 请求帧
+    // TX：UDP 视频流（M2 用可预测测试图案代替摄像头）
     // ==================================================================
     wire [7:0] txd_gmii;
     wire       tx_en;
-    wire       tx_er;
-    wire       tx_active;
     wire       frame_sent;
 
-    arp_frame_tx #(
-        .SEND_INTERVAL_CYCLES ( 32'd25_000_000 )   // 200 ms
-    ) u_frame (
-        .clk       ( clk_125    ),
-        .rst_n     ( rst_125_n  ),
-        .gmii_txd  ( txd_gmii   ),
-        .gmii_tx_en( tx_en      ),
-        .gmii_tx_er( tx_er      ),
-        .tx_active ( tx_active  ),
-        .frame_sent( frame_sent )
+    wire        udp_req;
+    wire        udp_busy;
+    wire        udp_done;
+    wire [15:0] frame_id;
+    wire [15:0] pkt_idx;
+    wire [15:0] pkt_total;
+    wire [10:0] pay_idx;
+    wire [7:0]  pay_data;
+
+    udp_test_gen #(
+        .PKT_TOTAL           ( 16'd800        ),
+        .FRAME_PERIOD_CYCLES ( 32'd2_083_333  )   // 60 fps @125MHz；联调可改大
+    ) u_gen (
+        .clk        ( clk_125    ),
+        .rst_n      ( rst_125_n  ),
+        .busy       ( udp_busy   ),
+        .done       ( udp_done   ),
+        .req        ( udp_req    ),
+        .frame_id   ( frame_id   ),
+        .pkt_idx    ( pkt_idx    ),
+        .pkt_total  ( pkt_total  ),
+        .pay_data   ( pay_data   ),
+        .pay_idx    ( pay_idx    )
     );
+
+    eth_udp_tx u_udp (
+        .clk        ( clk_125      ),
+        .rst_n      ( rst_125_n    ),
+        .req        ( udp_req      ),
+        .dst_mac    ( 48'hFF_FF_FF_FF_FF_FF ),   // 先广播，PC 用 raw socket 收
+        .src_mac    ( 48'h02_00_00_00_00_01 ),   // 本地管理单播（bit0=0）
+        .frame_id   ( frame_id     ),
+        .pkt_idx    ( pkt_idx      ),
+        .pkt_total  ( pkt_total    ),
+        .pay_data   ( pay_data     ),
+        .pay_idx    ( pay_idx      ),
+        .busy       ( udp_busy     ),
+        .done       ( udp_done     ),
+        .gmii_tx_en ( tx_en        ),
+        .gmii_txd   ( txd_gmii     )
+    );
+
+    // “发过包”锁存，用于 LED
+    reg pkt_sent;
+    always @(posedge clk_125 or negedge rst_125_n) begin
+        if (!rst_125_n) pkt_sent <= 1'b0;
+        else if (udp_done) pkt_sent <= 1'b1;
+    end
+    assign frame_sent = pkt_sent;
 
     rgmii_tx_phy u_rgmii_tx (
         .clk_125    ( clk_125      ),
@@ -116,7 +152,7 @@ module eth_top (
         .rst        ( ~rst_125_n   ),
         .gmii_txd   ( txd_gmii     ),
         .gmii_tx_en ( tx_en        ),
-        .gmii_tx_er ( tx_er        ),
+        .gmii_tx_er ( 1'b0         ),
         .rgmii_txc  ( O_rgmii_txc    ),
         .rgmii_tx_ctl( O_rgmii_tx_ctl),
         .rgmii_txd  ( O_rgmii_txd    )
@@ -208,11 +244,14 @@ module eth_top (
     end
 
     reg [15:0] frm_s1, frm_s2, arp_s1, arp_s2;
+    reg [15:0] fid_s1, fid_s2;
     always @(posedge I_sys_clk) begin
         frm_s1 <= rx_frame_cnt;
         frm_s2 <= frm_s1;
         arp_s1 <= arp_cnt;
         arp_s2 <= arp_s1;
+        fid_s1 <= frame_id;
+        fid_s2 <= fid_s1;
     end
 
     reg rx_alive;
@@ -233,7 +272,7 @@ module eth_top (
         .clk        ( I_sys_clk ),
         .rst_n      ( sys_rst_n ),
         .frames     ( frm_s2    ),
-        .arps       ( arp_s2    ),
+        .tx_frames  ( fid_s2    ),
         .mac        ( mac_50    ),
         .uart_valid ( u_valid   ),
         .uart_data  ( u_data    ),

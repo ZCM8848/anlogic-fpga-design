@@ -1,41 +1,39 @@
-# eth_smoke — 以太网 TX 通断测试（独立工程）
+# eth_smoke — 以太网 TX / RX / UDP 视频流验证工程
 
-用**最小、可验证**的设计证明 RGMII TX 通路：`FPGA → YT8511 → 网线 → PC`。
-每 200ms 发一个 128 字节的 ARP 请求帧。
+用最小可验证的方式逐层打通：`RGMII TX → RGMII RX → ARP → IPv4/UDP → 720p60 码流`。
 
-## 验证状态：✅ TX + RX 均已通过（2026-10-27）
+## 验证状态
 
-### TX（FPGA → PC）
+| 能力 | 状态 | 证据 |
+|---|---|---|
+| RGMII TX | ✅ | PC `arp -a` 出现 `192.168.1.200 → 01-23-45-67-89-ab` |
+| RGMII RX | ✅ | UART 学到 PC MAC `A8:2B:DD:29:A4:CE`，ARP 命中 5 帧/秒 |
+| **IPv4/UDP 视频流** | ✅ | **146,536 包 0 错、183/184 帧完整、60.3 fps、581.4 Mbps** |
+
+### UDP 视频流实测（2026-10-27）
 
 ```
-tshark 抓包结果：
+dumpcap 3 秒抓包 → host/udp_pcap_check.py：
+  [ok]       146536 包通过全部检查（Ethernet/IP校验和/UDP/应用头/1440B图案）
+  [bad]      0
+  [frames]   184 个 frame_id，3.053 s => 60.3 fps
+  [complete] 183/184 帧是完整的 800 包（缺的一帧是抓包结束时的半帧）
+  [pkt_idx]  0..799
+  [rate]     581.4 Mbps 在线速率 (72.7 MB/s)，dumpcap 统计 0 丢包
+```
+
+### 早期 ARP 测试（保留）
+
+```
+tshark：
   frame 1  0.000000000  124 bytes  0x0806
-  frame 2  0.199919500  124 bytes  0x0806
-  frame 3  0.399970800  124 bytes  0x0806      ← 严格 200ms = 125MHz
-  ...
+  frame 2  0.199919500  124 bytes  0x0806      ← 严格 200ms = 125MHz
   Ethernet II, Src: 01:23:45:67:89:ab, Dst: Broadcast
   Type: ARP (0x0806)
   ARP: request, Sender 192.168.1.200, Target 192.168.1.100
-  填充 A0 A1 A2 ... F0 F1 逐字节正确
 
-PC 端 arp -a：
-  192.168.1.200   01-23-45-67-89-ab   动态
+PC 端 arp -a：192.168.1.200   01-23-45-67-89-ab   动态
 ```
-
-### RX（PC → FPGA）
-
-PC 每 200ms 回一个 ARP reply（`a8:2b:dd:29:a4:ce → 01:23:45:67:89:ab`），
-FPGA 解析后通过 COM4 每秒打印：
-
-```
-N=00C7 A=0032 M=A82BDD29A4CE
-N=00D2 A=0037 M=A82BDD29A4CE
-N=00D9 A=003C M=A82BDD29A4CE
-```
-
-- `N` = 收到的帧总数（含 PC 的 mDNS/LLMNR 广播）
-- `A` = ARP reply 命中次数（每 5 秒 +25，即 5 帧/秒，与 200ms 请求严格对应）
-- `M` = 学到的对端 MAC = `A8:2B:DD:29:A4:CE` ✅ 与 Wireshark 抓到的一致
 
 
 
@@ -139,8 +137,9 @@ I_rgmii_rxc (V3,125MHz)
 每秒一行，30 字符，`115200 8N1`：
 
 ```
-N=XXXX A=XXXX M=XXXXXXXXXXXX\r\n
-  N = 收帧总数(hex)   A = ARP reply 命中数(hex)   M = 对端 MAC(hex)
+N=XXXX T=XXXX M=XXXXXXXXXXXX\r\n
+  N = RX 收帧总数(hex)   T = TX 视频帧计数(hex，60fps 时每秒 +3C)
+  M = 学到的对端 MAC(hex)
 ```
 
 PC 端：
@@ -156,6 +155,61 @@ python work\eth_smoke\host\rx_monitor.py COM4
   （可考虑 4 bit/拍 或流水化实现）。
 - 未做 DA 过滤（谁的帧都收），也未做 MAC 缓存（每帧都重新解析）。
 - 计数器跨时钟域是 2FF 直采，理论上有 ±1 的读数抖动（调试用足够）。
+
+## UDP 视频流（M2）
+
+### 帧格式（每包 1502 字节含前导码）
+
+| 字节 | 内容 |
+|---|---|
+| 0..7 | 前导码 `0x55 ×7` + SFD `0xD5` |
+| 8..21 | Ethernet：DA=`FF×6`(广播) / SA=`02:00:00:00:00:01` / Type=`0x0800` |
+| 22..41 | IPv4：192.168.1.200 → 192.168.1.100，总长 **1476**，校验和 **0xF0AC** |
+| 42..49 | UDP：4660 → 4660，长度 **1456**，校验和 0（IPv4 允许） |
+| 50..57 | 应用头：`AA 55` / frame_id / pkt_idx / pkt_total |
+| 58..1497 | 数据 **1440 B**（测试图案 `i ^ pkt_idx ^ frame_id`） |
+| 1498..1501 | FCS（CRC-32，小端） |
+
+### 为什么是 1440
+
+```
+720p RAW10 = 1280 × 720 × 10 bit = 1,152,000 B/帧
+1,152,000 / 1440 = 800 包，**正好整除**，每包都满
+```
+
+### 带宽
+
+```
+每包在线字节 = 1440 + 8(应用头) + 8(UDP) + 20(IP) + 14(Eth) + 4(FCS) + 8(前导) + 12(IFG)
+             = 1514 B
+800 × 1514 × 60 = 72.7 MB/s = 581 Mbps     (1G 网口余量 42%)
+时钟利用率 = 581/1000 = 58%（GMII 8bit @125MHz）
+```
+
+### PC 端校验
+
+```powershell
+# 1) 抓包（3 秒约 210 MB，dumpcap 统计 0 丢包）
+& "D:\Program Files\Wireshark\dumpcap.exe" `
+  -i "\Device\NPF_{...}" -a duration:3 `
+  -f "ether src 02:00:00:00:00:01" -w cap.pcapng
+
+# 2) 逐包校验
+python work\eth_smoke\host\udp_pcap_check.py cap.pcapng
+```
+
+校验项：源 MAC、EtherType、IPv4 头校验和、IP 地址、UDP 端口/长度、
+应用头 magic、1440 字节图案、每帧 800 包完整性、pkt_idx 0..799、在线速率。
+
+### 已知限制（UDP）
+
+- 目的是**广播 MAC**（PC 端用 raw socket / dumpcap 收）。等 MAC 层做完整后可以
+  直接单播到学到的 `A8:2B:DD:29:A4:CE`。
+- UDP 校验和填 0（IPv4 允许），没有做 UDP 伪头部校验。
+- 60 fps 下 PC 端用 Python 实时解包压力大（48.8k pkt/s）：
+  **实时显示建议用 jumbo frame（9000B，包率降到 ~7.7k pkt/s）或写 C 接收器**；
+  离线校验用 dumpcap 抓包完全没问题。
+
 
 
 ## 构建
