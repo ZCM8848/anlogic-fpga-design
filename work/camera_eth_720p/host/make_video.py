@@ -17,13 +17,15 @@ import numpy as np
 import cv2
 
 from cam_proc import (PKT_BYTES, PKT_TOTAL, W, H, frame_pixels, awb_gains,
-                      apply_awb, column_profile, column_correction, to_bgr, denoise)
+                      awb_gains_from_meta, apply_awb, column_profile,
+                      column_correction, to_bgr, denoise, parse_meta)
 from raw10_pcap_decode import read_pcap
 
 
 def load_frames(path):
     pkts = read_pcap(path)
     frames = defaultdict(dict)
+    metas = {}
     order = []
     for ts, p in pkts:
         if len(p) < 42 or p[12:14] != b"\x08\x00" or p[23] != 17:
@@ -36,12 +38,17 @@ def load_frames(path):
         fid = int.from_bytes(pl[2:4], "big")
         pidx = int.from_bytes(pl[4:6], "big")
         ptot = int.from_bytes(pl[6:8], "big")
+        if pidx == 0xFFFF:
+            m = parse_meta(pl[8:])
+            if m:
+                metas[m["frame_id"]] = m
+            continue
         if ptot != PKT_TOTAL or len(pl) - 8 != PKT_BYTES or pidx >= PKT_TOTAL:
             continue
         if fid not in frames:
             order.append(fid)
         frames[fid][pidx] = pl[8:]
-    return frames, order
+    return frames, order, metas
 
 
 def main():
@@ -52,7 +59,7 @@ def main():
     max_frames = int(sys.argv[3]) if len(sys.argv) > 3 else 100000
     fps = float(sys.argv[4]) if len(sys.argv) > 4 else 60.0
 
-    frames, order = load_frames(pcap)
+    frames, order, metas = load_frames(pcap)
     good = [f for f in order if len(frames[f]) == PKT_TOTAL][:max_frames]
     print(f"[load] {len(order)} frames, 用 {len(good)} 帧渲染")
 
@@ -69,6 +76,11 @@ def main():
     acc /= n0
 
     gb, gr = awb_gains(acc.astype(np.uint16))
+    m0 = next((metas[f] for f in good if f in metas), None)
+    if m0 is not None:
+        gb, gr = awb_gains_from_meta(m0)
+        print(f"[meta] 用 FPGA 统计: ae={m0['ae']} ag={m0['ag']} "
+              f"sid={m0['sensor_id']:04X} status={m0['status']:X}")
     bal0 = apply_awb(acc.astype(np.uint16), gb, gr)
     colfix = column_correction(column_profile(bal0)).astype(np.float32)
 

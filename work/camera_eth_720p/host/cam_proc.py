@@ -120,10 +120,13 @@ def parse_meta(p):
 
 
 def awb_gains_from_meta(m, bl=BLACK_LEVEL):
-    """用 FPGA 统计的 B/G/R 累加和算灰世界增益（扣黑电平）"""
+    """用 FPGA 统计的 B/G/R 累加和算灰世界增益（扣黑电平）
+
+    注意：B/R 各占 1/4 像素、G 占 1/2，必须先各自除以像素数再比，否则 G 会偏大 2 倍。
+    """
     n = m.get("total_px") or (W * H)
     nb, ng, nr = n // 4, n // 2, n // 4
-    sb = max(m["sum_b"] - bl * nb, 1e-3)
-    sg = max(m["sum_g"] - bl * ng, 1e-3)
-    sr = max(m["sum_r"] - bl * nr, 1e-3)
-    return sg / sb, sg / sr
+    mb = max(m["sum_b"] - bl * nb, 1e-3) / nb
+    mg = max(m["sum_g"] - bl * ng, 1e-3) / ng
+    mr = max(m["sum_r"] - bl * nr, 1e-3) / nr
+    return mg / mb, mg / mr
