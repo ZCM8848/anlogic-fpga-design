@@ -1,18 +1,19 @@
 `timescale 1ns / 1ps
 //=============================================================================
-// cv_top.v — CV 像素级前端 + OSD 叠加（v2：CCL/跟踪/计数转 MCU）
+// cv_top.v — 钢珠检测像素级前端 + OSD 叠加（MCU 负责 CCL/跟踪/计数）
 // ============================================================
-// 本模块只保留像素级实时部分：
-//   1) Sobel 3x3 边缘检测（2 行缓存 BRAM）
-//   2) 自适应阈值（min/max midpoint）+ 用户偏置（K3/K4 调）
-//   3) run 提取 → 写 run_mem（双口 BRAM：A 口 pixel 写，B 口 ahb_clk 读）
-//   4) min/max Y 累加（给 MCU 算自适应阈值）
-//   5) OSD 叠加：读 I_overlay（8 项 bbox+ID，MCU 算）画绿框+ID；读 I_count 画 4 位 hex Count
+// 数据流（pixel 75MHz）：
+//   G = I_data[15:8]
+//   -> 4x4 盒式平均（精确 (sum+8)>>4）
+//   -> 320x180
+//   -> |G - BG| >= I_ball_bg_thr -> 1bit mask
+//   -> run 提取 -> run_mem 双口 BRAM
+//      A 口 pixel 写；B 口 I_ahb_clk 读（MCU 经 RUN_IDX/RUN_DAT 间接读）
+//   -> 叠加 MCU 写的 overlay（绿框 + ID）和 count（4 位 hex）
 //
-// CCL / 形状筛选 / a-b 跟踪 / exit 计数 全部由 MCU 固件完成：
-//   MCU 经 ahb_status_slave 的 RUN_IDX/RUN_DAT 间接读 run_mem，
-//   软件做 CCL + 筛选 + 跟踪 + exit 计数，结果写 overlay 寄存器组 + count。
-//
+// 背景：I_ball_capture 上升沿后的下一帧写入 bg_mem（320x180x8bit）。
+// 所有阈值/几何/跟踪参数都在 mcu_fw/main.c 的 VISION_PARAMS，本模块不含业务阈值。
+// 旧参数 BIN_THR/EDGE_THR/MASK_SRC/MASK_VIEW/BALL_SCALE 仅为兼容例化保留，未使用。
 // run_mem 项（32bit）：{row_y[9:0], xs[10:0], xe[10:0]}
 // overlay 项（64bit）：{valid, id[3:0], x0[11:0], y0[11:0], x1[11:0], y1[11:0], pad}
 //=============================================================================
@@ -21,11 +22,14 @@ module cv_top #(
     parameter IMG_H            = 720,
     parameter [7:0]  BIN_THR   = 8'd91,
     parameter [10:0] EDGE_THR  = 11'd80,
-    parameter         MASK_SRC = 1,        // 1=Sobel 边缘；0=亮阈值
+    parameter         MASK_SRC = 1,        // legacy Sobel/bright (unused in ball mode)
     parameter         MAX_RUNS = 1024,
-    parameter         MASK_VIEW= 1,        // 1=机器视角（mask 黑白）；0=叠原画
+    parameter         MASK_VIEW= 0,
     parameter [11:0] FBOX_W   = 12'd2,
-    parameter         MAX_OV   = 8
+    parameter         MAX_OV   = 8,
+    parameter         BALL_W   = 320,
+    parameter         BALL_H   = 180,
+    parameter         BALL_SCALE = 4
 )(
     input  wire        I_clk,          // pixel 75MHz
     input  wire        I_rst_n,
@@ -35,6 +39,14 @@ module cv_top #(
     input  wire        I_de,
     input  wire        I_vs,
     input  wire [23:0] I_data,
+
+    // MCU-controlled ball front-end; RTL contains no business thresholds
+    input  wire        I_ball_en,
+    input  wire [7:0]  I_ball_bg_thr,
+    input  wire [7:0]  I_ball_min_run,
+    input  wire        I_ball_capture,
+    output wire        O_ball_bg_ready,
+    output wire        O_ball_capturing,
 
     // run_mem B 口（ahb_clk 域读，给 MCU）
     input  wire        I_ahb_clk,
@@ -74,109 +86,204 @@ module cv_top #(
         end
     end
 
-    // ---------- 亮度 ----------
-    wire [7:0] w_y = {2'b0,I_data[23:18]} + {1'b0,I_data[15:9]} + {2'b0,I_data[7:2]};
+    // ============================================================ ball front-end
+    // MCU C owns every tunable threshold; RTL only applies registers.
+    // G = I_data[15:8]; exact 4x4 box average -> BALL_W x BALL_H.
+    wire [7:0] w_g   = I_data[15:8];
+    wire [8:0] w_sx  = r_x[11:2];      // 0..319
+    wire [7:0] w_sy  = r_y[10:2];      // 0..179
+    wire       w_hsum_end  = I_de && (r_x[1:0] == 2'd3);
+    wire       w_small_end = w_hsum_end && (r_y[1:0] == 2'd3);
+    reg  [11:0] r_hsum;
+    wire [11:0] w_hsum = r_hsum + {4'b0, w_g};
 
-    // ---------- 自适应阈值 + 用户偏置 ----------
-    reg [7:0] r_user_off;
-    reg [7:0] r_min_y, r_max_y;       // 本帧 min/max Y（run extractor 累加）
-    // midpoint 由上帧 min/max 算
-    wire [8:0] mid_plus = {1'b0, r_min_y} + {1'b0, r_max_y};
-    wire [7:0] r_otsu_thr = mid_plus[8:1];   // (min+max)/2
-    wire [7:0] base_thr = MASK_SRC ? EDGE_THR[7:0] : r_otsu_thr;
-    wire [8:0] thr_plus = {1'b0,base_thr} + {1'b0,r_user_off};
-    wire [7:0] eff_thr  = (thr_plus>9'd255) ? 8'd255 : (thr_plus[8] ? 8'd0 : thr_plus[7:0]);
+    // 3 previous full rows' 4-pixel horizontal sums -> exact 4x4 average
+    (*ram_style = "dram"*) reg [11:0] hs0 [0:BALL_W-1];
+    (*ram_style = "dram"*) reg [11:0] hs1 [0:BALL_W-1];
+    (*ram_style = "dram"*) reg [11:0] hs2 [0:BALL_W-1];
+    wire [13:0] w_vsum = {2'b0, hs0[w_sx]} + {2'b0, hs1[w_sx]} +
+                         {2'b0, hs2[w_sx]} + {2'b0, w_hsum};
+    wire [7:0]  w_small = (w_vsum + 14'd8) >> 4;
 
-    // ---------- Sobel 3x3（2 行缓存 BRAM，async read，仿 edge_detect_96）----------
-    (* ram_style="block" *) reg [7:0] sob_l1 [0:IMG_W-1];
-    (* ram_style="block" *) reg [7:0] sob_l2 [0:IMG_W-1];
-    wire [7:0] mid_word = sob_l1[r_x];
-    wire [7:0] top_word = sob_l2[r_x];
-    reg [7:0] top_p2, top_p1, mid_p2, mid_p1, bot_p2, bot_p1;
-    wire signed [13:0] gx = $signed({5'b0,top_p2}) + ($signed({5'b0,top_p1})<<<1) + $signed({5'b0,top_word})
-                         - $signed({5'b0,bot_p2}) - ($signed({5'b0,bot_p1})<<<1) - $signed({5'b0,w_y});
-    wire signed [13:0] gy = $signed({5'b0,top_p2}) + ($signed({5'b0,mid_p2})<<<1) + $signed({5'b0,bot_p2})
-                         - $signed({5'b0,top_word}) - ($signed({5'b0,mid_word})<<<1) - $signed({5'b0,w_y});
-    wire [13:0] abs_gx = gx[13] ? (~gx + 1) : gx;
-    wire [13:0] abs_gy = gy[13] ? (~gy + 1) : gy;
-    wire [14:0] w_sobel_mag = {1'b0,abs_gx} + {1'b0,abs_gy};
-    wire        w_edge_mask = (r_y >= 12'd2) && (r_x >= 12'd2) && (w_sobel_mag > {4'b0, eff_thr});
-    wire        w_mask = MASK_SRC ? w_edge_mask : (w_y > eff_thr);
-
-    always @(posedge I_clk) begin
-        if (I_de) begin
-            sob_l1[r_x] <= w_y;
-            sob_l2[r_x] <= mid_word;
-            top_p2 <= top_p1; top_p1 <= top_word;
-            mid_p2 <= mid_p1; mid_p1 <= mid_word;
-            bot_p2 <= bot_p1; bot_p1 <= w_y;
-        end
-    end
-
-    // ---------- run_mem（双口 BRAM：A 口 pixel 写，B 口 ahb 读）----------
-    // 项 = {row_y[9:0], xs[10:0], xe[10:0]} = 32bit
-    (* ram_style="block" *) reg [31:0] run_mem [0:MAX_RUNS-1];
-
-    // A 口写（pixel 域）
-    reg [10:0] r_run_wr, r_run_cnt;
-    reg        r_run_act, r_run_overflow, r_de_d;
-    reg [10:0] r_run_xs, r_run_xe;
-    wire       row_last = I_de & (r_x==IMG_W-1);
-
-    // min/max Y 在自适应阈值段声明（run extractor 累加）
-
+    // slow MCU registers -> pixel domain (2FF)
+    reg [2:0] r_ball_en_s, r_cap_s;
+    reg [7:0] r_bg_thr_a, r_bg_thr;
+    reg [7:0] r_min_run_a, r_min_run;
+    reg       r_cap_d;
     always @(posedge I_clk or negedge I_rst_n) begin
         if (!I_rst_n) begin
-            r_run_wr<=0; r_run_cnt<=0; r_run_act<=0; r_run_xs<=0; r_run_xe<=0;
-            r_run_overflow<=0; r_de_d<=0; r_user_off<=0;
-            r_min_y<=8'hFF; r_max_y<=8'd0;
+            r_ball_en_s <= 3'd0; r_cap_s <= 3'd0;
+            r_bg_thr_a  <= 8'd0; r_bg_thr <= 8'd0; r_cap_d <= 1'b0;
+            r_min_run_a <= 8'd0; r_min_run <= 8'd0;
         end else begin
-            r_de_d<=I_de;
-            if (I_thr_up && r_user_off!=8'h7F) r_user_off<=r_user_off+8'd1;
-            else if (I_thr_dn && r_user_off!=8'h80) r_user_off<=r_user_off-8'd1;
+            r_ball_en_s <= {r_ball_en_s[1:0], I_ball_en};
+            r_cap_s     <= {r_cap_s[1:0], I_ball_capture};
+            r_bg_thr_a  <= I_ball_bg_thr;
+            r_bg_thr    <= r_bg_thr_a;
+            r_min_run_a <= I_ball_min_run;
+            r_min_run   <= r_min_run_a;
+            r_cap_d     <= r_cap_s[2];
+        end
+    end
+    wire w_ball_en  = r_ball_en_s[2];
+    wire w_cap_rise = r_cap_s[2] & ~r_cap_d;
+
+    // background frame (320x180 x 8bit = 57.6 KB)
+    localparam integer BALL_PIX = BALL_W * BALL_H;
+    (*ram_style = "bram"*) reg [7:0] bg_mem [0:BALL_PIX-1];
+    reg [7:0] bg_q;
+    reg [16:0] r_bg_addr;
+    wire [16:0] w_bg_addr = w_sy * BALL_W + w_sx;
+
+    // one-shot capture: MCU sets I_ball_capture, next vsync captures one frame
+    reg r_cap_pending, r_cap_active, r_bg_ready;
+    always @(posedge I_clk or negedge I_rst_n) begin
+        if (!I_rst_n) begin
+            r_cap_pending <= 1'b0; r_cap_active <= 1'b0; r_bg_ready <= 1'b0;
+        end else begin
+            if (w_cap_rise) r_cap_pending <= 1'b1;
             if (vs_rise) begin
-                if (r_run_act && r_run_wr<MAX_RUNS) begin
-                    run_mem[r_run_wr]<={r_y[9:0], r_run_xs[10:0], r_run_xe[10:0]};
-                    r_run_wr<=r_run_wr+1;
-                end
-                r_run_cnt<=r_run_wr; r_run_wr<=0; r_run_act<=0; r_run_overflow<=0;
-                r_min_y<=8'hFF; r_max_y<=8'd0;
-            end else if (I_cv_on && I_de) begin
-                if (w_y < r_min_y) r_min_y <= w_y;
-                if (w_y > r_max_y) r_max_y <= w_y;
-                if (row_last && r_run_act) begin
-                    r_run_xe<=r_x;
-                    if (r_run_wr<MAX_RUNS) begin
-                        run_mem[r_run_wr]<={r_y[9:0], r_run_xs[10:0], r_run_xe[10:0]};
-                        r_run_wr<=r_run_wr+1;
-                    end else r_run_overflow<=1;
-                    r_run_act<=0;
-                end else begin
-                    if (w_mask) begin
-                        if (!r_run_act) begin r_run_act<=1; r_run_xs<=r_x; r_run_xe<=r_x; end
-                        else r_run_xe<=r_x;
-                    end else if (r_run_act) begin
-                        if (r_run_wr<MAX_RUNS) begin
-                            run_mem[r_run_wr]<={r_y[9:0], r_run_xs[10:0], r_run_xe[10:0]};
-                            r_run_wr<=r_run_wr+1;
-                        end else r_run_overflow<=1;
-                        r_run_act<=0;
-                    end
+                if (r_cap_pending) begin
+                    r_cap_pending <= 1'b0; r_cap_active <= 1'b1; r_bg_ready <= 1'b0;
+                end else if (r_cap_active) begin
+                    r_cap_active <= 1'b0; r_bg_ready <= 1'b1;
                 end
             end
         end
     end
 
+    always @(posedge I_clk) begin
+        if (w_small_end && r_cap_active)
+            bg_mem[w_bg_addr] <= w_small;
+        r_bg_addr <= w_bg_addr;
+    end
+    always @(posedge I_clk) begin
+        bg_q <= bg_mem[r_bg_addr];
+    end
+
+    // run_mem：A 口 pixel 写，B 口 ahb_clk 读（给 MCU）
+    (*ram_style = "bram"*) reg [31:0] run_mem [0:MAX_RUNS-1];
+
+    // pipeline the 4x4 result one cycle so bg_q is valid
+    reg [7:0] r_small_d, r_sy_d;
+    reg [8:0] r_sx_d;
+    reg       r_small_valid, r_small_valid_d;
+    always @(posedge I_clk or negedge I_rst_n) begin
+        if (!I_rst_n) begin
+            r_small_d <= 8'd0; r_sx_d <= 9'd0; r_sy_d <= 8'd0;
+            r_small_valid <= 1'b0; r_small_valid_d <= 1'b0;
+        end else begin
+            r_small_valid <= w_small_end;
+            r_small_valid_d <= r_small_valid;
+            if (w_small_end) begin
+                r_small_d <= w_small; r_sx_d <= w_sx; r_sy_d <= w_sy;
+            end
+        end
+    end
+
+    // 4-pixel horizontal sum; each of the first 3 rows writes hs0/1/2.
+    // At y%4==3 the current row (not stored) completes the 4x4 block.
+    always @(posedge I_clk or negedge I_rst_n) begin
+        if (!I_rst_n) r_hsum <= 12'd0;
+        else if (vs_rise) r_hsum <= 12'd0;
+        else if (I_de) r_hsum <= w_hsum_end ? 12'd0 : w_hsum;
+    end
+
+    always @(posedge I_clk) begin
+        if (w_hsum_end) begin
+            case (r_y[1:0])
+                2'd0: hs0[w_sx] <= w_hsum;
+                2'd1: hs1[w_sx] <= w_hsum;
+                2'd2: hs2[w_sx] <= w_hsum;
+                default: ;
+            endcase
+        end
+    end
+
+    // run extraction at 320x180 (same run_mem format as before)
+    reg        r_run_act;
+    reg [8:0]  r_run_xs, r_run_xe;
+    reg [10:0] r_run_wr, r_run_cnt;
+    reg        r_run_ovf, r_run_ovf_frame;
+    wire [7:0] w_diff = (r_small_d >= bg_q) ? (r_small_d - bg_q)
+                                            : (bg_q - r_small_d);
+    wire w_ball_mask = r_small_valid_d && r_bg_ready && !r_cap_active &&
+                       w_ball_en && I_cv_on && (w_diff >= r_bg_thr);
+    // MCU-tunable minimum run length: drop isolated 1..N-1 pixel noise
+    wire [8:0] w_run_xs_now = r_run_act ? r_run_xs : r_sx_d;
+    wire [8:0] w_run_len     = r_run_xe - r_run_xs + 9'd1;
+    wire [8:0] w_run_len_end = r_sx_d - w_run_xs_now + 9'd1;
+    wire w_run_keep     = (r_min_run == 8'd0) || (w_run_len     >= {1'b0, r_min_run});
+    wire w_run_keep_end = (r_min_run == 8'd0) || (w_run_len_end >= {1'b0, r_min_run});
+
+    always @(posedge I_clk or negedge I_rst_n) begin
+        if (!I_rst_n) begin
+            r_run_act <= 1'b0; r_run_xs <= 9'd0; r_run_xe <= 9'd0;
+            r_run_wr <= 11'd0; r_run_cnt <= 11'd0;
+            r_run_ovf <= 1'b0; r_run_ovf_frame <= 1'b0;
+        end else if (vs_rise) begin
+            if (r_run_act) begin
+                if (w_run_keep) begin
+                    if (r_run_wr < MAX_RUNS) begin
+                        run_mem[r_run_wr[9:0]] <= {2'b0, r_sy_d, 2'b0, r_run_xs,
+                                                   2'b0, r_run_xe};
+                        r_run_wr <= r_run_wr + 1'b1;
+                    end else r_run_ovf <= 1'b1;
+                    r_run_cnt <= r_run_wr + 1'b1;
+                end else begin
+                    r_run_cnt <= r_run_wr;
+                end
+            end else begin
+                r_run_cnt <= r_run_wr;
+            end
+            r_run_wr  <= 11'd0;
+            r_run_act <= 1'b0;
+            r_run_ovf_frame <= r_run_ovf | (r_run_act && w_run_keep && (r_run_wr >= MAX_RUNS));
+            r_run_ovf <= 1'b0;
+        end else if (r_small_valid_d) begin
+            if (w_ball_mask) begin
+                if (!r_run_act) begin
+                    r_run_act <= 1'b1;
+                    r_run_xs  <= r_sx_d;
+                end
+                r_run_xe <= r_sx_d;
+                if (r_sx_d == BALL_W-1) begin
+                    if (w_run_keep_end) begin
+                        if (r_run_wr < MAX_RUNS) begin
+                            run_mem[r_run_wr[9:0]] <= {2'b0, r_sy_d, 2'b0, w_run_xs_now,
+                                                       2'b0, r_sx_d};
+                            r_run_wr <= r_run_wr + 1'b1;
+                        end else r_run_ovf <= 1'b1;
+                    end
+                    r_run_act <= 1'b0;
+                end
+            end else if (r_run_act) begin
+                if (w_run_keep) begin
+                    if (r_run_wr < MAX_RUNS) begin
+                        run_mem[r_run_wr[9:0]] <= {2'b0, r_sy_d, 2'b0, r_run_xs,
+                                                   2'b0, r_run_xe};
+                        r_run_wr <= r_run_wr + 1'b1;
+                    end else r_run_ovf <= 1'b1;
+                end
+                r_run_act <= 1'b0;
+            end
+        end
+    end
+
     // B 口读（ahb_clk 域，给 MCU 间接读）
+    reg [9:0] r_run_rd_addr;
     always @(posedge I_ahb_clk) begin
-        O_run_rd_data <= run_mem[I_run_rd_addr];
+        r_run_rd_addr <= I_run_rd_addr;
+        O_run_rd_data <= run_mem[r_run_rd_addr];
     end
 
     assign O_run_cnt      = r_run_cnt;
-    assign O_min_y        = r_min_y;
-    assign O_max_y        = r_max_y;
-    assign O_run_overflow = r_run_overflow;
-    assign O_bin_thr      = eff_thr;
+    assign O_min_y        = 8'h00;
+    assign O_max_y        = 8'h00;
+    assign O_run_overflow = r_run_ovf_frame;
+    assign O_bin_thr      = r_bg_thr;
+    assign O_ball_bg_ready  = r_bg_ready;
+    assign O_ball_capturing = r_cap_active;
 
     //=============================================================================
     // OSD 叠加：绿框 + ID 字模（来自 I_overlay）；Count（来自 I_count，4 位 hex）
@@ -341,7 +448,7 @@ module cv_top #(
         end
     end
 
-    wire [23:0] cv_base = (MASK_VIEW!=0) ? (w_mask ? 24'hFFFFFF : 24'h000000) : I_data;
+    wire [23:0] cv_base = I_data;   // ball mode: camera + green boxes (mask view is in the PC tool)
     assign O_de=I_de; assign O_vs=I_vs;
     // 优先级：Count 字模 > ID 字模 > 绿框边 > 机器视角/原画
     assign O_data = (I_cv_on && I_de) ? (r_cnt_digit ? 24'hFFFFFF :

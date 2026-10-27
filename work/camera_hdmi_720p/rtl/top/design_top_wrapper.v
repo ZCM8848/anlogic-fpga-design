@@ -111,6 +111,11 @@ module design_top_wrapper (
     // CV 开关（前向声明：r_cv_on 在像素域 KEY2 段赋值，此处先声明供 ae_set/edge_on 早期引用）
     reg r_cv_on;
 
+    // MCU 钢珠前端参数（ahb_status_slave 驱动；先声明供字节域 edge_on 使用）
+    wire        S_ball_en, S_ball_capture;
+    wire [7:0]  S_ball_bg_thr, S_ball_min_run;
+    wire        S_ball_bg_ready, S_ball_capturing;
+
     // ============================================================ 摄像头上电时序 + I2C 配置（参考件）
     reg  [17:0] S_cam_power_cnt;
     reg         S_cam_pwdnb;
@@ -301,11 +306,18 @@ module design_top_wrapper (
     end
     // CV 开关（r_cv_on 在像素域 KEY2 段赋值；此处同步到字节域供 edge_on 门控）
     reg [2:0]  r_cv_on_sync_rx;
+    reg [2:0]  S_ball_en_sync_rx;
     always @(posedge S_csi_rx_clk or negedge S_rst_n_rx) begin
-        if (!S_rst_n_rx) r_cv_on_sync_rx <= 3'd0;
-        else             r_cv_on_sync_rx <= {r_cv_on_sync_rx[1:0], r_cv_on};
+        if (!S_rst_n_rx) begin
+            r_cv_on_sync_rx <= 3'd0;
+            S_ball_en_sync_rx <= 3'd0;
+        end else begin
+            r_cv_on_sync_rx <= {r_cv_on_sync_rx[1:0], r_cv_on};
+            S_ball_en_sync_rx <= {S_ball_en_sync_rx[1:0], S_ball_en};
+        end
     end
-    wire S_edge_on = S_sw4_sync_rx[2] & ~S_sw3_sync_rx[2] & ~r_cv_on_sync_rx[2] & ~S_sw1_sync_rx[2];
+    wire S_edge_on = S_sw4_sync_rx[2] & ~S_sw3_sync_rx[2] & ~r_cv_on_sync_rx[2] &
+                     ~S_ball_en_sync_rx[2] & ~S_sw1_sync_rx[2];
 
     isp_top u_isp_top (
         .axi4s_video_aclk ( S_csi_rx_clk    ),
@@ -535,7 +547,15 @@ module design_top_wrapper (
 
     // SW1=1：RGB888 原图直通，暂停 CV（cv_top 的 I_cv_on 拉低 → O_data 自动直通 I_data）。
     // r_cv_on 本身保留，SW1 拨回 0 后 CV 自动恢复。
-    wire S_cv_eff = r_cv_on & ~S_sw1_sync_pix[2];
+    // MCU BALL_CTRL.enable 也可让 CV 生效（正常部署由 MCU 固件参数决定）。
+    // S_ball_en 来自 AHB 寄存器，先 2FF 同步到像素域再参与视频/OSD 门控。
+    reg [2:0] S_ball_en_sync_pix;
+    always @(posedge S_pixel_clk or negedge S_rst_n_pix) begin
+        if (!S_rst_n_pix) S_ball_en_sync_pix <= 3'd0;
+        else              S_ball_en_sync_pix <= {S_ball_en_sync_pix[1:0], S_ball_en};
+    end
+    wire S_ball_mode = S_ball_en_sync_pix[2];
+    wire S_cv_eff = (r_cv_on | S_ball_mode) & ~S_sw1_sync_pix[2];
     // ============================================================ KEY2 → CV 开关（像素域去抖 + 翻转 + 跨域同步）
     // KEY2=A9 板载按键（PULLUP，按下=0）。计数器采样去抖（~14ms），下降沿翻转 r_cv_on。
     // CV 开或 SW1=1 时强制 edge_on=0 / osd_on=0（让 hdmi_mixer/isp_top 直通纯摄像头画面）。
@@ -559,7 +579,8 @@ module design_top_wrapper (
     end
 
     // osd_on = SW4&SW3 且 CV 关且 SW1 关（CV/SW1 开时强制 0，纯摄像头画面）
-    wire S_osd_on = S_sw4_sync_pix[2] & S_sw3_sync_pix[2] & ~r_cv_on & ~S_sw1_sync_pix[2];
+    wire S_osd_on = S_sw4_sync_pix[2] & S_sw3_sync_pix[2] & ~r_cv_on &
+                    ~S_ball_mode & ~S_sw1_sync_pix[2];
 
     wire        S_hdmi_out_vsync;
     wire        S_hdmi_out_hsync;
@@ -643,9 +664,12 @@ module design_top_wrapper (
         .EDGE_THR ( 11'd80 ),
         .MASK_SRC ( 1      ),
         .MAX_RUNS ( 1024   ),
-        .MASK_VIEW( 1      ),
+        .MASK_VIEW( 0      ),
         .FBOX_W   ( 12'd2  ),
-        .MAX_OV   ( 8      )
+        .MAX_OV   ( 8      ),
+        .BALL_W   ( 320    ),
+        .BALL_H   ( 180    ),
+        .BALL_SCALE ( 4    )
     ) u_cv_top (
         .I_clk          ( S_pixel_clk      ),
         .I_rst_n        ( S_rst_n_pix      ),
@@ -655,6 +679,12 @@ module design_top_wrapper (
         .I_de           ( S_hdmi_out_de    ),
         .I_vs           ( S_hdmi_out_vsync ),
         .I_data         ( S_hdmi_out_data  ),
+        .I_ball_en      ( S_ball_mode      ),
+        .I_ball_bg_thr  ( S_ball_bg_thr    ),
+        .I_ball_min_run ( S_ball_min_run   ),
+        .I_ball_capture ( S_ball_capture   ),
+        .O_ball_bg_ready( S_ball_bg_ready  ),
+        .O_ball_capturing(S_ball_capturing ),
         .I_ahb_clk      ( S_ahb_clk        ),
         .I_run_rd_addr  ( S_run_rd_addr    ),
         .O_run_rd_data  ( S_run_rd_data    ),
@@ -689,7 +719,7 @@ module design_top_wrapper (
         .clk        ( S_pixel_clk      ),
         .rst_n      ( S_rst_n_pix      ),
         .I_sw4      ( I_sw4            ),
-        .I_force_cam( S_sw1_sync_pix[2]),
+        .I_force_cam( S_sw1_sync_pix[2] | S_ball_mode),
         .I_pat_data ( S_pat_data       ),
         .I_pat_de   ( S_pat_de         ),
         .I_pat_vs   ( S_pat_vs         ),
@@ -837,9 +867,17 @@ module design_top_wrapper (
         .I_blob_cnt    ( 6'd0              ),   // CCL 转 MCU，无硬件检测数
         .I_bin_thr     ( S_cv_bin_thr_s2    ),
         .I_run_cnt     ( S_run_cnt_eff      ),   // SW1=1 时保持上一帧，避免 MCU 跟踪老化
+        .I_run_overflow( S_cv_run_overflow ),
         .I_min_y       ( S_cv_min_y         ),
         .I_max_y       ( S_cv_max_y         ),
         .I_vsync       ( S_hdmi_vsync       ),
+        // 钢珠前端参数（C 固件唯一定义）
+        .O_ball_en       ( S_ball_en         ),
+        .O_ball_bg_thr   ( S_ball_bg_thr     ),
+        .O_ball_min_run  ( S_ball_min_run    ),
+        .O_ball_capture  ( S_ball_capture    ),
+        .I_ball_bg_ready ( S_ball_bg_ready   ),
+        .I_ball_capturing( S_ball_capturing  ),
         // run_mem 间接读口（slave 发地址 → cv_top B 口出数据）
         .O_run_rd_addr ( S_run_rd_addr     ),
         .I_run_rd_data ( S_run_rd_data     ),

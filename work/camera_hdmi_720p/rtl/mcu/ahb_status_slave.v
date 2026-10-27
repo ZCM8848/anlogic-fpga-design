@@ -66,9 +66,18 @@ module ahb_status_slave #(
     input  wire [5:0]  I_blob_cnt,
     input  wire [7:0]  I_bin_thr,
     input  wire [10:0] I_run_cnt,       // pixel 域 run 数（本帧）
+    input  wire        I_run_overflow,  // pixel 域 run_mem 溢出（本帧不完整）
     input  wire [7:0]  I_min_y,          // pixel 域本帧最小亮度（自适应阈值用）
     input  wire [7:0]  I_max_y,          // pixel 域本帧最大亮度
     input  wire        I_vsync,         // pixel 域，内部 2FF + 上升沿锁存
+
+    // ---- MCU 参数：钢珠前端（C 固件写；RTL 不写死阈值）----
+    output wire        O_ball_en,
+    output wire [7:0]  O_ball_bg_thr,
+    output wire [7:0]  O_ball_min_run,
+    output wire        O_ball_capture,
+    input  wire        I_ball_bg_ready,
+    input  wire        I_ball_capturing,
 
     // ---- run_mem 间接读口（cv_top 的 run_mem B 口，ahb_clk 域读）----
     output wire [9:0]  O_run_rd_addr,
@@ -92,7 +101,9 @@ module ahb_status_slave #(
     reg [5:0]  S_blob_a, S_blob;
     reg [7:0]  S_binthr_a, S_binthr;
     reg [10:0] S_runcnt_a, S_runcnt;
+    reg        S_rovf_a, S_rovf;
     reg [7:0]  S_miny_a, S_miny, S_maxy_a, S_maxy;
+    reg        S_bgready_a, S_bgready, S_capturing_a, S_capturing;
     reg [1:0]  S_vs_sync;
     reg        S_vs_d;
     reg [31:0] S_frame_cnt;
@@ -109,7 +120,10 @@ module ahb_status_slave #(
             S_blob_a <= 6'd0; S_blob <= 6'd0;
             S_binthr_a <= 8'd0; S_binthr <= 8'd0;
             S_runcnt_a <= 11'd0; S_runcnt <= 11'd0;
+            S_rovf_a <= 1'b0; S_rovf <= 1'b0;
             S_miny_a <= 8'd0; S_miny <= 8'd0; S_maxy_a <= 8'd0; S_maxy <= 8'd0;
+            S_bgready_a <= 1'b0; S_bgready <= 1'b0;
+            S_capturing_a <= 1'b0; S_capturing <= 1'b0;
             S_vs_sync <= 2'b00; S_vs_d <= 1'b0; S_frame_cnt <= 32'd0;
         end else begin
             S_cam_id_a <= I_cam_id;       S_cam_id <= S_cam_id_a;
@@ -123,8 +137,11 @@ module ahb_status_slave #(
             S_blob_a   <= I_blob_cnt;    S_blob   <= S_blob_a;
             S_binthr_a <= I_bin_thr;     S_binthr <= S_binthr_a;
             S_runcnt_a <= I_run_cnt;    S_runcnt <= S_runcnt_a;
+            S_rovf_a   <= I_run_overflow; S_rovf <= S_rovf_a;
             S_miny_a   <= I_min_y;       S_miny   <= S_miny_a;
             S_maxy_a   <= I_max_y;       S_maxy   <= S_maxy_a;
+            S_bgready_a <= I_ball_bg_ready; S_bgready <= S_bgready_a;
+            S_capturing_a <= I_ball_capturing; S_capturing <= S_capturing_a;
             S_vs_sync  <= {S_vs_sync[0], I_vsync};
             S_vs_d     <= S_vs_sync[1];
             if (vs_rise) S_frame_cnt <= S_frame_cnt + 1'b1;
@@ -141,6 +158,14 @@ module ahb_status_slave #(
     reg [31:0] S_scratch;
     assign O_heartbeat = S_heartbeat;
     assign O_scratch  = S_scratch;
+
+    // 钢珠前端参数（MCU C 固件唯一写入源）
+    reg        S_ball_en, S_ball_capture;
+    reg [15:0] S_ball_thr;
+    assign O_ball_en      = S_ball_en;
+    assign O_ball_capture = S_ball_capture;
+    assign O_ball_bg_thr  = S_ball_thr[7:0];
+    assign O_ball_min_run = S_ball_thr[15:8];
 
     // run_mem 间接读
     reg [9:0]  r_run_idx;           // MCU 写 RUN_IDX
@@ -197,6 +222,9 @@ module ahb_status_slave #(
     wire [31:0] VER_REG  = VER;
     // META：{run_cnt[10:0], min_y[7:0], max_y[7:0], vsync_latch, 4'b0}
     wire [31:0] META_REG = {S_runcnt, S_miny, S_maxy, 1'b0, 4'b0};
+    wire [31:0] BALL_CTRL_REG   = {30'b0, S_ball_capture, S_ball_en};
+    wire [31:0] BALL_THR_REG    = {16'b0, S_ball_thr};
+    wire [31:0] BALL_STATUS_REG = {29'b0, S_rovf, S_capturing, S_bgready};
 
     function [31:0] rdata_mux(input [4:0] idx);
         begin
@@ -210,6 +238,9 @@ module ahb_status_slave #(
                 5'h07: rdata_mux = r_run_dat;        // RUN_DAT
                 5'h0B: rdata_mux = META_REG;
                 5'h0C: rdata_mux = {16'b0, S_count}; // OV_COUNT 回读
+                5'h0D: rdata_mux = BALL_CTRL_REG;
+                5'h0E: rdata_mux = BALL_THR_REG;
+                5'h0F: rdata_mux = BALL_STATUS_REG;
                 default: rdata_mux = 32'h0;
             endcase
         end
@@ -229,6 +260,7 @@ module ahb_status_slave #(
             r_ov_idx  <= 3'd0;
             r_ov_w0   <= 32'd0;
             S_count   <= 16'd0;
+            S_ball_en <= 1'b0; S_ball_capture <= 1'b0; S_ball_thr <= 16'd0;
             for (i = 0; i < 8; i = i + 1) S_overlay[i] <= 64'd0;
         end else begin
             // run_mem B 口同步读输出锁存（每拍把 I_run_rd_data 入 r_run_dat）
@@ -244,6 +276,11 @@ module ahb_status_slave #(
                     5'h09: r_ov_w0      <= I_hwdata;                    // OV_W0 暂存
                     5'h0A: S_overlay[r_ov_idx] <= {r_ov_w0, I_hwdata};  // OV_W1 触发提交
                     5'h0C: S_count      <= I_hwdata[15:0];              // OV_COUNT
+                    5'h0D: begin                                       // BALL_CTRL
+                        S_ball_en      <= I_hwdata[0];
+                        S_ball_capture <= I_hwdata[1];
+                    end
+                    5'h0E: S_ball_thr   <= I_hwdata[15:0];              // BALL_THR: [7:0]=thr [15:8]=min_run
                     default: ;
                 endcase
             end

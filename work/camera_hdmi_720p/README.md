@@ -530,3 +530,37 @@ S_hdmi_out_data[23:0] = {R[7:0], G[7:0], B[7:0]}   // 1280×720，75MHz 像素�
     双击 `*_Runs/{syn_1,phy_1}/run.bat`（自愈版先恢复含 `IpADCList/IpSDCList` 的 settings.cfg）。
     GUI 的 Run 会 reset 并用内部参数重写 settings.cfg → 约束丢失、报 `SYN-8534`；GUI 只用于下载/查看。
     命令行构建的日志在控制台 stdout（**不会**写 run.log —— 那是 GUI 运行的遗留文件），细节见 `tools/td_run/README.md`。
+
+## M11 — 钢珠检测移植到 MCU 参数化（2026-10-28）
+
+**目标**：把 Python playground 中已经验证的钢珠检测算法移植到本工程；FPGA 只做像素级前端，
+所有阈值/几何/跟踪参数由 MCU C 固件集中管理，改参数不需要重新综合 FPGA。
+
+**RTL（cv_top）**
+- `G = I_data[15:8]`，精确 4×4 盒式平均 → 320×180；
+- 单帧背景快照（MCU 命令触发），`|G-BG| >= bg_thr` → run 提取；
+- `run_mem` 双口 BRAM（A 口 pixel 写 / B 口 ahb_clk 读），每项 `{y[9:0], xs[10:0], xe[10:0]}`；
+- overlay 绿框 + ID + Count 仍由 cv_top 叠加；
+- 新增 `BALL_CTRL[0]=enable [1]=capture`、`BALL_THR`、`BALL_STATUS[0]=bg_ready [1]=capturing [2]=run_overflow`。
+
+**MCU（mcu_fw/main.c）**
+- 顶部「调参区」的 `VISION_PARAMS` 是唯一参数入口：背景阈值、面积/宽高筛选、碎块合并、
+  固定 2R 框、门线、最近邻跟踪、5 帧运动门控、静态轨迹老化、调试输出；
+- 算法顺序：run → CCL（union-find）→ 形状筛选 → 按面积排序取前 8 → 合并碎块 →
+  最近邻跟踪（欧氏门限 + 距离排序）→ 可见性/门线计数 → overlay；
+- 跟踪器按 Python 参考实现逐条移植（直接取检测位置、`vx=(vx+dvx)//2`、5 帧窗口、
+  `moved/min_move`、`window_move/min_window`、`missed/max_miss`、`age/static_max_age`）；
+- 背景采集：先 `BALL_CTRL=1` 关 edge/OSD 并切摄像头，等 10 帧清流水线，
+  再 `BALL_CTRL=3` 采一帧空滑道背景，最后 `BALL_CTRL=1` 开始检测；
+- 串口新增 `VP ...` 参数打印、`D ... OVF=...` 调试行、`BG/OVF/CNT` 状态字段。
+
+**构建产物**
+- bit：`td_project/camera_hdmi_720p_Runs/phy_1/camera_hdmi_720p.bit`
+  （1,789,539 B，MD5 `341B1A2C38D7BEC9FCFD9826E4C027B2`；Setup WNS -1.137 ns / Hold +0.020 ns /
+  2 violated endpoints，均为 M6 遗留 ISP `awb→edge`；ball mode 旁路；slices 75.78%，EBR 68/108，DSP 10/40）
+- ELF：`C:\Users\Z___C\FDWork\ph1p35_status\build\ph1p35_status.elf`
+  （204,760 B，MD5 `814512928604BB9409AF855CE3297B1E`；text 35,912 / data 600 / bss 11,596）
+
+**调参/上板说明**：见 `mcu_fw/README.md`（参数表、串口字段、调参顺序、上板检查清单、与 Python 版差异）。
+
+**待办**：上板验证绿框/计数；若现场噪声大，优先调 `bg_thr`/`min_area`，必要时再在 RTL 加 3×3 形态学。
