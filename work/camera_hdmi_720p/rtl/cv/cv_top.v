@@ -45,7 +45,8 @@ module cv_top #(
     input  wire [7:0]  I_ball_bg_thr,
     input  wire [7:0]  I_ball_min_run,
     input  wire        I_ball_capture,
-    input  wire [1:0]  I_disp_mode,   // 0=RGB+框/Count, 1=score, 2=mask
+    input  wire [1:0]  I_disp_mode,   // 调试：3=RGB, 1=score, 2=mask
+    input  wire        I_debug_view,  // 1=调试动态画面
     output wire        O_ball_bg_ready,
     output wire        O_ball_capturing,
 
@@ -468,11 +469,12 @@ module cv_top #(
                               (r_disp_score < 8'd64)   ? 24'h0000FF :
                               (r_disp_score < 8'd128)  ? 24'h00FFFF :
                               (r_disp_score < 8'd192)  ? 24'hFFFF00 : 24'hFF0000;
-    wire [23:0] dbg_color = (I_disp_mode == 2'd2) ? (r_disp_mask ? 24'hFFFFFF : 24'h000000) :
-                            (I_disp_mode == 2'd1) ? score_color : 24'h000000;
+    wire [23:0] mask_color = r_disp_mask ? 24'hFFFFFF : 24'h000000;
+    wire [23:0] dbg_color = (I_disp_mode == 2'd2) ? mask_color :
+                            (I_disp_mode == 2'd1) ? score_color : I_data;
     assign O_de=I_de; assign O_vs=I_vs;
     // 优先级：Count 字模 > ID 字模 > 绿框边 > 机器视角/原画
-    assign O_data = (I_cv_on && I_de) ? ((I_disp_mode != 2'd0) ? dbg_color :
+    assign O_data = (I_cv_on && I_de) ? (I_debug_view ? dbg_color :
                                          (r_cnt_digit ? 24'hFFFFFF :
                                          (r_id_digit ? 24'hFFFFFF :
                                          (r_border ? 24'h00FF00 : cv_base)))) : I_data;

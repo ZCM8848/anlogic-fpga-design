@@ -521,7 +521,7 @@ module design_top_wrapper (
     wire S_debug_static  = S_debug_mode & ~S_sw2_sync_pix[2];
     wire S_camera_sel    = ~S_debug_static;   // 0=测试图案，1=摄像头/CV
 
-    // KEY1=D5：动态调试画面循环 RGB -> score -> mask
+    // KEY1=D5：动态调试画面循环 RGB(纯净) -> score -> mask
     reg [20:0] r_key1_cnt;
     reg [2:0]  r_key1_sync;
     reg        r_key1_d;
@@ -530,15 +530,16 @@ module design_top_wrapper (
     always @(posedge S_pixel_clk or negedge S_rst_n_pix) begin
         if (!S_rst_n_pix) begin
             r_key1_cnt <= 21'd0; r_key1_sync <= 3'd0; r_key1_d <= 1'b0;
-            S_disp_mode <= 2'd0;
+            S_disp_mode <= 2'd3;
         end else begin
             r_key1_sync <= {r_key1_sync[1:0], I_key1};
             if (r_key1_cnt == 21'd1048575) begin   // ~14ms @75MHz
                 r_key1_cnt <= 21'd0;
                 r_key1_d   <= r_key1_sync[2];
                 if (key1_fall && S_debug_dynamic) begin
-                    if (S_disp_mode == 2'd2) S_disp_mode <= 2'd0;
-                    else                     S_disp_mode <= S_disp_mode + 2'd1;
+                    if (S_disp_mode == 2'd3)      S_disp_mode <= 2'd1;
+                    else if (S_disp_mode == 2'd1) S_disp_mode <= 2'd2;
+                    else                          S_disp_mode <= 2'd3;
                 end
             end else begin
                 r_key1_cnt <= r_key1_cnt + 21'd1;
@@ -683,6 +684,7 @@ module design_top_wrapper (
         .I_ball_min_run ( S_ball_min_run   ),
         .I_ball_capture ( S_ball_capture   ),
         .I_disp_mode    ( S_disp_mode      ),
+        .I_debug_view   ( S_debug_dynamic  ),
         .O_ball_bg_ready( S_ball_bg_ready  ),
         .O_ball_capturing(S_ball_capturing ),
         .I_ahb_clk      ( S_ahb_clk        ),
