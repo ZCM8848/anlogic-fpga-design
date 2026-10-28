@@ -45,6 +45,8 @@ module cv_top #(
     input  wire [7:0]  I_ball_bg_thr,
     input  wire [7:0]  I_ball_min_run,
     input  wire        I_ball_capture,
+    input  wire [1:0]  I_disp_mode,   // 调试：3=RGB, 1=score, 2=mask
+    input  wire        I_debug_view,  // 1=调试动态画面
     output wire        O_ball_bg_ready,
     output wire        O_ball_capturing,
 
@@ -209,6 +211,19 @@ module cv_top #(
                                             : (bg_q - r_small_d);
     wire w_ball_mask = r_small_valid_d && r_bg_ready && !r_cap_active &&
                        w_ball_en && I_cv_on && (w_diff >= r_bg_thr);
+
+    // 调试显示：锁存上一个 320x180 小像素的 mask/score，供下一个 4x4 块输出
+    reg [7:0] r_disp_score;
+    reg       r_disp_mask;
+    always @(posedge I_clk or negedge I_rst_n) begin
+        if (!I_rst_n) begin
+            r_disp_score <= 8'd0;
+            r_disp_mask  <= 1'b0;
+        end else if (r_small_valid_d) begin
+            r_disp_score <= w_diff;
+            r_disp_mask  <= w_ball_mask;
+        end
+    end
     // MCU-tunable minimum run length: drop isolated 1..N-1 pixel noise
     wire [8:0] w_run_xs_now = r_run_act ? r_run_xs : r_sx_d;
     wire [8:0] w_run_len     = r_run_xe - r_run_xs + 9'd1;
@@ -448,11 +463,20 @@ module cv_top #(
         end
     end
 
-    wire [23:0] cv_base = I_data;   // ball mode: camera + green boxes (mask view is in the PC tool)
+    wire [23:0] cv_base = I_data;   // ball mode: camera + green boxes
+    // score 伪彩：低=黑，中=蓝/青/黄，高=红；mask=白
+    wire [23:0] score_color = (r_disp_score < r_bg_thr) ? 24'h000000 :
+                              (r_disp_score < 8'd64)   ? 24'h0000FF :
+                              (r_disp_score < 8'd128)  ? 24'h00FFFF :
+                              (r_disp_score < 8'd192)  ? 24'hFFFF00 : 24'hFF0000;
+    wire [23:0] mask_color = r_disp_mask ? 24'hFFFFFF : 24'h000000;
+    wire [23:0] dbg_color = (I_disp_mode == 2'd2) ? mask_color :
+                            (I_disp_mode == 2'd1) ? score_color : I_data;
     assign O_de=I_de; assign O_vs=I_vs;
     // 优先级：Count 字模 > ID 字模 > 绿框边 > 机器视角/原画
-    assign O_data = (I_cv_on && I_de) ? (r_cnt_digit ? 24'hFFFFFF :
+    assign O_data = (I_cv_on && I_de) ? (I_debug_view ? dbg_color :
+                                         (r_cnt_digit ? 24'hFFFFFF :
                                          (r_id_digit ? 24'hFFFFFF :
-                                          (r_border ? 24'h00FF00 : cv_base))) : I_data;
+                                         (r_border ? 24'h00FF00 : cv_base)))) : I_data;
 
 endmodule
