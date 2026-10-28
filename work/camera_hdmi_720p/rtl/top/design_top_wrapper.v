@@ -28,6 +28,8 @@
 module design_top_wrapper (
     input  wire        I_sys_clk,        // C4 板载 50MHz
     output wire [3:0]  O_led,            // D10/E10/C6/D6（高电平点亮）
+    output wire [7:0]  O_seg,            // 8 位数码管段选（低有效，SW6 拨上）
+    output wire [7:0]  O_sel,            // 8 位数码管位选（低有效）
 
     // 摄像头控制（BANK21，3V3；经 TXS0104E 电平转换）
     output wire        O_cam_scl,        // K3
@@ -101,8 +103,10 @@ module design_top_wrapper (
     wire S_rst_n_pix;
     wire S_rst_n_24m;
     wire S_rst_n_ddr;
+    wire S_rst_n_50m;
 
     reset_ctrl u_rst_100m (.clk(S_clk_100m), .pll_lock(S_pll_lock), .rst_n(S_rst_n_100m));
+    reset_ctrl u_rst_50m  (.clk(I_sys_clk),  .pll_lock(S_pll_lock), .rst_n(S_rst_n_50m));
     reset_ctrl u_rst_pix  (.clk(S_pixel_clk), .pll_lock(S_pll_lock), .rst_n(S_rst_n_pix));
     reset_ctrl u_rst_24m  (.clk(S_24m_clk),  .pll_lock(S_pll_lock), .rst_n(S_rst_n_24m));
 
@@ -625,6 +629,7 @@ module design_top_wrapper (
     wire [31:0] S_run_rd_data;    // cv_top → slave（run_mem B 口数据）
     wire [511:0] S_overlay;        // slave → cv_top（叠加 bbox+ID）
     wire [15:0]  S_count;          // slave → cv_top（exit 计数显示）
+    wire [19:0]  S_count_bcd;      // slave → cv_top / 数码管（5 位 BCD）
 
     // K3(B9)/K4(C7) 板载按键：CV 开时作阈值 ±1 调参（像素域去抖 → 单拍脉冲）
     // 注：脉冲必须单拍——cv_top 每周期判 I_thr_up/dn，若发 14ms 电平会被加到饱和
@@ -692,6 +697,7 @@ module design_top_wrapper (
         .O_run_rd_data  ( S_run_rd_data    ),
         .I_overlay      ( S_overlay        ),
         .I_count        ( S_count          ),
+        .I_count_bcd    ( S_count_bcd      ),
         .O_de           ( S_cv_de          ),
         .O_vs           ( S_cv_vs          ),
         .O_data         ( S_cv_data        ),
@@ -885,6 +891,7 @@ module design_top_wrapper (
         // overlay + count（MCU 写 → cv_top 叠加读）
         .O_overlay     ( S_overlay          ),
         .O_count       ( S_count            ),
+        .O_count_bcd   ( S_count_bcd        ),
         .O_heartbeat   ( S_mcu_heartbeat    ),
         .O_scratch     ( S_mcu_scratch      ),
         .O_frame_cnt   ( S_mcu_frame_cnt    )
@@ -912,6 +919,16 @@ module design_top_wrapper (
         .I_hready     ( S_hready          ),
         .O_uart0_tx   ( S_mcu_uart0_tx    ),
         .I_uart0_rx   ( 1'b1             )    // UART idle
+    );
+
+    // ---- 8 位数码管：5 位十进制 BCD 计数（右对齐，左 3 位灭）----
+    // SW6 必须拨到数码管一侧；数码管与双色 LED 复用 16 根引脚。
+    seg_count_display u_seg_count (
+        .I_clk   ( I_sys_clk       ),
+        .I_rst_n ( S_rst_n_50m     ),
+        .I_bcd   ( S_count_bcd     ),
+        .O_seg   ( O_seg           ),
+        .O_sel   ( O_sel           )
     );
 
 endmodule

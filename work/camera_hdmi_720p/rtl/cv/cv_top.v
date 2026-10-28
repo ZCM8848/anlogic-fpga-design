@@ -58,6 +58,7 @@ module cv_top #(
     // overlay + count（来自 ahb_status_slave）
     input  wire [511:0] I_overlay,
     input  wire [15:0]  I_count,
+    input  wire [19:0]  I_count_bcd,
 
     // meta（给 ahb_status_slave）
     output wire [10:0] O_run_cnt,
@@ -344,14 +345,14 @@ module cv_top #(
     // Count 显示：左上 (24,56)，4 位 hex，每位 8px（5 字模 + 3 间隙），共 32px
     localparam [11:0] CNT_X = 12'd24;
     localparam [11:0] CNT_Y = 12'd56;
-    localparam [11:0] CNT_W = 12'd32;
+    localparam [11:0] CNT_W = 12'd40;
 
     integer oi;
     reg r_border, r_id_digit, r_cnt_digit;
     reg [4:0] dg_bits;
     reg [11:0] dg_row, dg_col;
     reg [3:0]  cnt_nib;
-    reg [1:0]  cnt_idx;
+    reg [2:0]  cnt_idx;
     always @(*) begin
         r_border=1'b0; r_id_digit=1'b0; r_cnt_digit=1'b0;
         // ---- overlay 绿框 + ID ----
@@ -447,13 +448,14 @@ module cv_top #(
         // ---- Count（4 位 hex，每位 8px）----
         if (r_x>=CNT_X && r_x<CNT_X+CNT_W && r_y>=CNT_Y && r_y<CNT_Y+7) begin
             dg_row = r_y - CNT_Y;
-            dg_col = r_x - CNT_X;          // 0..31
-            cnt_idx = dg_col[4:3];         // 0..3（每 8px 一位）
+            dg_col = r_x - CNT_X;          // 0..39
+            cnt_idx = dg_col[5:3];         // 0..4（每 8px 一位）
             case (cnt_idx)
-                2'd0: cnt_nib = I_count[15:12];
-                2'd1: cnt_nib = I_count[11:8];
-                2'd2: cnt_nib = I_count[7:4];
-                2'd3: cnt_nib = I_count[3:0];
+                3'd0: cnt_nib = I_count_bcd[3:0];
+                3'd1: cnt_nib = I_count_bcd[7:4];
+                3'd2: cnt_nib = I_count_bcd[11:8];
+                3'd3: cnt_nib = I_count_bcd[15:12];
+                3'd4: cnt_nib = I_count_bcd[19:16];
                 default: cnt_nib = 4'h0;
             endcase
             if (dg_col[2:0] < 5) begin     // 位内 col 0-4 画字模，5-7 间隙

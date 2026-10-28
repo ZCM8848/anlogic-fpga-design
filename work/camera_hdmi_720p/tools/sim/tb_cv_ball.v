@@ -47,6 +47,7 @@ module tb_cv_ball;
         .I_ahb_clk(I_ahb_clk), .I_run_rd_addr(I_run_rd_addr),
         .O_run_rd_data(O_run_rd_data),
         .I_overlay(I_overlay), .I_count(I_count),
+        .I_count_bcd(20'd0),
         .O_de(O_de), .O_vs(O_vs), .O_data(O_data),
         .O_run_cnt(O_run_cnt), .O_min_y(O_min_y), .O_max_y(O_max_y),
         .O_run_overflow(O_run_overflow), .O_bin_thr(O_bin_thr)

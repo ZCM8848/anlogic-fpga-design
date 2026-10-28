@@ -88,6 +88,7 @@ module ahb_status_slave #(
     // ---- overlay 寄存器组输出（给 cv_top 叠加；8 项 × 64bit）+ count ----
     output wire [511:0] O_overlay,
     output wire [15:0]  O_count,
+    output wire [19:0]  O_count_bcd,
 
     // ---- MCU 写回暴露 ----
     output wire [31:0] O_heartbeat,
@@ -183,7 +184,9 @@ module ahb_status_slave #(
     reg [2:0]  r_ov_idx;
     reg [31:0] r_ov_w0;
     reg [15:0] S_count;
+    reg [19:0] S_count_bcd;
     assign O_count = S_count;
+    assign O_count_bcd = S_count_bcd;
 
     // overlay 总线打包：{ov7, ov6, ..., ov0}
     assign O_overlay = {S_overlay[7], S_overlay[6], S_overlay[5], S_overlay[4],
@@ -245,6 +248,7 @@ module ahb_status_slave #(
                 5'h07: rdata_mux = r_run_dat;        // RUN_DAT
                 5'h0B: rdata_mux = META_REG;
                 5'h0C: rdata_mux = {16'b0, S_count}; // OV_COUNT 回读
+                5'h11: rdata_mux = {12'b0, S_count_bcd}; // BCD_COUNT @0x44
                 5'h0D: rdata_mux = BALL_CTRL_REG;
                 5'h0E: rdata_mux = BALL_THR_REG;
                 5'h0F: rdata_mux = BALL_STATUS_REG;
@@ -268,6 +272,7 @@ module ahb_status_slave #(
             r_ov_idx  <= 3'd0;
             r_ov_w0   <= 32'd0;
             S_count   <= 16'd0;
+            S_count_bcd <= 20'd0;
             S_ball_en <= 1'b0; S_ball_capture <= 1'b0; S_ball_thr <= 16'd0;
             for (i = 0; i < 8; i = i + 1) S_overlay[i] <= 64'd0;
         end else begin
@@ -284,6 +289,7 @@ module ahb_status_slave #(
                     5'h09: r_ov_w0      <= I_hwdata;                    // OV_W0 暂存
                     5'h0A: S_overlay[r_ov_idx] <= {r_ov_w0, I_hwdata};  // OV_W1 触发提交
                     5'h0C: S_count      <= I_hwdata[15:0];              // OV_COUNT
+                    5'h11: S_count_bcd  <= I_hwdata[19:0];              // BCD_COUNT @0x44
                     5'h0D: begin                                       // BALL_CTRL
                         S_ball_en      <= I_hwdata[0];
                         S_ball_capture <= I_hwdata[1];

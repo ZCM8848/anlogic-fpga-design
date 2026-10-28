@@ -67,6 +67,14 @@
                     <Attr Name="CompileOrder" Val="16"/>
                 </FileInfo>
             </File>
+            <File Path="../rtl/video/seg_count_display.v">
+                <FileInfo>
+                    <Attr Name="UsedInSyn" Val="true"/>
+                    <Attr Name="UsedInP&R" Val="true"/>
+                    <Attr Name="BelongTo" Val="design_1"/>
+                    <Attr Name="CompileOrder" Val="63"/>
+                </FileInfo>
+            </File>
 
             <File Path="../ip/hdmi/hdmi_tx.v">
                 <FileInfo>

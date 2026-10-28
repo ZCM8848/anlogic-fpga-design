@@ -36,6 +36,7 @@ extern void al_simp_putchar(char c);
 #define BALL_THR    (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x38))
 #define BALL_STATUS (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x3C))
 #define SW_STAT     (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x40))
+#define BCD_COUNT   (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x44))
 
 #define VER_MAGIC   0x4D435602U
 
@@ -694,6 +695,18 @@ static void report_switches(void)
                    (int)((sw >> 3) & 1u));
 }
 
+static void write_count_bcd(void)
+{
+    uint32_t bcd = 0;
+    int v = count;
+    int i;
+    for (i = 0; i < 5; i++) {
+        bcd |= (uint32_t)(v % 10) << (4 * i);
+        v /= 10;
+    }
+    BCD_COUNT = bcd;
+}
+
 static void report_debug(uint32_t frame, int run_cnt, int ovf)
 {
     int i;
@@ -738,6 +751,7 @@ int main(void)
     next_id = 1;
     count = 0;
     n_det = 0;
+    BCD_COUNT = 0u;
 
     report_params();
 
@@ -804,6 +818,7 @@ int main(void)
             track_update();
             write_overlay();
             OV_COUNT = (uint32_t)count;
+            write_count_bcd();
 
             if (VISION_PARAMS.debug && (++dbg_div >= dbg_step)) {
                 dbg_div = 0;
