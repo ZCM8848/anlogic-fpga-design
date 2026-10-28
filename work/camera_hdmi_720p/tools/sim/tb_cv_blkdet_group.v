@@ -19,8 +19,8 @@ module tb_cv_blkdet_group;
         .DARK_THR(100), .CB_DELTA(20),
         .FRAG_MIN_BLKN(3), .MIN_BLKN(14), .MAX_BLKN(400),
         .MAX_RAWWH(36), .GROUP_MAXWH(13), .GROUP_MIN_SIDE(4),
-        .GROUP_MIN_LONG(7), .SPLIT_SIDE(15), .SPLIT_MIN_SIDE(6),
-        .BOX_HALF(80), .ROI_Y0(0), .MAX_BLOBS(8)
+        .GROUP_MIN_LONG(7), .SPLIT_SIDE(15), .SPLIT_MIN_SIDE(8),
+        .BOX_HALF(80), .MAX_BLOBS(8)
     ) dut (
         .clk(clk), .rst_n(rst_n), .de(de), .vs(vs), .rgb(rgb),
         .i_sel(i_sel), .i_wide(1'b0), .o_ready(o_ready), .o_count(o_count),
@@ -164,6 +164,21 @@ module tb_cv_blkdet_group;
         rn = 0; add_rect(10, 10, 24, 19);
         load_mask; pulse_vs; wait_ready;
         check_case("wide14x9", 0, -1, -1, -1);
+
+        // 上下两条暗带夹住球体：合并为一颗球，框心取两条暗带的中点
+        rn = 0; add_rect(30, 18, 40, 24); add_rect(30, 26, 40, 32);
+        load_mask; pulse_vs; wait_ready;
+        check_case("stack_two_bands", 1, 480, -1, -1);
+
+        // 单条 14x5 拖影暗带：按一颗球输出
+        rn = 0; add_rect(10, 10, 24, 15);
+        load_mask; pulse_vs; wait_ready;
+        check_case("band14x5", 1, 192, -1, -1);
+
+        // 左右并排的两条暗带不按上下夹带合并
+        rn = 0; add_rect(10, 10, 20, 15); add_rect(30, 10, 40, 15);
+        load_mask; pulse_vs; wait_ready;
+        check_case("bands_side_by_side", 2, 160, 480, -1);
 
         if (errors != 0) begin
             $display("RESULT FAIL errors=%0d", errors);

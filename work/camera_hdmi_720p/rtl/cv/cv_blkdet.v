@@ -27,9 +27,11 @@ module cv_blkdet #(
     parameter [7:0]  GROUP_MIN_SIDE = 8'd4, // 分组短边下限(块)，剔除细长残片
     parameter [7:0]  GROUP_MIN_LONG = 8'd7, // 分组长边下限(块)，剔除 5x5/6x6 阴影与纹理小块
     parameter [7:0]  SPLIT_SIDE = 8'd15,    // 接触钢珠拆分长边门限(块)
-    parameter [7:0]  SPLIT_MIN_SIDE = 8'd6, // 拆分短边下限(块)
+    parameter [7:0]  SPLIT_MIN_SIDE = 8'd8, // 拆分短边下限(块)；6~7 块是单条拖影暗带
+    parameter [7:0]  STACK_WH = 8'd22,      // 上下暗带合并后的最大宽度(块)
+    parameter [7:0]  STACK_H  = 8'd15,      // 上下暗带合并后的最大高度(块)
+    parameter [7:0]  STACK_GAP= 8'd5,       // 上下暗带之间的最大间隔(块)
     parameter [11:0] BOX_HALF = 12'd80,     // 固定识别框半边长(px)，10 块=160px
-    parameter [11:0] ROI_Y0 = 12'd200,      // 上方纹理区不输出识别框，保留左侧入场高度
     parameter        MAX_GROUPS = 8,        // 分组表深度：一颗钢珠一条，与输出槽位一致
     parameter        MAX_BLOBS= 8
 )(
@@ -141,6 +143,7 @@ module cv_blkdet #(
     reg [3:0]  t_gscan;                     // 0..MAX_GROUPS-1
     reg [3:0]  t_best;
     reg        t_best_valid;
+    reg        t_best_stk;
     reg [15:0] t_best_delta;
     reg [3:0]  t_gsel;                      // 0..MAX_GROUPS
     reg [3:0]  t_mi, t_mj;
@@ -182,6 +185,7 @@ module cv_blkdet #(
     reg [11:0] g_maxy [0:MAX_GROUPS-1];
     reg [15:0] g_area [0:MAX_GROUPS-1];
     reg [MAX_GROUPS-1:0] g_valid;
+    reg [MAX_GROUPS-1:0] g_stacked;         // 该分组由上下两条暗带夹住球体
     reg [4:0]  g_count;
 
     wire [12:0]     s_bidx  = {1'b0, t_by}*7'd80 + {8'b0, t_bx};
@@ -232,10 +236,11 @@ module cv_blkdet #(
     wire fn_corner = (fn_lft&fn_top)|(fn_rgt&fn_top)|(fn_lft&fn_bot)|(fn_rgt&fn_bot);
     wire frag_edge_ok = (i_wide && (fn_wb>=8'd2) && (fn_hb>=8'd2) && (fn_ab>=16'd8));
     wire frag_left_ok = (!fn_lft) || frag_edge_ok;
+    wire frag_top_ok  = (fn_mny!=7'd0) || frag_edge_ok;
     wire frag_corner_ok = (!fn_corner) || (frag_edge_ok && (fn_mnx<=7'd2));
     wire frag_size_ok = s_ff[64] && (fn_ab>=FRAG_MIN_BLKN) && (fn_ab<=MAX_BLKN)
                      && (fn_wb<=MAX_RAWWH) && (fn_hb<=MAX_RAWWH);
-    wire frag_ok = frag_size_ok && frag_corner_ok && (fn_mny!=7'd0) && frag_left_ok;
+    wire frag_ok = frag_size_ok && frag_corner_ok && frag_top_ok && frag_left_ok;
 
     // ---- 碎片 -> 分组：并集包围盒 <= 13x13 块；任意数量碎片都走同一条件 ----
     wire [11:0] gs_minx = g_minx[t_gscan], gs_maxx = g_maxx[t_gscan];
@@ -252,6 +257,20 @@ module cv_blkdet #(
     wire [15:0] gu_box = gu_wb * gu_hb;
     wire [15:0] gu_delta = (gu_box >= gs_box) ? (gu_box - gs_box) : 16'd0;
     wire        g_fits = g_valid[t_gscan] && (gu_wb<=GROUP_MAXWH) && (gu_hb<=GROUP_MAXWH);
+    // ---- 上下暗带夹住球体：x 重叠>=60%，垂直间隔<=5 块，并集<=22x15 ----
+    wire        g_upper = (gs_miny <= s_ff[39:28]);
+    wire [11:0] st_up_maxy = g_upper ? gs_maxy : s_ff[27:16];
+    wire [11:0] st_dn_miny = g_upper ? s_ff[39:28] : gs_miny;
+    wire [11:0] st_ox0 = (gs_minx > s_ff[63:52]) ? gs_minx : s_ff[63:52];
+    wire [11:0] st_ox1 = (gs_maxx < s_ff[51:40]) ? gs_maxx : s_ff[51:40];
+    wire [7:0]  st_vgap = ((st_dn_miny - st_up_maxy)>>4) - 8'd1;
+    wire [7:0]  st_ovb  = ((st_ox1 - st_ox0)>>4) + 8'd1;
+    wire [7:0]  st_mw   = (gs_wb < fn_wb) ? gs_wb : fn_wb;
+    wire        g_stack = g_valid[t_gscan] && (st_dn_miny > st_up_maxy) &&
+                          (st_vgap <= STACK_GAP) && (st_ox1 >= st_ox0) &&
+                          (({4'b0,st_ovb} * 8'd5) >= ({4'b0,st_mw} * 8'd3)) &&
+                          (gu_wb<=STACK_WH) && (gu_hb<=STACK_H);
+    wire        g_any   = g_fits || g_stack;
 
     // ---- 分组之间合并：处理碎片先后顺序造成的一颗钢珠分成多条分组 ----
     wire [11:0] mg_minx = (g_minx[t_mi[3:0]] < g_minx[t_mj[3:0]]) ? g_minx[t_mi[3:0]] : g_minx[t_mj[3:0]];
@@ -263,6 +282,23 @@ module cv_blkdet #(
     wire        m_fits = (t_mi < MAX_GROUPS) && (t_mj < MAX_GROUPS)
                       && g_valid[t_mi[3:0]] && g_valid[t_mj[3:0]]
                       && (mg_wb<=GROUP_MAXWH) && (mg_hb<=GROUP_MAXWH);
+    wire [11:0] mg_ox0 = (g_minx[t_mi[3:0]] > g_minx[t_mj[3:0]]) ? g_minx[t_mi[3:0]] : g_minx[t_mj[3:0]];
+    wire [11:0] mg_ox1 = (g_maxx[t_mi[3:0]] < g_maxx[t_mj[3:0]]) ? g_maxx[t_mi[3:0]] : g_maxx[t_mj[3:0]];
+    wire        mg_upper = (g_miny[t_mi[3:0]] <= g_miny[t_mj[3:0]]);
+    wire [11:0] mg_up_maxy = mg_upper ? g_maxy[t_mi[3:0]] : g_maxy[t_mj[3:0]];
+    wire [11:0] mg_dn_miny = mg_upper ? g_miny[t_mj[3:0]] : g_miny[t_mi[3:0]];
+    wire [7:0]  mg_vgap = ((mg_dn_miny - mg_up_maxy)>>4) - 8'd1;
+    wire [7:0]  mg_ovb  = ((mg_ox1 - mg_ox0)>>4) + 8'd1;
+    wire [7:0]  mg_iw = ((g_maxx[t_mi[3:0]] - g_minx[t_mi[3:0]])>>4) + 8'd1;
+    wire [7:0]  mg_jw = ((g_maxx[t_mj[3:0]] - g_minx[t_mj[3:0]])>>4) + 8'd1;
+    wire [7:0]  mg_mw = (mg_iw < mg_jw) ? mg_iw : mg_jw;
+    wire        m_stack = (t_mi < MAX_GROUPS) && (t_mj < MAX_GROUPS)
+                       && g_valid[t_mi[3:0]] && g_valid[t_mj[3:0]]
+                       && (mg_dn_miny > mg_up_maxy) && (mg_vgap <= STACK_GAP)
+                       && (mg_ox1 >= mg_ox0)
+                       && (({4'b0,mg_ovb} * 8'd5) >= ({4'b0,mg_mw} * 8'd3))
+                       && (mg_wb<=STACK_WH) && (mg_hb<=STACK_H);
+    wire        m_any = m_fits || m_stack;
 
     // ---- 分组输出：支撑面积/短边达标，固定 13x13 块框 ----
     wire [11:0] o_minx = g_minx[t_gsel[3:0]], o_maxx = g_maxx[t_gsel[3:0]];
@@ -278,19 +314,18 @@ module cv_blkdet #(
     wire [11:0] o_cy = o_cy_s[12:1];
     wire [11:0] o_cy_out = o_cy;   // 跟踪/计数使用真实中心，显示偏移在 cv_top
     wire        o_edge = i_wide && (o_minx<=12'd32);   // 只放宽左侧入场
-    wire [7:0]  o_min_side = o_edge ? 8'd3 : GROUP_MIN_SIDE;
-    wire [7:0]  o_min_long = o_edge ? 8'd3 : GROUP_MIN_LONG;
-    wire [15:0] o_min_area = o_edge ? 16'd10 : MIN_BLKN;
+    wire [7:0]  o_min_side = o_edge ? 8'd4 : GROUP_MIN_SIDE;
+    wire [7:0]  o_min_long = o_edge ? 8'd6 : GROUP_MIN_LONG;
+    wire [15:0] o_min_area = o_edge ? 16'd14 : MIN_BLKN;
     wire        o_single = (o_l<=GROUP_MAXWH);
     wire        o_aspect_ok = (!o_single) ||
                               (o_edge ? (({4'b0,o_l} * 8'd5) <= ({4'b0,o_s} * 8'd11))
-                                      : (({4'b0,o_l} * 8'd5) <= ({4'b0,o_s} * 8'd9)));
-    wire        o_roi_ok = (o_cy_out>=ROI_Y0) ||
-                           ((o_cx<=12'd240) && (o_cy_out>=12'd150));
-    wire        o_basic = g_valid[t_gsel[3:0]] && (o_area>=o_min_area)
-                       && (o_s>=o_min_side) && (o_l>=o_min_long)
-                       && o_aspect_ok && o_roi_ok;
-    wire        o_one = o_basic && (o_l<=GROUP_MAXWH);
+                                      : (({4'b0,o_l} * 8'd5) <= ({4'b0,o_s} * 8'd13)));
+    wire        o_side_ok = g_valid[t_gsel[3:0]] && (o_area>=o_min_area)
+                         && (o_s>=o_min_side) && (o_l>=o_min_long);
+    wire        o_band = (o_l>GROUP_MAXWH) && (o_s<SPLIT_MIN_SIDE) && (o_l<=STACK_WH);
+    wire        o_one = o_side_ok &&
+                        ((o_single && o_aspect_ok) || g_stacked[t_gsel[3:0]] || o_band);
 
     function [2:0] f_nsplit;
         input [7:0] l;
@@ -309,7 +344,8 @@ module cv_blkdet #(
     wire [7:0]  o_seg_b = (o_n==3'd2) ? (o_l_b>>1) :
                           (o_n==3'd3) ? o_seg3_b_w[7:0] : (o_l_b>>2);
     wire [11:0] o_seg = {4'd0,o_seg_b} << 4;   // 块 -> 像素
-    wire        o_split = o_basic && (o_l>GROUP_MAXWH) && (o_l>=SPLIT_SIDE)
+    wire        o_split = o_side_ok && (!g_stacked[t_gsel[3:0]]) && (!o_band)
+                       && (o_l>GROUP_MAXWH) && (o_l>=SPLIT_SIDE)
                        && (o_s>=SPLIT_MIN_SIDE) && (o_s<=GROUP_MAXWH)
                        && ({16'd0,o_area} >= ({16'd0,o_n} * MIN_BLKN));
 
@@ -337,16 +373,16 @@ module cv_blkdet #(
         if (!rst_n) begin
             t_st<=T_IDLE; t_bx<=0; t_by<=0; t_lv<=0; t_next<=1; t_sel<=0;
             t_lbl<=0; t_dark<=0; t_new<=0; t_frd<=0; t_di<=0; t_col<=0; o_ready<=0; o_count<=0;
-            t_gscan<=0; t_best<=0; t_best_valid<=0; t_best_delta<=0;
+            t_gscan<=0; t_best<=0; t_best_valid<=0; t_best_stk<=0; t_best_delta<=0;
             t_gsel<=0; t_mi<=0; t_mj<=0; t_mchanged<=0;
             t_nsplit<=0; t_si<=0; t_split_h<=0; t_start<=0; t_cross<=0; t_seg<=0;
-            g_valid<=0; g_count<=0;
+            g_valid<=0; g_stacked<=0; g_count<=0;
         end else begin
             case (t_st)
                 T_IDLE: begin
                     t_di<=0; t_col<=0;
                     if (vs_rise) begin
-                        t_lv<=0; o_ready<=1'b0; g_valid<=0; g_count<=0;
+                        t_lv<=0; o_ready<=1'b0; g_valid<=0; g_stacked<=0; g_count<=0;
                         t_st<=T_CLR;
                     end
                 end
@@ -370,7 +406,7 @@ module cv_blkdet #(
                     if (t_bx==BW-1) begin
                         t_bx <= 0;
                         if (t_by==BH-1) begin
-                            t_by<=0; t_lv<=0; t_col<=0; g_count<=0; g_valid<=0;
+                            t_by<=0; t_lv<=0; t_col<=0; g_count<=0; g_valid<=0; g_stacked<=0;
                             t_st<=T_GRP;
                         end else begin t_by<=t_by+1'b1; t_sel<=~t_sel; t_st<=T_READ; end
                     end else begin t_bx<=t_bx+1'b1; t_st<=T_READ; end
@@ -379,15 +415,16 @@ module cv_blkdet #(
                 // ---- 逐碎片并入分组 ----
                 T_GRP: begin
                     if (frag_ok) begin
-                        t_gscan<=0; t_best<=0; t_best_valid<=0; t_best_delta<=16'hFFFF;
+                        t_gscan<=0; t_best<=0; t_best_valid<=0; t_best_stk<=0; t_best_delta<=16'hFFFF;
                         t_st<=T_GSCAN;
                     end else begin
                         t_st<=T_GNEXT;
                     end
                 end
                 T_GSCAN: begin
-                    if (g_fits && ((!t_best_valid) || (gu_delta < t_best_delta))) begin
+                    if (g_any && ((!t_best_valid) || (gu_delta < t_best_delta))) begin
                         t_best<=t_gscan; t_best_valid<=1'b1; t_best_delta<=gu_delta;
+                        t_best_stk <= g_stack && (!g_fits);
                     end
                     if (t_gscan==MAX_GROUPS-1) t_st<=T_GUPD;
                     else t_gscan<=t_gscan+1'b1;
@@ -399,12 +436,14 @@ module cv_blkdet #(
                         g_miny[t_best] <= (g_miny[t_best] < s_ff[39:28]) ? g_miny[t_best] : s_ff[39:28];
                         g_maxy[t_best] <= (g_maxy[t_best] > s_ff[27:16]) ? g_maxy[t_best] : s_ff[27:16];
                         g_area[t_best] <= g_area[t_best] + s_ff[15:0];
+                        g_stacked[t_best] <= g_stacked[t_best] | t_best_stk;
                     end else if (g_count < MAX_GROUPS) begin
                         g_minx[g_count[3:0]] <= s_ff[63:52];
                         g_maxx[g_count[3:0]] <= s_ff[51:40];
                         g_miny[g_count[3:0]] <= s_ff[39:28];
                         g_maxy[g_count[3:0]] <= s_ff[27:16];
                         g_area[g_count[3:0]] <= s_ff[15:0];
+                        g_stacked[g_count[3:0]] <= 1'b0;
                         g_valid[g_count[3:0]] <= 1'b1;
                         g_count <= g_count + 1'b1;
                     end
@@ -429,10 +468,11 @@ module cv_blkdet #(
                     end else if (t_mj >= MAX_GROUPS) begin
                         t_mi<=t_mi+1'b1; t_mj<=t_mi+2'd2;
                     end else begin
-                        if (m_fits) begin
+                        if (m_any) begin
                             g_minx[t_mi[3:0]]<=mg_minx; g_maxx[t_mi[3:0]]<=mg_maxx;
                             g_miny[t_mi[3:0]]<=mg_miny; g_maxy[t_mi[3:0]]<=mg_maxy;
                             g_area[t_mi[3:0]]<=g_area[t_mi[3:0]]+g_area[t_mj[3:0]];
+                            g_stacked[t_mi[3:0]]<=g_stacked[t_mi[3:0]] | g_stacked[t_mj[3:0]] | m_stack;
                             g_valid[t_mj[3:0]]<=1'b0;
                             t_mchanged<=1'b1;
                         end

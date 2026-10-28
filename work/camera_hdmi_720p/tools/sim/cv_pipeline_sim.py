@@ -26,18 +26,22 @@ import numpy as np
 ALPHA = 0.5            # a-b 位置增益(≈cv_top ALPHA_Q/256)
 BETA = 0.1875          # a-b 速度增益(≈cv_top BETA_Q/256)；GATE 配合吸收快球
 BG_DELAY = 5           # 块背景取 5 帧前(与 cv_blkdet 的 BG_FRAMES 对应)
-REC = 1                # 丢检只保留 1 帧，避免框闪烁，也避免离场后长残影
+REC = 3                # 丢检后框再保留 3 帧，抑制框闪烁；纯预测滑行不长于此刻
 
 CB_DELTA = 20          # 块均值须比 5 帧前的背景低这么多才判暗
 AMIN = 14              # 分组最小支撑面积(块数)；与 cv_blkdet 的 MIN_BLKN 对应
 WIDE_THR = 130         # DARK_THR >= 此值时放宽左侧入场的紧凑团块(亮场景快球更大)
 MIN_HITS_EX = 3        # 窄场景左/右边缘出画面门限；亮场景用 2（并排第二颗命中少）
 MIN_HITS_V = 6         # 上/下边缘出画面门限(顶边真球 6；4 次命中的阴影仍被滤掉)
-EXIT_MISS = 8          # 出画面计数允许的丢失帧数；短时丢检仍可计数
+EXIT_MISS = 12         # 出画面计数允许的丢失帧数；轨迹丢失后仍需滑行到边界之外
 
 # 钢珠直径为 151 px，块域 16x16 -> 约 9 个块单元；识别框固定 10x10 个块单元。
 BALL_BLK = 9           # 钢珠直径对应的块数(四舍五入)
 GROUP_GATE_BLK = 13    # 同一颗钢珠全部碎片的最大并集包围盒
+STACK_GAP = 5          # 上下两条暗带之间的最大间隔(块)，钢珠夹在中间
+STACK_WIDE = 22        # 上下暗带合并后的最大宽度(块)，含运动拖影
+STACK_HIGH = 15        # 上下暗带合并后的最大高度(块)，含拖影
+STACK_OVERLAP = 0.6    # 上下暗带的 x 方向最小重叠比例
 GROUP_MAX_SIDE = 13    # 单颗钢珠分组的最大边长，14 块以上不成单球
 GROUP_MIN_SIDE = 4     # 分组短边下限，剔除细长残片
 GROUP_MIN_LONG = 7     # 分组长边下限，剔除 5x5/6x6 阴影与纹理小块
@@ -48,11 +52,11 @@ FRAG_MIN = 3           # 参与合并的碎片最小面积(块)
 MAX_RAWWH = 36         # 原始连通域宽/高上限(块)，超过按背景长条剔除
 MAX_BLKN = 400         # 原始连通域面积上限(块)
 SPLIT_SIDE = 15        # 长边超过此值按多颗接触钢珠拆分
-SPLIT_MIN_SIDE = 6     # 拆分时长边垂直方向的短边下限
+SPLIT_MIN_SIDE = 8     # 拆分时长边垂直方向的短边下限(块)；6~7 块是单条拖影暗带
 DUP_DIST = 136         # 同一颗钢珠重复轨迹去重距离 = 0.9 * 151 px
 FRAME_W = 1280
 FRAME_H = 720
-ROI_Y0 = 200           # 上方纹理区不输出识别框，保留左侧入场高度
+ROI_Y0 = 0             # 钢珠会沿画面上沿通过，不再固定屏蔽上部
 
 
 def _union_box(a, b):
@@ -70,7 +74,7 @@ def _edge_reject(x, y, w, h, a, wide):
     xl, xr = (x <= 2), ((x + w) >= 78)
     yt, yb = (y == 0), ((y + h) >= 43)
     if yt:
-        return True
+        return not (wide and w >= 2 and h >= 1 and a >= 8)
     if (xl and yt) or (xr and yt) or (xl and yb) or (xr and yb):
         if not (wide and xl and w >= 2 and h >= 2 and a >= 8):
             return True
@@ -88,25 +92,57 @@ def _fixed_box(cx, cy):
     return (int(round(cx)), int(round(cy)), x0, y0, x1, y1)
 
 
+def _stack_ok(g, f):
+    """上下两条暗带是否夹住同一颗钢珠：x 方向明显重叠，垂直间隔不超过 STACK_GAP。"""
+    if g[2] <= f[2]:
+        up, dn = g, f
+    else:
+        up, dn = f, g
+    gap = dn[2] - up[3] - 1
+    if gap < 0 or gap > STACK_GAP:
+        return False
+    ox0 = max(up[0], dn[0])
+    ox1 = min(up[1], dn[1])
+    if ox1 < ox0:
+        return False
+    if (ox1 - ox0 + 1) < STACK_OVERLAP * min(_box_wh(up)[0], _box_wh(dn)[0]):
+        return False
+    u = _union_box(g, f)
+    uw, uh = _box_wh(u)
+    return uw <= STACK_WIDE and uh <= STACK_HIGH
+
+
+def _merge_group(g, f):
+    """尝试把碎片 f 并进分组 g。返回合并后的分组(6 元组)或 None。"""
+    u = _union_box(g, f)
+    uw, uh = _box_wh(u)
+    if uw <= GROUP_GATE_BLK and uh <= GROUP_GATE_BLK:
+        return (u[0], u[1], u[2], u[3], u[4], g[5] if len(g) > 5 else False)
+    if _stack_ok(g, f):
+        return (u[0], u[1], u[2], u[3], u[4], True)
+    return None
+
+
 def _group_fragments(frags):
-    """任意数量碎片 -> 分组。合并条件只看并集包围盒是否装得进一颗钢珠。"""
+    """任意数量碎片 -> 分组。普通碎片按单球包围盒合并；
+    上下两条暗带夹住球体时单独按 STACK 规则合并，并标记 stacked。"""
     groups = []
     for f in frags:
+        f6 = (f[0], f[1], f[2], f[3], f[4], False)
         best = -1
         best_delta = None
-        best_box = None
+        best_group = None
         for gi, g in enumerate(groups):
-            u = _union_box(g, f)
-            uw, uh = _box_wh(u)
-            if uw <= GROUP_GATE_BLK and uh <= GROUP_GATE_BLK:
-                gw, gh = _box_wh(g)
-                delta = uw * uh - gw * gh
-                if best < 0 or delta < best_delta:
-                    best, best_delta, best_box = gi, delta, u
+            m = _merge_group(g, f6)
+            if m is None:
+                continue
+            delta = m[4] - g[4]
+            if best < 0 or delta < best_delta:
+                best, best_delta, best_group = gi, delta, m
         if best < 0:
-            groups.append(f)
+            groups.append(f6)
         else:
-            groups[best] = best_box
+            groups[best] = best_group
 
     # 分组之间再合并：处理碎片先后顺序造成的一颗钢珠分成多个分组。
     changed = True
@@ -115,10 +151,9 @@ def _group_fragments(frags):
         for i in range(len(groups)):
             j = i + 1
             while j < len(groups):
-                u = _union_box(groups[i], groups[j])
-                uw, uh = _box_wh(u)
-                if uw <= GROUP_GATE_BLK and uh <= GROUP_GATE_BLK:
-                    groups[i] = u
+                m = _merge_group(groups[i], groups[j])
+                if m is not None:
+                    groups[i] = m
                     groups.pop(j)
                     changed = True
                 else:
@@ -143,19 +178,25 @@ def _split_boxes(minx, maxx, miny, maxy, n):
 def _group_boxes(g, bm=None, ring=None, center_bright=False, offset_y=0.0,
                  edge_allow=False, dog_score=None):
     """分组 -> 固定识别框。超过一颗钢珠范围的分组按接触钢珠拆分。"""
-    minx, maxx, miny, maxy, a = g
+    minx, maxx, miny, maxy, a = g[:5]
+    stacked = len(g) > 5 and g[5]
     w, h = _box_wh(g)
     edge = edge_allow and (minx <= 2)
-    min_area = 10 if edge else AMIN
-    min_side = 3 if edge else GROUP_MIN_SIDE
-    min_long = 3 if edge else GROUP_MIN_LONG
+    min_area = 14 if edge else AMIN
+    min_side = 4 if edge else GROUP_MIN_SIDE
+    min_long = 6 if edge else GROUP_MIN_LONG
     if a < min_area or min(w, h) < min_side or max(w, h) < min_long:
         return []
+    if stacked:
+        # 上下两条暗带夹住球体：整组就是一颗球，长宽比和拆分都不适用。
+        cx = (minx + maxx + 1) * 8.0
+        cy = (miny + maxy + 1) * 8.0
+        return [_fixed_box(cx, cy + offset_y)]
     if max(w, h) <= GROUP_MAX_SIDE:
         if edge:
             if max(w, h) * 5 > min(w, h) * 11:
                 return []
-        elif max(w, h) * 5 > min(w, h) * 9:
+        elif max(w, h) * 5 > min(w, h) * 13:
             return []
         cx = (minx + maxx + 1) * 8.0
         cy = (miny + maxy + 1) * 8.0
@@ -183,6 +224,13 @@ def _group_boxes(g, bm=None, ring=None, center_bright=False, offset_y=0.0,
                 cx = (ex0 + ix + 0.5) * 16.0
                 cy = (ey0 + iy + 0.5) * 16.0
         return [_fixed_box(cx, cy + offset_y)]
+    if min(w, h) < SPLIT_MIN_SIDE:
+        # 单条运动拖影暗带：厚度不足半个球，宽度在拖影范围内仍按一颗球处理。
+        if max(w, h) <= STACK_WIDE and a >= AMIN:
+            cx = (minx + maxx + 1) * 8.0
+            cy = (miny + maxy + 1) * 8.0
+            return [_fixed_box(cx, cy + offset_y)]
+        return []
     if max(w, h) < SPLIT_SIDE:
         return []
 
@@ -211,12 +259,18 @@ def detect_blocks(m, wide=False, bm=None, ring=None, center_bright=False,
             continue
         frags.append((x, x + w - 1, y, y + h - 1, a))
 
-    out = []
+    cand = []
     for g in _group_fragments(frags):
         for b in _group_boxes(g, bm, ring, center_bright, center_offset_y,
                               wide, dog_score):
             if b[1] >= ROI_Y0 or (b[0] <= 240 and b[1] >= 150):
-                out.append(b)
+                cand.append((g[4], b))
+    # 同一颗球的上下暗带偶尔各自成框：按面积从大到小做同帧抑制，近距离只留一个框。
+    cand.sort(key=lambda t: -t[0])
+    out = []
+    for _a, b in cand:
+        if all(abs(b[0] - o[0]) + abs(b[1] - o[1]) >= DUP_DIST for o in out):
+            out.append(b)
     return out
 
 
@@ -290,6 +344,42 @@ def detect_dog(bm, bg, thr=6.0, s1=1.5, s2=5.0, nms=5):
     return out, cand
 
 
+def _snap_boxes(boxes, bm, bg, sat=235, diff=8, win=10, maxdist=120):
+    """把每个框心吸附到附近的饱和亮球核；吸不到的框视为背景条纹，直接丢弃。"""
+    if bg is None:
+        return boxes
+    out = []
+    for b in boxes:
+        cx, cy = b[0], b[1]
+        bx = int(round(cx / 16.0))
+        by = int(round(cy / 16.0))
+        x0 = max(0, bx - win); x1 = min(79, bx + win)
+        y0 = max(0, by - win); y1 = min(44, by + win)
+        sub = bm[y0:y1 + 1, x0:x1 + 1]
+        sub_bg = bg[y0:y1 + 1, x0:x1 + 1]
+        cand = ((sub >= sat) & ((sub - sub_bg) > diff)).astype(np.uint8)
+        n, _lab, stats, cent = cv2.connectedComponentsWithStats(cand, 4)
+        best = None
+        bestd = maxdist
+        for i in range(1, n):
+            x, y, w, h, a = [int(v) for v in stats[i]]
+            if a < 6 or a > 250 or w < 3 or w > 20 or h < 2 or h > 12:
+                continue
+            ccx = (x0 + cent[i][0] + 0.5) * 16.0
+            ccy = (y0 + cent[i][1] + 0.5) * 16.0
+            d = abs(ccx - cx) + abs(ccy - cy)
+            if d < bestd:
+                bestd = d
+                best = _fixed_box(ccx, ccy)
+        if best is not None:
+            out.append(best)
+    res = []
+    for b in out:
+        if all(abs(b[0] - o[0]) + abs(b[1] - o[1]) >= DUP_DIST for o in res):
+            res.append(b)
+    return res
+
+
 def detect(frame, dark, bg=None, mode="abs", cb=None, local_delta=20):
     """块域暗块检测 -> 固定识别框[像素(cx,cy,minx,miny,maxx,maxy)]。
     bg 为 5 帧前的 80x45 块均值；None 表示背景尚未建立。"""
@@ -305,7 +395,7 @@ def detect(frame, dark, bg=None, mode="abs", cb=None, local_delta=20):
     m = mask_from_bm(bm, bg, dark, mode, cb, local_delta)
     ring = _ring_mean(bm)
     score, _ = _dog_response(bm, bg, 6.0)
-    return detect_blocks(m, dark >= WIDE_THR, bm, ring, False, 0.0, score)
+    return _snap_boxes(detect_blocks(m, dark >= WIDE_THR, bm, ring, False, 0.0, score), bm, bg)
 
 
 FONT5x7 = {
@@ -435,8 +525,8 @@ def main():
                 t[6] = _fixed_box(t[0], t[1])[2:6]
         for j, d in enumerate(dets):
             if not taken[j]:
-                # 同一颗钢珠的残余碎片不再新建轨迹：已有轨迹最近 2 帧有检测且中心距离过近
-                dup = any(t[4] <= 2 and
+                # 同一颗钢珠的残余碎片不再新建轨迹：只要旧轨迹还在存活期内，中心过近就丢弃
+                dup = any(t[4] <= EXIT_MISS and
                           abs(d[0] - t[0]) + abs(d[1] - t[1]) < DUP_DIST
                           for t in tracks)
                 if dup:
@@ -444,13 +534,13 @@ def main():
                     continue
                 tracks.append([d[0], d[1], 0, 0, 0, 1, d[2:6], False, next_id]); next_id += 1
 
-        # 同一颗钢珠的重复轨迹：中心距离小于 113 px 时只保留命中数更多的轨迹
+        # 同一颗钢珠的重复轨迹：存活期内中心距离小于 136 px 时只保留命中数更多的轨迹
         keep = [True] * len(tracks)
         for i in range(len(tracks)):
-            if not keep[i] or tracks[i][4] > 2:
+            if not keep[i] or tracks[i][4] > EXIT_MISS:
                 continue
             for j in range(i + 1, len(tracks)):
-                if not keep[j] or tracks[j][4] > 2:
+                if not keep[j] or tracks[j][4] > EXIT_MISS:
                     continue
                 if (abs(tracks[i][0] - tracks[j][0]) +
                         abs(tracks[i][1] - tracks[j][1]) < DUP_DIST):
@@ -461,14 +551,14 @@ def main():
                         break
         tracks = [t for t, k in zip(tracks, keep) if k]
 
-        # 红框轨迹预测出画面 -> +1（左右边缘命中≥4；上下边缘需≥8，滤阴影/反光）
+        # 红框轨迹预测出画面 -> +1（横向离场命中≥4；竖向离场需≥6；底部左侧反光带收紧）
         for t in tracks:
-            # 球心越过“画面边界 + 半径”才算离开，避免钢珠还有半个身子在画面内就计数
-            out_x = t[0] < -BOX_HALF or t[0] >= W + BOX_HALF
-            out_y = t[1] < -BOX_HALF or t[1] >= H + BOX_HALF
+            # 球心越过画面边界即视为离场，计数时刻与球体离开视野同步
+            out_x = t[0] < 0 or t[0] >= W
+            out_y = t[1] < 0 or t[1] >= H
             need = (2 if wide else MIN_HITS_EX) if out_x else MIN_HITS_V
             if t[1] > 650 and t[0] < 700:
-                need = 8   # 底部左侧反光带：阴影/倒影，要求更高命中
+                need = 8 if out_y else 4
             if (not t[7]) and t[5] >= need and t[4] <= EXIT_MISS and (out_x or out_y):
                 t[7] = True
                 corner = (t[1] < 100 or t[1] > 650)

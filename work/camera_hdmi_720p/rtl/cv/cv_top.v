@@ -288,7 +288,7 @@ module cv_top #(
     always @(*) begin
         r_new_dup = 1'b0;
         for (dup_k=0; dup_k<MAX_BLOBS; dup_k=dup_k+1) begin
-            if (track[dup_k][106] && (track[dup_k][53:48] <= 6'd2)) begin
+            if (track[dup_k][106] && (track[dup_k][53:48] <= EXIT_MISS)) begin
                 dup_dx = (d_jcx > track[dup_k][101:90])
                        ? ({1'b0,d_jcx} - {1'b0,track[dup_k][101:90]})
                        : ({1'b0,track[dup_k][101:90]} - {1'b0,d_jcx});
@@ -332,14 +332,14 @@ module cv_top #(
     wire [11:0] nbx0=f_box_lo(d_jcx,TRK_BOX_HALF), nbx1=f_box_hi(d_jcx,TRK_BOX_HALF,IMG_W-1);
     wire [11:0] nby0=f_box_lo(d_jcy,TRK_BOX_HALF), nby1=f_box_hi(d_jcy,TRK_BOX_HALF,IMG_H-1);
     wire       t_alive = t_valid && (n_miss <= MISS_K);
-    // 预测位置已出画面 -> 该轨迹离开视野（左右边缘与上下边缘分别给命中门限）
-    // 球心越过画面边界再加半径，钢珠完整离开才计数
-    wire       t_out_x = (px_s >= $signed(13'd1360)) || (px_s < $signed(13'd0));
-    wire       t_out_y = (py_s >= $signed(13'd800))  || (py_s < $signed(13'd0));
+    // 预测位置越过画面边界 -> 该轨迹离开视野（计数时刻与球体离开同步）
+    wire       t_out_x = (px_s >= $signed(13'd1280)) || (px_s < $signed(13'd0));
+    wire       t_out_y = (py_s >= $signed(13'd720))  || (py_s < $signed(13'd0));
     wire       t_out   = t_out_x | t_out_y;
     wire       w_shadow = (py > 12'd650) && (px < 12'd700);   // 底部左侧反光带(阴影/倒影)
     wire [3:0] w_need_ex = w_wide ? 4'd2 : MIN_HITS_EX;
-    wire [3:0] w_need = w_shadow ? 4'd8 : (t_out_x ? w_need_ex : MIN_HITS_V);
+    wire [3:0] w_need = w_shadow ? (t_out_x ? 4'd4 : 4'd8)
+                                 : (t_out_x ? w_need_ex : MIN_HITS_V);
 
     // ---- 角部重复计数抑制：同一颗球在顶/底区裂成两条轨迹时只计一次 ----
     reg  [7:0]  r_frame;
@@ -447,7 +447,7 @@ module cv_top #(
         .IMG_W(IMG_W), .IMG_H(IMG_H), .DARK_THR(DARK_THR),
         .FRAG_MIN_BLKN(16'd3), .MIN_BLKN(MIN_BLKN), .MAX_BLKN(16'd400),
         .MAX_RAWWH(8'd36), .GROUP_MAXWH(8'd13), .GROUP_MIN_SIDE(8'd4),
-        .GROUP_MIN_LONG(8'd7), .SPLIT_SIDE(8'd15), .SPLIT_MIN_SIDE(8'd6),
+        .GROUP_MIN_LONG(8'd7), .SPLIT_SIDE(8'd15), .SPLIT_MIN_SIDE(8'd8),
         .BOX_HALF(12'd80), .MAX_BLOBS(MAX_BLOBS)
     ) u_blkdet (
         .clk(I_clk), .rst_n(I_rst_n), .de(I_de), .vs(I_vs), .rgb(I_det_data),
@@ -650,8 +650,8 @@ module cv_top #(
                         r_di<=r_di+1'b1; r_dj2<=r_di+2'd2;
                     end else begin
                         if (track[r_di][106] && track[r_dj2][106] &&
-                            (track[r_di][53:48] <= 6'd2) &&
-                            (track[r_dj2][53:48] <= 6'd2) &&
+                            (track[r_di][53:48] <= EXIT_MISS) &&
+                            (track[r_dj2][53:48] <= EXIT_MISS) &&
                             ((((track[r_di][101:90] > track[r_dj2][101:90])
                                ? (track[r_di][101:90]-track[r_dj2][101:90])
                                : (track[r_dj2][101:90]-track[r_di][101:90])) +
@@ -723,7 +723,7 @@ module cv_top #(
             if (dy0 > IMG_H-1) dy0 = IMG_H-1;
             if (dy1 > IMG_H-1) dy1 = IMG_H-1;
             // 丢检最多保留 1 帧，避免闪烁和离场残影
-            if (track[oi][106] && (track[oi][53:48] <= 6'd1)) begin
+            if (track[oi][106] && (track[oi][53:48] <= 6'd3)) begin
                 if ((((r_x>=track[oi][47:36])&&(r_x<track[oi][47:36]+FBOX_W)) ||
                      ((r_x<=track[oi][35:24])&&(r_x>track[oi][35:24]-FBOX_W))) &&
                     (r_y>=dy0)&&(r_y<=dy1)) r_border=1;
