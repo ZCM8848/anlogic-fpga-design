@@ -114,12 +114,15 @@ BALL BG ready=1
 
 ```
 CAM ID=EE4B OK=1 E=0 CFG=1 DDR=1 SW4=1 SW3=0 CV=1 TH=1E BG=1 OVF=0 LBL=0 CNT=3
+SW1=0 SW2=1 SW3=0 SW4=1 SW5=NA SW6=NA
 ```
 
 - `BG`：背景已就绪
 - `OVF`：本帧 run_mem 溢出（该帧被跳过，只做轨迹老化）
 - `LBL`：CCL 标签/行 run 溢出（该帧检测被丢弃）
 - `CNT`：门线计数
+- `SW1..SW4`：拨码开关原始状态（拨上=1）
+- `SW5/SW6`：板级硬件开关，未接 FPGA IO，无法读取，固定显示 `NA`
 
 调试行（`debug=1` 时每 `debug_div` 帧）：
 

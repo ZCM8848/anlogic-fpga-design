@@ -60,6 +60,8 @@ module ahb_status_slave #(
     input  wire        I_cam_i2c_err,
     input  wire        I_cam_cfg_done,
     input  wire        I_ddr_rdy,
+    input  wire        I_sw1,
+    input  wire        I_sw2,
     input  wire        I_sw4,
     input  wire        I_sw3,
     input  wire        I_cv_on,
@@ -97,7 +99,8 @@ module ahb_status_slave #(
     // ------------------------------------------------------------------
     reg [15:0] S_cam_id_a, S_cam_id;
     reg        S_idok_a, S_idok, S_i2cerr_a, S_i2cerr, S_cfgdn_a, S_cfgdn;
-    reg        S_ddrrdy_a, S_ddrrdy, S_sw4_a, S_sw4, S_sw3_a, S_sw3, S_cvon_a, S_cvon;
+    reg        S_ddrrdy_a, S_ddrrdy, S_sw1_a, S_sw1, S_sw2_a, S_sw2;
+    reg        S_sw4_a, S_sw4, S_sw3_a, S_sw3, S_cvon_a, S_cvon;
     reg [5:0]  S_blob_a, S_blob;
     reg [7:0]  S_binthr_a, S_binthr;
     reg [10:0] S_runcnt_a, S_runcnt;
@@ -115,6 +118,7 @@ module ahb_status_slave #(
             S_idok_a <= 1'b0; S_idok <= 1'b0; S_i2cerr_a <= 1'b0; S_i2cerr <= 1'b0;
             S_cfgdn_a <= 1'b0; S_cfgdn <= 1'b0;
             S_ddrrdy_a <= 1'b0; S_ddrrdy <= 1'b0;
+            S_sw1_a <= 1'b0; S_sw1 <= 1'b0; S_sw2_a <= 1'b0; S_sw2 <= 1'b0;
             S_sw4_a <= 1'b0; S_sw4 <= 1'b0; S_sw3_a <= 1'b0; S_sw3 <= 1'b0;
             S_cvon_a <= 1'b0; S_cvon <= 1'b0;
             S_blob_a <= 6'd0; S_blob <= 6'd0;
@@ -131,6 +135,8 @@ module ahb_status_slave #(
             S_i2cerr_a <= I_cam_i2c_err; S_i2cerr <= S_i2cerr_a;
             S_cfgdn_a  <= I_cam_cfg_done;S_cfgdn  <= S_cfgdn_a;
             S_ddrrdy_a <= I_ddr_rdy;     S_ddrrdy <= S_ddrrdy_a;
+            S_sw1_a    <= I_sw1;          S_sw1    <= S_sw1_a;
+            S_sw2_a    <= I_sw2;          S_sw2    <= S_sw2_a;
             S_sw4_a    <= I_sw4;          S_sw4    <= S_sw4_a;
             S_sw3_a    <= I_sw3;          S_sw3    <= S_sw3_a;
             S_cvon_a   <= I_cv_on;       S_cvon   <= S_cvon_a;
@@ -225,6 +231,7 @@ module ahb_status_slave #(
     wire [31:0] BALL_CTRL_REG   = {30'b0, S_ball_capture, S_ball_en};
     wire [31:0] BALL_THR_REG    = {16'b0, S_ball_thr};
     wire [31:0] BALL_STATUS_REG = {29'b0, S_rovf, S_capturing, S_bgready};
+    wire [31:0] SW_STAT_REG = {28'b0, S_sw4, S_sw3, S_sw2, S_sw1};
 
     function [31:0] rdata_mux(input [4:0] idx);
         begin
@@ -241,6 +248,7 @@ module ahb_status_slave #(
                 5'h0D: rdata_mux = BALL_CTRL_REG;
                 5'h0E: rdata_mux = BALL_THR_REG;
                 5'h0F: rdata_mux = BALL_STATUS_REG;
+                5'h10: rdata_mux = SW_STAT_REG;      // 0x40: SW1..SW4
                 default: rdata_mux = 32'h0;
             endcase
         end

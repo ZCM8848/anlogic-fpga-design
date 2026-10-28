@@ -766,22 +766,28 @@ module design_top_wrapper (
         else               S_ddr_rdy_s <= {S_ddr_rdy_s[0], S_ddr_rdy};
     end
 
-    // SW4/SW3 同步到 100M 域（供串口上报）
+    // SW1~SW4 同步到 100M 域（供串口上报）
+    reg [2:0] S_sw1_sync_100m;
+    reg [2:0] S_sw2_sync_100m;
     reg [2:0] S_sw4_sync_100m;
     reg [2:0] S_sw3_sync_100m;
     reg [2:0] S_cv_on_sync_100m;
     reg [7:0] S_cv_bin_thr_s1, S_cv_bin_thr_s2;
     always @(posedge S_clk_100m) begin
         if (!S_rst_n_100m) begin
+            S_sw1_sync_100m <= 3'd0;
+            S_sw2_sync_100m <= 3'd0;
             S_sw4_sync_100m <= 3'd0;
             S_sw3_sync_100m <= 3'd0;
             S_cv_on_sync_100m <= 3'd0;
             S_cv_bin_thr_s1 <= 8'd0;  S_cv_bin_thr_s2 <= 8'd0;
         end else begin
+            S_sw1_sync_100m <= {S_sw1_sync_100m[1:0], I_sw1};
+            S_sw2_sync_100m <= {S_sw2_sync_100m[1:0], I_sw2};
             S_sw4_sync_100m <= {S_sw4_sync_100m[1:0], I_sw4};
             S_sw3_sync_100m <= {S_sw3_sync_100m[1:0], I_sw3};
-            S_cv_on_sync_100m <= {S_cv_on_sync_100m[1:0], S_cv_eff};  // 有效 CV（r_cv_on 或 BALL_EN）
-            S_cv_bin_thr_s1  <= S_cv_bin_thr;        // 8bit 慢变（手动调），2FF 同步
+            S_cv_on_sync_100m <= {S_cv_on_sync_100m[1:0], S_cv_eff};
+            S_cv_bin_thr_s1  <= S_cv_bin_thr;
             S_cv_bin_thr_s2  <= S_cv_bin_thr_s1;
         end
     end
@@ -854,6 +860,8 @@ module design_top_wrapper (
         .I_cam_i2c_err ( S_cam_i2c_error    ),
         .I_cam_cfg_done( S_cam_cfg_done     ),
         .I_ddr_rdy     ( S_ddr_rdy_s[1]     ),
+        .I_sw1         ( S_sw1_sync_100m[2] ),
+        .I_sw2         ( S_sw2_sync_100m[2] ),
         .I_sw4         ( S_sw4_sync_100m[2] ),
         .I_sw3         ( S_sw3_sync_100m[2] ),
         .I_cv_on       ( S_cv_on_sync_100m[2]),

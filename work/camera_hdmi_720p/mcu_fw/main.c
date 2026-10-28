@@ -35,6 +35,7 @@ extern void al_simp_putchar(char c);
 #define BALL_CTRL   (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x34))
 #define BALL_THR    (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x38))
 #define BALL_STATUS (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x3C))
+#define SW_STAT     (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x40))
 
 #define VER_MAGIC   0x4D435602U
 
@@ -666,6 +667,16 @@ static void report_serial(void)
                    (int)(st & 1), (int)((st >> 2) & 1), ccl_overflow, count);
 }
 
+static void report_switches(void)
+{
+    uint32_t sw = SW_STAT;
+    al_simp_printf("SW1=%d SW2=%d SW3=%d SW4=%d SW5=NA SW6=NA\r\n",
+                   (int)(sw & 1u),
+                   (int)((sw >> 1) & 1u),
+                   (int)((sw >> 2) & 1u),
+                   (int)((sw >> 3) & 1u));
+}
+
 static void report_debug(uint32_t frame, int run_cnt, int ovf)
 {
     int i;
@@ -782,6 +793,7 @@ int main(void)
             if (++report_div >= 30) {
                 report_div = 0;
                 report_serial();
+                report_switches();
             }
         }
         HEARTBEAT = ++hb;
