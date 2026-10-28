@@ -342,10 +342,12 @@ module cv_top #(
     wire [63:0] ov6 = I_overlay[447:384];
     wire [63:0] ov7 = I_overlay[511:448];
 
-    // Count 显示：左上 (24,56)，4 位 hex，每位 8px（5 字模 + 3 间隙），共 32px
+    // Count 显示：5 位 BCD，5x7 字模，每位 8px；CNT_SCALE_SHIFT 控制 1/2/4/8 倍整数缩放
     localparam [11:0] CNT_X = 12'd24;
-    localparam [11:0] CNT_Y = 12'd56;
-    localparam [11:0] CNT_W = 12'd40;
+    localparam [11:0] CNT_Y = 12'd638;
+    localparam [11:0] CNT_W = 12'd160;          // 40 * 2^CNT_SCALE_SHIFT
+    localparam [11:0] CNT_H = 12'd28;           // 7  * 2^CNT_SCALE_SHIFT
+    localparam [11:0] CNT_SCALE_SHIFT = 12'd2;  // 0=1x, 1=2x, 2=4x, 3=8x
 
     integer oi;
     reg r_border, r_id_digit, r_cnt_digit;
@@ -445,10 +447,10 @@ module cv_top #(
                 if (dg_bits[4-dg_col[2:0]]) r_id_digit=1;
             end
         end
-        // ---- Count（4 位 hex，每位 8px）----
-        if (r_x>=CNT_X && r_x<CNT_X+CNT_W && r_y>=CNT_Y && r_y<CNT_Y+7) begin
-            dg_row = r_y - CNT_Y;
-            dg_col = r_x - CNT_X;          // 0..39
+        // ---- Count（5 位 BCD，可 1/2/4/8 倍整数缩放）----
+        if (r_x>=CNT_X && r_x<CNT_X+CNT_W && r_y>=CNT_Y && r_y<CNT_Y+CNT_H) begin
+            dg_row = (r_y - CNT_Y) >> CNT_SCALE_SHIFT;
+            dg_col = (r_x - CNT_X) >> CNT_SCALE_SHIFT;  // 0..39
             cnt_idx = dg_col[5:3];         // 0..4（每 8px 一位）
             case (cnt_idx)
                 3'd0: cnt_nib = I_count_bcd[3:0];

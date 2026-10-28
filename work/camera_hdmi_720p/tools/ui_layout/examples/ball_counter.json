@@ -1,0 +1,75 @@
+{
+  "app": "fpga-ui-layout-studio",
+  "version": 1,
+  "canvas": {
+    "width": 1280,
+    "height": 720
+  },
+  "elements": [
+    {
+      "id": "el_mvsbl7b4_1",
+      "type": "logo",
+      "name": "安路 Logo",
+      "x": 24,
+      "y": 24,
+      "w": 160,
+      "h": 160,
+      "color": "#1f315c",
+      "text": "",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "el_mvsbl7b4_2",
+      "type": "label",
+      "name": "计数标题",
+      "x": 24,
+      "y": 612,
+      "w": 160,
+      "h": 18,
+      "color": "#8be9fd",
+      "text": "STEEL BALL",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "el_mvsbl7b4_3",
+      "type": "count",
+      "name": "钢珠计数",
+      "x": 24,
+      "y": 638,
+      "w": 150,
+      "h": 34,
+      "color": "#00e6ff",
+      "text": "00000",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "el_mvsbl7b4_4",
+      "type": "osd_text",
+      "name": "赛事文本",
+      "x": 24,
+      "y": 172,
+      "w": 160,
+      "h": 24,
+      "color": "#fff200",
+      "text": "Anlogic HX1P35A",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "el_mvsbl7b4_5",
+      "type": "frame",
+      "name": "帧计数",
+      "x": 24,
+      "y": 680,
+      "w": 240,
+      "h": 20,
+      "color": "#9aa7bd",
+      "text": "FRAME 000123",
+      "visible": true,
+      "locked": false
+    }
+  ]
+}

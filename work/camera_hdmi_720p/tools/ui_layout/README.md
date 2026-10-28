@@ -73,11 +73,15 @@
 
 `define UI_LOGO_X 12'd24
 `define UI_LOGO_Y 12'd24
-`define UI_LOGO_W 12'd120
-`define UI_LOGO_H 12'd120
+`define UI_LOGO_W 12'd160
+`define UI_LOGO_H 12'd160
 ...
 `define UI_COUNT_X 12'd24
 `define UI_COUNT_Y 12'd638
+`define UI_COUNT_W 12'd150
+`define UI_COUNT_H 12'd34
+`define UI_COUNT_SCALE_SHIFT 12'd2
+`define UI_COUNT_SCALE 4
 ...
 `define UI_EL0_X 12'd24
 ...
@@ -93,6 +97,8 @@
 #define UI_COUNT_Y 638
 #define UI_COUNT_W 150
 #define UI_COUNT_H 34
+#define UI_COUNT_SCALE_SHIFT 2
+#define UI_COUNT_SCALE 4
 ```
 
 ## 与当前 RTL 的对应关系
@@ -100,18 +106,18 @@
 | 工具元素 | RTL 参数 | 当前状态 |
 |---|---|---|
 | 安路 Logo | `hdmi_mixer.v` → `LOGO_X / LOGO_Y` | X/Y 可直接写回；Logo ROM 固定 160×160，W/H 仅预览 |
-| 钢珠计数 | `cv_top.v` → `CNT_X / CNT_Y` | X/Y 可直接写回；5×7 字模、每位 8px，W/H 仅预览 |
+| 钢珠计数 | `cv_top.v` → `CNT_X / CNT_Y / CNT_W / CNT_H / CNT_SCALE_SHIFT` | X/Y 直接写回；W/H 换算成 1/2/4/8 倍整数缩放（150×34 → 4×，实际 160×28） |
 | OSD 文本 | `hdmi_mixer.v` → `DYN_OSD_X / DYN_OSD_Y` | X/Y 可直接写回；W/H 仅预览 |
 | 门线 | 检测逻辑固定 `x = 0.30 × 1280 = 384` | 仅预览，移动不会改变检测 |
 | 检测 ROI | MCU `roi_y1`（小分辨率 166 → 全分辨率 664） | 仅预览 |
 | 球框 | 运行时动态叠加 | 仅样例 |
 | 帧计数 / 标签 / 调试统计 / 十字 / 彩条 | 固件或后续功能 | 规划位置用 |
 
-> 24×24 MiSans 字库接入后，Count / OSD 的 `W/H` 才会真正参与字模缩放；当前 RTL 仍是 5×7 与 16×16 字模。
+> Count 的 W/H 是 **1/2/4/8 倍整数缩放**，实际尺寸为 40/80/160/320 × 7/14/28/56；任意字号仍需要 24×24 字库。Logo / OSD 的 W/H 目前仅预览。
 
 ## 写回 RTL：apply_layout.py
 
-导出的 JSON 可以直接把 **Logo / Count / OSD 的 X/Y** 写回 RTL：
+导出的 JSON 可以直接把 **Logo / Count / OSD 的布局**写回 RTL：
 
 ```powershell
 # 先看会改什么（推荐）
@@ -121,7 +127,7 @@ python tools/ui_layout/apply_layout.py path/to/ui_layout.json --dry-run
 python tools/ui_layout/apply_layout.py path/to/ui_layout.json
 ```
 
-脚本只替换 `localparam ... = 12'dN;` 中的数字，保留 CRLF 和其余格式；不会改 W/H，也不会动门线/ROI。写回后需要重新综合：
+脚本只替换 `localparam ... = 12'dN;` 中的数字，保留原有换行和其余格式；Count 额外写 `CNT_W / CNT_H / CNT_SCALE_SHIFT`；Logo / OSD 的 W/H 不改，也不会动门线/ROI。写回后需要重新综合：
 
 ```text
 syn_1 -> phy_1 -> 新 bit -> 上板
@@ -136,12 +142,20 @@ syn_1 -> phy_1 -> 新 bit -> 上板
 | 调试叠加 | ROI、门线 x=384、左上 Count、调试统计、球框样例、十字 |
 | 空白画布 | 清空 |
 
-示例文件在 `examples/`，可直接“导入 JSON”。
+示例文件在 `examples/`，可直接“导入 JSON”。其中 `ball_counter.json` 是当前实机布局：
+
+- Logo `(24,24)` 160×160
+- 标签 `STEEL BALL (24,612)`
+- Count `(24,638)` 150×34 → RTL 4× 整数缩放，实际 160×28
+- OSD 文本 `(24,172)`
+- 帧计数 `(24,680)`
 
 ## 说明 / 限制
 
 - 预览里的“安路 Logo”由 `anlogic_logo_rom.v` 导出的 160×160 PNG（`logo_anlogic.png`）渲染，透明底；实际 OSD 仍是同一 Logo ROM。
 - Logo 的 W/H 只改变预览缩放，不会缩放 RTL 的 160×160 ROM；写回脚本只应用 X/Y。
+- Count 的 W/H 按 1/2/4/8 倍整数缩放写回，不是任意尺寸；150×34 对应 4×（160×28）。
+- `STEEL BALL` 标签和 `FRAME 000123` 帧计数目前没有 RTL 渲染，只是布局预览。
 - PNG 导出会临时关闭网格/安全框/选择框，输出 1280×720 纯画面。
 - 背景图只存在浏览器内存，不写入 JSON，也不参与导出。
 - 当前 OSD 在钢珠识别模式下被整体关闭（`S_osd_on` 的 gating），因此 Count 位置会生效，但 Logo 是否显示取决于后续的 Logo/OSD 独立开关。
@@ -154,13 +168,14 @@ tools/ui_layout/
 ├─ index.html          # 页面结构
 ├─ style.css           # 深色 UI
 ├─ app.js              # 编辑器 / 渲染 / 导出
-├─ apply_layout.py     # JSON -> RTL X/Y
+├─ apply_layout.py     # JSON -> RTL X/Y + Count 整数缩放
 ├─ logo_anlogic.png    # 从 Logo ROM 导出的 160×160 预览图
 ├─ preview.png         # 完整界面截图
 ├─ preview_canvas.png  # 纯画面预览（1280×720）
 └─ examples/
    ├─ current.json
    ├─ competition.json
+   ├─ ball_counter.json
    └─ debug.json
 ```
 
