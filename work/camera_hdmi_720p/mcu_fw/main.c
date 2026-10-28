@@ -72,11 +72,13 @@ typedef struct {
     int min_ratio;              /* 短边/长边 下限（百分比，0=不检查） */
     int edge_margin;            /* 贴边剔除像素（320 尺度，0=不剔除） */
     int merge_dist;             /* 碎块合并半径（320 尺度，约 0.8*D） */
+    int max_run_len;            /* 单行 run 最大长度，超过丢弃（0=不过滤） */
 
     /* ---- 几何 ---- */
     int box_w_small;            /* 固定框边长（320 尺度，约 D/4 = 43） */
     int gate_x;                 /* 门线 x（320 尺度，0.30*320=96） */
     int gate_y0, gate_y1;       /* 门线 y 范围（320 尺度） */
+    int roi_y1;                 /* CCL 只处理 y<=roi_y1；<0 或 >=180 表示不过滤 */
 
     /* ---- 跟踪 ---- */
     int track_gate;             /* 最近邻关联半径（320 尺度，欧氏距离） */
@@ -109,11 +111,13 @@ static const vision_params_t VISION_PARAMS = {
     .min_ratio           = 0,     /* 参考实现不做长短比筛选 */
     .edge_margin         = 0,
     .merge_dist          = 34,    /* 0.8 * 43 ≈ 34 */
+    .max_run_len         = 200,   /* 大于 4 个球宽的横向 run 丢弃 */
 
     .box_w_small         = 43,
     .gate_x              = 96,
     .gate_y0             = 14,
     .gate_y1             = 166,
+    .roi_y1              = 166,   /* 与门线底部一致；底部球堆不参与 CCL */
 
     .track_gate          = 55,    /* 220 / 4 */
     .max_miss            = 5,
@@ -172,6 +176,7 @@ static struct Track   trk[MAX_TRK];
 static int            next_id;
 static int            count;
 static int            ccl_overflow;
+static int            skip_roi_cnt, skip_len_cnt;
 
 struct DbgComp { int area, x0, y0, x1, y1, pass; };
 static struct DbgComp dbg[DBG_TOPK];
@@ -227,6 +232,7 @@ static void ccl_init(void)
     }
     n_prev = 0; n_cur = 0; prev_y = -1; next_label = 0;
     ccl_overflow = 0;
+    skip_roi_cnt = 0; skip_len_cnt = 0;
 }
 
 static void ccl_step(uint32_t r)
@@ -234,7 +240,7 @@ static void ccl_step(uint32_t r)
     int y  = (r >> 22) & 0x3FF;
     int xs = (r >> 11) & 0x7FF;
     int xe = r & 0x7FF;
-    int k, found = -1;
+    int k, found = -1, len;
 
     if (y != prev_y) {
         if (y > prev_y + 1) {
@@ -244,6 +250,16 @@ static void ccl_step(uint32_t r)
             n_prev = n_cur;
         }
         n_cur = 0; prev_y = y;
+    }
+    len = xe - xs + 1;
+    if (VISION_PARAMS.roi_y1 >= 0 && VISION_PARAMS.roi_y1 < IMG_H &&
+        y > VISION_PARAMS.roi_y1) {
+        skip_roi_cnt++;
+        return;
+    }
+    if (VISION_PARAMS.max_run_len > 0 && len > VISION_PARAMS.max_run_len) {
+        skip_len_cnt++;
+        return;
     }
     for (k = 0; k < n_prev; k++) {
         if (prev_r[k].xs <= xe && prev_r[k].xe >= xs) {
@@ -628,12 +644,13 @@ static void report_params(void)
                    VISION_PARAMS.enable, VISION_PARAMS.bg_thr,
                    VISION_PARAMS.min_run, VISION_PARAMS.bg_capture_delay,
                    VISION_PARAMS.bg_settle_frames);
-    al_simp_printf("VP area=%d..%d wh=%d..%d,%d..%d fill=%d ratio=%d edge=%d merge=%d\r\n",
+    al_simp_printf("VP area=%d..%d wh=%d..%d,%d..%d fill=%d ratio=%d edge=%d merge=%d roi=%d runmax=%d\r\n",
                    VISION_PARAMS.min_area, VISION_PARAMS.max_area,
                    VISION_PARAMS.min_w, VISION_PARAMS.max_w,
                    VISION_PARAMS.min_h, VISION_PARAMS.max_h,
                    VISION_PARAMS.min_fill, VISION_PARAMS.min_ratio,
-                   VISION_PARAMS.edge_margin, VISION_PARAMS.merge_dist);
+                   VISION_PARAMS.edge_margin, VISION_PARAMS.merge_dist,
+                   VISION_PARAMS.roi_y1, VISION_PARAMS.max_run_len);
     al_simp_printf("VP box=%d gate=%d,%d..%d trk=%d miss=%d hit=%d mv=%d win=%d vx=%d age=%d\r\n",
                    VISION_PARAMS.box_w_small, VISION_PARAMS.gate_x,
                    VISION_PARAMS.gate_y0, VISION_PARAMS.gate_y1,
@@ -680,9 +697,10 @@ static void report_switches(void)
 static void report_debug(uint32_t frame, int run_cnt, int ovf)
 {
     int i;
-    al_simp_printf("D F=%d RUN=%d NC=%d DET=%d OVF=%d LBL=%d B=%d,%d,%d | ",
+    al_simp_printf("D F=%d RUN=%d NC=%d DET=%d OVF=%d LBL=%d SR=%d SL=%d B=%d,%d,%d | ",
                    (int)(frame & 0xFFFFFFu), run_cnt, next_label, n_det, ovf,
-                   ccl_overflow, bkt_a, bkt_b, bkt_c);
+                   ccl_overflow, skip_roi_cnt, skip_len_cnt,
+                   bkt_a, bkt_b, bkt_c);
     for (i = 0; i < n_dbg; i++) {
         al_simp_putchar(dbg[i].pass ? '*' : '.');
         al_simp_printf("%d,%d,%d,%d,%d ",
@@ -776,6 +794,7 @@ int main(void)
                 n_dbg = 0;
                 next_label = 0;
                 ccl_overflow = 0;
+                skip_roi_cnt = 0; skip_len_cnt = 0;
                 bkt_a = bkt_b = bkt_c = 0;
             } else {
                 ccl_init();
