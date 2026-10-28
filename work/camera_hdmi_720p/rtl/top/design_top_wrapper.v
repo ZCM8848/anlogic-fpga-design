@@ -2,14 +2,14 @@
  * camera_hdmi_720p — 板级顶层（M6 三模式重构）
  *
  * 模式（SW1 最高优先级 + SW4 主选 + SW3 子选；拨上=1）：
- *   SW1=1            → 摄像头 RGB888 原图直通（CV 暂停；无 OSD/edge/mask/框）
+ *   SW1=1            → 摄像头 RGB888 原图直通（CV 暂停；无 OSD/mask/框）
  *   SW1=0, SW4=0     → 彩条测试图案（M1 基准，不退化）
- *   SW1=0, SW4=1,SW3=0 → 边缘提取（Sobel 二值图）
+ *   SW1=0, SW4=1,SW3=0 → 彩色摄像头（无 OSD）
  *   SW1=0, SW4=1,SW3=1 → 彩色摄像头 + OSD（Anlogic logo + 帧计数）
  *
  * 数据通路（SW4=1 或 SW1=1 时）：
  *   SC520CS → MIPI D-PHY RX(IP) → csi_unpacket_2lane → raw10_unpacket_2lane
- *   → uial2axis → isp_top[demosaic→awb→edge_detect_96(edge_on 门控 bypass)→pack]
+ *   → uial2axis → isp_top[demosaic→awb→pack]
  *   → video_in(async FIFO,4帧乒乓) → mc_to_user_interface → DDR2 IP
  *   → video_out(async FIFO) → hdmi_mixer[OSD(osd_on 门控)]
  *   → cv_top(CV/SW1 门控；SW1=1 时 I_cv_on=0，输出直通 I_data) → video_mux → hdmi_tx
@@ -42,7 +42,7 @@ module design_top_wrapper (
     // 模式切换
     input  wire        I_sw1,            // A4（最高优先级：1=RGB888 原图直通，CV 暂停）
     input  wire        I_sw4,            // D11（主选：0=彩条，1=摄像头）
-    input  wire        I_sw3,            // E11（子选：0=edge，1=OSD彩色）
+    input  wire        I_sw3,            // E11（子选：0=无OSD，1=OSD彩色）
     input  wire        I_key2,           // A9 板载 KEY2（CV 叠加开关：按下切换 CV 开/关）
     input  wire        I_key3,           // B9 板载 KEY3（CV 开时：阈值 -1）
     input  wire        I_key4,           // C7 板载 KEY4（CV 开时：阈值 +1）
@@ -108,10 +108,10 @@ module design_top_wrapper (
     // 异步复位最稳、且 TD 可走全局网络避免高扇出 recovery 违例）。本工程沿用。
     wire S_rst_n = S_pll_lock;
 
-    // CV 开关（前向声明：r_cv_on 在像素域 KEY2 段赋值，此处先声明供 ae_set/edge_on 早期引用）
+    // CV 开关（前向声明：r_cv_on 在像素域 KEY2 段赋值，此处先声明供 ae_set 早期引用）
     reg r_cv_on;
 
-    // MCU 钢珠前端参数（ahb_status_slave 驱动；先声明供字节域 edge_on 使用）
+    // MCU 钢珠前端参数（ahb_status_slave 驱动；先声明供 cv_top 使用）
     wire        S_ball_en, S_ball_capture;
     wire [7:0]  S_ball_bg_thr, S_ball_min_run;
     wire        S_ball_bg_ready, S_ball_capturing;
@@ -282,42 +282,12 @@ module design_top_wrapper (
         .axis_tlast    ( S_axis_tlast         )
     );
 
-    // ============================================================ ISP（参考件 + edge bypass）
+    // ============================================================ ISP（参考件；edge 模式已移除）
     wire        S_ISP_O_tready;
     wire [127:0] S_ISP_O_tdata;
     wire        S_ISP_O_tlast;
     wire        S_ISP_O_tuser;
     wire        S_ISP_O_tvalid;
-
-    // edge_on = SW4 & ~SW3 & ~CV & ~SW1（字节域同步）：1=走 edge_detect_96，0=彩色直通(喂 OSD)
-    reg  [2:0]  S_sw4_sync_rx;
-    reg  [2:0]  S_sw3_sync_rx;
-    reg  [2:0]  S_sw1_sync_rx;
-    always @(posedge S_csi_rx_clk or negedge S_rst_n_rx) begin
-        if (!S_rst_n_rx) begin
-            S_sw4_sync_rx <= 3'd0;
-            S_sw3_sync_rx <= 3'd0;
-            S_sw1_sync_rx <= 3'd0;
-        end else begin
-            S_sw4_sync_rx <= {S_sw4_sync_rx[1:0], I_sw4};
-            S_sw3_sync_rx <= {S_sw3_sync_rx[1:0], I_sw3};
-            S_sw1_sync_rx <= {S_sw1_sync_rx[1:0], I_sw1};
-        end
-    end
-    // CV 开关（r_cv_on 在像素域 KEY2 段赋值；此处同步到字节域供 edge_on 门控）
-    reg [2:0]  r_cv_on_sync_rx;
-    reg [2:0]  S_ball_en_sync_rx;
-    always @(posedge S_csi_rx_clk or negedge S_rst_n_rx) begin
-        if (!S_rst_n_rx) begin
-            r_cv_on_sync_rx <= 3'd0;
-            S_ball_en_sync_rx <= 3'd0;
-        end else begin
-            r_cv_on_sync_rx <= {r_cv_on_sync_rx[1:0], r_cv_on};
-            S_ball_en_sync_rx <= {S_ball_en_sync_rx[1:0], S_ball_en};
-        end
-    end
-    wire S_edge_on = S_sw4_sync_rx[2] & ~S_sw3_sync_rx[2] & ~r_cv_on_sync_rx[2] &
-                     ~S_ball_en_sync_rx[2] & ~S_sw1_sync_rx[2];
 
     isp_top u_isp_top (
         .axi4s_video_aclk ( S_csi_rx_clk    ),
@@ -332,8 +302,7 @@ module design_top_wrapper (
         .O_tlast          ( S_ISP_O_tlast   ),
         .O_tuser          ( S_ISP_O_tuser   ),
         .O_tvalid         ( S_ISP_O_tvalid  ),
-        .I_tready         (                 ),
-        .I_edge_on        ( S_edge_on       )
+        .I_tready         (                 )
     );
 
     // ============================================================ DDR2 帧缓存（参考件 video_in/out + mc 桥 + IP）
@@ -558,7 +527,7 @@ module design_top_wrapper (
     wire S_cv_eff = (r_cv_on | S_ball_mode) & ~S_sw1_sync_pix[2];
     // ============================================================ KEY2 → CV 开关（像素域去抖 + 翻转 + 跨域同步）
     // KEY2=A9 板载按键（PULLUP，按下=0）。计数器采样去抖（~14ms），下降沿翻转 r_cv_on。
-    // CV 开或 SW1=1 时强制 edge_on=0 / osd_on=0（让 hdmi_mixer/isp_top 直通纯摄像头画面）。
+    // CV 开或 SW1=1 时强制 osd_on=0（让 hdmi_mixer 直通纯摄像头画面）。
     reg [20:0] r_key2_cnt;
     reg [2:0]  r_key2_sync;
     reg        r_key2_d;
