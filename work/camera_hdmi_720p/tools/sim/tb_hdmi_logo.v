@@ -9,7 +9,8 @@ module tb_hdmi_logo;
     reg         de = 1'b0;
     reg         user = 1'b0;
     reg         last = 1'b0;
-    reg         osd_on = 1'b1;
+    reg         osd_on = 1'b0;
+    reg         ui_on = 1'b1;
     reg  [3:0]  debug_status = 4'd0;
     reg  [23:0] rd_data = 24'h112233;
 
@@ -28,6 +29,7 @@ module tb_hdmi_logo;
         .I_video_user    ( user          ),
         .I_video_last    ( last          ),
         .I_osd_on        ( osd_on        ),
+        .I_ui_on         ( ui_on         ),
         .I_debug_status  ( debug_status  ),
         .O_video_rd_en   ( rd_en         ),
         .I_video_rd_data ( rd_data       ),

@@ -11,7 +11,7 @@
  *   SC520CS → MIPI D-PHY RX(IP) → csi_unpacket_2lane → raw10_unpacket_2lane
  *   → uial2axis → isp_top[demosaic→awb→pack]
  *   → video_in(async FIFO,4帧乒乓) → mc_to_user_interface → DDR2 IP
- *   → video_out(async FIFO) → hdmi_mixer[OSD(osd_on 门控)]
+ *   → video_out(async FIFO) → hdmi_mixer[识别态 UI（SW1=0 统一叠加）]
  *   → cv_top(CV/BALL 门控；调试态仍保持检测运行) → video_mux → hdmi_tx
  *
  * 时钟（ip/pll/PLL.v，厂商验证配置）：
@@ -45,7 +45,7 @@ module design_top_wrapper (
     input  wire        I_sw1,            // A4（0=识别/正常，1=调试）
     input  wire        I_sw2,            // B4（调试子选：0=静态测试图案，1=动态调试画面）
     input  wire        I_sw4,            // D11（保留/留空）
-    input  wire        I_sw3,            // E11（0=无OSD，1=OSD彩色）
+    input  wire        I_sw3,            // E11（保留；当前不控制识别态 UI，仍进 SW_STAT）
     input  wire        I_key1,           // D5 板载 KEY1（动态调试：RGB → score → mask）
     input  wire        I_key2,           // A9 板载 KEY2（CV 叠加开关：按下切换 CV 开/关）
     input  wire        I_key3,           // B9 板载 KEY3（CV 开时：阈值 -1）
@@ -562,7 +562,7 @@ module design_top_wrapper (
     wire S_cv_eff = r_cv_on | S_ball_mode;
     // ============================================================ KEY2 → CV 开关（像素域去抖 + 翻转 + 跨域同步）
     // KEY2=A9 板载按键（PULLUP，按下=0）。计数器采样去抖（~14ms），下降沿翻转 r_cv_on。
-    // CV 开、BALL_EN 或调试态时强制 osd_on=0（让 hdmi_mixer 直通纯摄像头画面）。
+    // 识别态 UI 由 S_ui_on=~SW1 统一开关；SW1=1 调试/测试图案时关闭，hdmi_mixer 直通。
     reg [20:0] r_key2_cnt;
     reg [2:0]  r_key2_sync;
     reg        r_key2_d;
@@ -582,9 +582,8 @@ module design_top_wrapper (
         end
     end
 
-    // osd_on = SW3 & ~CV & ~BALL & ~DEBUG（识别态才允许 Anlogic OSD）
-    wire S_osd_on = S_sw3_sync_pix[2] & ~r_cv_on &
-                    ~S_ball_mode & ~S_debug_mode;
+    // 识别态 UI：SW1=0 整套 OSD 同时显示（Logo / 标签 / Count / 文本 / FRAME）
+    wire S_ui_on = ~S_debug_mode;
 
     wire        S_hdmi_out_vsync;
     wire        S_hdmi_out_hsync;
@@ -605,7 +604,8 @@ module design_top_wrapper (
         .I_video_de      ( S_hdmi_de           ),
         .I_video_user    ( S_hdmi_user         ),
         .I_video_last    ( S_hdmi_last         ),
-        .I_osd_on        ( S_osd_on            ),
+        .I_osd_on        ( 1'b0                ),
+        .I_ui_on         ( S_ui_on             ),
         .I_debug_status  ( 4'd0                ),
         .O_video_rd_en   ( S_hdmi_window_rd_en ),
         .I_video_rd_data ( S_video_rd_data     ),
@@ -679,6 +679,7 @@ module design_top_wrapper (
         .I_clk          ( S_pixel_clk      ),
         .I_rst_n        ( S_rst_n_pix      ),
         .I_cv_on        ( S_cv_eff         ),
+        .I_ui_on        ( S_ui_on          ),
         .I_thr_up       ( R_thr_up         ),
         .I_thr_dn       ( R_thr_dn         ),
         .I_de           ( S_hdmi_out_de    ),

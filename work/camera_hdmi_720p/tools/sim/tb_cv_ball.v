@@ -35,7 +35,7 @@ module tb_cv_ball;
         .MAX_RUNS(64), .MASK_VIEW(0),
         .BALL_W(BALL_W), .BALL_H(BALL_H), .BALL_SCALE(4)
     ) dut (
-        .I_clk(clk), .I_rst_n(rst_n), .I_cv_on(I_cv_on),
+        .I_clk(clk), .I_rst_n(rst_n), .I_cv_on(I_cv_on), .I_ui_on(1'b0),
         .I_thr_up(I_thr_up), .I_thr_dn(I_thr_dn),
         .I_de(I_de), .I_vs(I_vs), .I_data(I_data),
         .I_ball_en(I_ball_en), .I_ball_bg_thr(I_ball_bg_thr),

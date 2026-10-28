@@ -34,6 +34,7 @@ module cv_top #(
     input  wire        I_clk,          // pixel 75MHz
     input  wire        I_rst_n,
     input  wire        I_cv_on,
+    input  wire        I_ui_on,
     input  wire        I_thr_up,
     input  wire        I_thr_dn,
     input  wire        I_de,
@@ -478,8 +479,8 @@ module cv_top #(
                             (I_disp_mode == 2'd1) ? score_color : I_data;
     assign O_de=I_de; assign O_vs=I_vs;
     // 优先级：Count 字模 > ID 字模 > 绿框边 > 机器视角/原画
-    assign O_data = (I_cv_on && I_de) ? (I_debug_view ? dbg_color :
-                                         (r_cnt_digit ? 24'hFFFFFF :
+    assign O_data = ((I_cv_on || I_ui_on) && I_de) ? (I_debug_view ? dbg_color :
+                                         (r_cnt_digit ? 24'h00E6FF :
                                          (r_id_digit ? 24'hFFFFFF :
                                          (r_border ? 24'h00FF00 : cv_base)))) : I_data;
 

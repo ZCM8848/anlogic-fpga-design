@@ -150,15 +150,29 @@ syn_1 -> phy_1 -> 新 bit -> 上板
 - OSD 文本 `(24,172)`
 - 帧计数 `(24,680)`
 
+## MiSans Medium 1-bit（已应用）
+
+识别态静态文字现在由 MiSans Medium 1-bit ROM 渲染：
+
+- 生成脚本：`gen_ui_text_rom.py`
+- RTL ROM：`rtl/video/ui_text_rom.v`
+- `STEEL BALL`：160×18
+- `Anlogic HX1P35A`：160×24
+- `FRAME` 前缀：80×20
+- 帧计数数字：16×20 × 10
+- 预览图：`misans_text_preview.png`
+
+排布器画布里的文字仍是浏览器系统字体（只用于排版示意）；实际 FPGA 输出使用上面的 MiSans ROM。
+
 ## 说明 / 限制
 
 - 预览里的“安路 Logo”由 `anlogic_logo_rom.v` 导出的 160×160 PNG（`logo_anlogic.png`）渲染，透明底；实际 OSD 仍是同一 Logo ROM。
 - Logo 的 W/H 只改变预览缩放，不会缩放 RTL 的 160×160 ROM；写回脚本只应用 X/Y。
 - Count 的 W/H 按 1/2/4/8 倍整数缩放写回，不是任意尺寸；150×34 对应 4×（160×28）。
-- `STEEL BALL` 标签和 `FRAME 000123` 帧计数目前没有 RTL 渲染，只是布局预览。
+- `STEEL BALL`、`Anlogic HX1P35A`、`FRAME 000123` 已在识别态（SW1=0）由 MiSans ROM 渲染；调试态/测试图案下关闭。
 - PNG 导出会临时关闭网格/安全框/选择框，输出 1280×720 纯画面。
 - 背景图只存在浏览器内存，不写入 JSON，也不参与导出。
-- 当前 OSD 在钢珠识别模式下被整体关闭（`S_osd_on` 的 gating），因此 Count 位置会生效，但 Logo 是否显示取决于后续的 Logo/OSD 独立开关。
+- 识别态 UI 由 `S_ui_on = ~SW1` 统一开关；SW3 不再控制这套 UI。
 - 坐标按 12-bit 无符号处理，范围 0…4095；画布内元素不会出现负数坐标。
 
 ## 文件
@@ -169,6 +183,8 @@ tools/ui_layout/
 ├─ style.css           # 深色 UI
 ├─ app.js              # 编辑器 / 渲染 / 导出
 ├─ apply_layout.py     # JSON -> RTL X/Y + Count 整数缩放
+├─ gen_ui_text_rom.py  # MiSans Medium -> 1-bit 静态文字 ROM
+├─ misans_text_preview.png
 ├─ logo_anlogic.png    # 从 Logo ROM 导出的 160×160 预览图
 ├─ preview.png         # 完整界面截图
 ├─ preview_canvas.png  # 纯画面预览（1280×720）
