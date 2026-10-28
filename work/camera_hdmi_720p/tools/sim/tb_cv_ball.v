@@ -41,6 +41,7 @@ module tb_cv_ball;
         .I_ball_en(I_ball_en), .I_ball_bg_thr(I_ball_bg_thr),
         .I_ball_min_run(I_ball_min_run),
         .I_ball_capture(I_ball_capture),
+        .I_disp_mode(2'd0),
         .O_ball_bg_ready(O_ball_bg_ready), .O_ball_capturing(O_ball_capturing),
         .I_ahb_clk(I_ahb_clk), .I_run_rd_addr(I_run_rd_addr),
         .O_run_rd_data(O_run_rd_data),
