@@ -1,0 +1,88 @@
+{
+  "app": "fpga-ui-layout-studio",
+  "version": 1,
+  "canvas": {
+    "width": 1280,
+    "height": 720
+  },
+  "elements": [
+    {
+      "id": "el_mvsbjfe1_14",
+      "type": "roi",
+      "name": "检测 ROI",
+      "x": 0,
+      "y": 0,
+      "w": 1280,
+      "h": 664,
+      "color": "#00aaff",
+      "text": "ROI",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "el_mvsbjfe1_15",
+      "type": "gate",
+      "name": "门线 x=0.30W",
+      "x": 384,
+      "y": 0,
+      "w": 2,
+      "h": 720,
+      "color": "#ff3366",
+      "text": "GATE",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "el_mvsbjfe1_16",
+      "type": "count",
+      "name": "钢珠计数",
+      "x": 24,
+      "y": 16,
+      "w": 120,
+      "h": 24,
+      "color": "#00e6ff",
+      "text": "00000",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "el_mvsbjfe1_17",
+      "type": "debug",
+      "name": "调试统计",
+      "x": 24,
+      "y": 52,
+      "w": 340,
+      "h": 92,
+      "color": "#7cfc9a",
+      "text": "DET 3  TRK 3\nGATE 96  FPS 60\nRUN 512  LBL 5",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "el_mvsbjfe1_18",
+      "type": "box",
+      "name": "球框样例",
+      "x": 600,
+      "y": 300,
+      "w": 56,
+      "h": 56,
+      "color": "#00ff66",
+      "text": "BALL 3",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "el_mvsbjfe1_19",
+      "type": "crosshair",
+      "name": "十字准线",
+      "x": 624,
+      "y": 328,
+      "w": 32,
+      "h": 32,
+      "color": "#ffffff",
+      "text": "",
+      "visible": true,
+      "locked": false
+    }
+  ]
+}
