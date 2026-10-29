@@ -5,6 +5,7 @@ module tb_seg_count_display;
     reg        clk = 1'b0;
     reg        rst_n = 1'b0;
     reg [19:0] bcd = 20'h12345;   // 万=1 千=2 百=3 十=4 个=5
+    reg        dash = 1'b0;
     wire [7:0] seg;
     wire [7:0] sel;
 
@@ -18,6 +19,7 @@ module tb_seg_count_display;
         .I_clk   ( clk   ),
         .I_rst_n ( rst_n ),
         .I_bcd   ( bcd   ),
+        .I_dash  ( dash  ),
         .O_seg   ( seg   ),
         .O_sel   ( sel   )
     );
@@ -73,6 +75,21 @@ module tb_seg_count_display;
         check_digit(3'd5, 4'hF);
         check_digit(3'd6, 4'hF);
         check_digit(3'd7, 4'hF);
+
+        // 重采样：8 位全部显示 '-'
+        dash = 1'b1;
+        repeat (2) @(posedge clk);
+        for (i = 0; i < 8; i = i + 1) begin
+            while (sel !== ~(8'h01 << i))
+                @(posedge clk);
+            #1;
+            if (seg !== 8'hBF) begin
+                $display("[ERR] dash digit %0d: seg=%02h expected=BF", i, seg);
+                errors = errors + 1;
+            end
+        end
+        dash = 1'b0;
+        repeat (2) @(posedge clk);
 
         if (errors == 0) $display("TB_SEG_COUNT PASS");
         else             $display("TB_SEG_COUNT FAIL errors=%0d", errors);

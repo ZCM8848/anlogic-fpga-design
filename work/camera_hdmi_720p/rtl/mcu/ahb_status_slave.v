@@ -30,8 +30,10 @@
 //   0x44 BCD_COUNT MCU 写：5 位 BCD 计数
 //   0x48 BALL_RUN_CFG [8:0]=roi_y1 [19:10]=max_run_len（前端 run 过滤）
 //   0x4C SKIP_CNT  [15:0]=ROI 丢弃 run 数 [31:16]=超长 run 丢弃数（只读）
-//   0x50 KEY_EVT   [0]=KEY1 长按事件（写 1 清零；MCU 清零 count/tracks）
+//   0x50 KEY_EVT   [0]=KEY1 长按事件 [1]=KEY2 长按事件（写 1 清零）
 //   0x54 BALL_NOW  [3:0]=当前实际框住的球数（MCU 每帧写 oi，0..8）
+//   0x58 SEG_CTRL  [0]=1 时 8 位数码管全部显示 '-'（MCU 重采样背景期间置位）
+//   0x5C BALL_GATE [8:0]=gate_x [16:9]=gate_y0 [24:17]=gate_y1（320x180 坐标；RTL 画门线）
 //
 // overlay 项字段（64bit = {W0[31:0], W1[31:0]}，cv_top 叠加解析）：
 //   [63] valid  [62:59] id[3:0]  [58:47] x0[11:0]  [46:35] y0[11:0]  [34:32] pad
@@ -80,6 +82,7 @@ module ahb_status_slave #(
     input  wire [7:0]  I_max_y,          // pixel 域本帧最大亮度
     input  wire        I_vsync,         // pixel 域，内部 2FF + 上升沿锁存
     input  wire        I_key1_long,     // pixel 域：KEY1 长按脉冲（>=1s）
+    input  wire        I_key2_long,     // pixel 域：KEY2 长按电平（>=1s，保持到松手）
     input  wire [15:0] I_skip_roi_cnt,  // pixel 域：本帧 ROI 丢弃 run 数
     input  wire [15:0] I_skip_len_cnt,  // pixel 域：本帧 max_run_len 丢弃 run 数
 
@@ -102,6 +105,10 @@ module ahb_status_slave #(
     output wire [15:0]  O_count,
     output wire [19:0]  O_count_bcd,
     output wire [3:0]   O_ball_now,
+    output wire         O_seg_dash,      // 1=8 位数码管全部显示 '-'
+    output wire [8:0]   O_gate_x,        // 门线 x（320x180 小像素）
+    output wire [7:0]   O_gate_y0,
+    output wire [7:0]   O_gate_y1,
 
     // ---- MCU 写回暴露 ----
     output wire [31:0] O_heartbeat,
@@ -122,7 +129,9 @@ module ahb_status_slave #(
     reg [7:0]  S_miny_a, S_miny, S_maxy_a, S_maxy;
     reg [15:0] S_skip_roi_a, S_skip_roi, S_skip_len_a, S_skip_len;
     reg        S_key1_long_a, S_key1_long_d, S_key1_evt;
+    reg        S_key2_long_a, S_key2_long_d, S_key2_evt;
     wire       key1_long_rise = S_key1_long_a & ~S_key1_long_d;
+    wire       key2_long_rise = S_key2_long_a & ~S_key2_long_d;
     reg        S_bgready_a, S_bgready, S_capturing_a, S_capturing;
     reg [1:0]  S_vs_sync;
     reg        S_vs_d;
@@ -146,6 +155,7 @@ module ahb_status_slave #(
             S_skip_roi_a <= 16'd0; S_skip_roi <= 16'd0;
             S_skip_len_a <= 16'd0; S_skip_len <= 16'd0;
             S_key1_long_a <= 1'b0; S_key1_long_d <= 1'b0;
+            S_key2_long_a <= 1'b0; S_key2_long_d <= 1'b0;
             S_bgready_a <= 1'b0; S_bgready <= 1'b0;
             S_capturing_a <= 1'b0; S_capturing <= 1'b0;
             S_vs_sync <= 2'b00; S_vs_d <= 1'b0; S_frame_cnt <= 32'd0;
@@ -170,6 +180,8 @@ module ahb_status_slave #(
             S_skip_len_a <= I_skip_len_cnt; S_skip_len <= S_skip_len_a;
             S_key1_long_a <= I_key1_long;
             S_key1_long_d <= S_key1_long_a;
+            S_key2_long_a <= I_key2_long;
+            S_key2_long_d <= S_key2_long_a;
             S_bgready_a <= I_ball_bg_ready; S_bgready <= S_bgready_a;
             S_capturing_a <= I_ball_capturing; S_capturing <= S_capturing_a;
             S_vs_sync  <= {S_vs_sync[0], I_vsync};
@@ -193,12 +205,16 @@ module ahb_status_slave #(
     reg        S_ball_en, S_ball_capture;
     reg [15:0] S_ball_thr;
     reg [31:0] S_ball_run_cfg;
+    reg [31:0] S_ball_gate;
     assign O_ball_en      = S_ball_en;
     assign O_ball_capture = S_ball_capture;
     assign O_ball_bg_thr  = S_ball_thr[7:0];
     assign O_ball_min_run = S_ball_thr[15:8];
     assign O_ball_roi_y1  = S_ball_run_cfg[8:0];
     assign O_ball_max_run_len = S_ball_run_cfg[19:10];
+    assign O_gate_x  = S_ball_gate[8:0];
+    assign O_gate_y0 = S_ball_gate[16:9];
+    assign O_gate_y1 = S_ball_gate[24:17];
 
     // run_mem 间接读
     reg [9:0]  r_run_idx;           // MCU 写 RUN_IDX
@@ -212,9 +228,11 @@ module ahb_status_slave #(
     reg [15:0] S_count;
     reg [19:0] S_count_bcd;
     reg [3:0]  S_ball_now;
+    reg        S_seg_dash;
     assign O_count = S_count;
     assign O_count_bcd = S_count_bcd;
     assign O_ball_now = S_ball_now;
+    assign O_seg_dash = S_seg_dash;
 
     // overlay 总线打包：{ov7, ov6, ..., ov0}
     assign O_overlay = {S_overlay[7], S_overlay[6], S_overlay[5], S_overlay[4],
@@ -284,8 +302,10 @@ module ahb_status_slave #(
                 5'h10: rdata_mux = SW_STAT_REG;      // 0x40: SW1..SW4
                 5'h12: rdata_mux = S_ball_run_cfg;    // 0x48: [8:0]=roi_y1 [19:10]=max_run_len
                 5'h13: rdata_mux = SKIP_REG;          // 0x4C: [15:0]=skip_roi [31:16]=skip_len
-                5'h14: rdata_mux = {31'b0, S_key1_evt}; // 0x50: KEY_EVT, write 1 clear
+                5'h14: rdata_mux = {30'b0, S_key2_evt, S_key1_evt}; // 0x50: KEY_EVT
                 5'h15: rdata_mux = {28'b0, S_ball_now}; // 0x54: current boxed balls
+                5'h16: rdata_mux = {31'b0, S_seg_dash}; // 0x58: 7-seg dashes
+                5'h17: rdata_mux = S_ball_gate;       // 0x5C: gate x/y0/y1
                 default: rdata_mux = 32'h0;
             endcase
         end
@@ -309,14 +329,18 @@ module ahb_status_slave #(
             S_ball_now <= 4'd0;
             S_ball_en <= 1'b0; S_ball_capture <= 1'b0; S_ball_thr <= 16'd0;
             S_ball_run_cfg <= 32'h0003_20A6;   // roi_y1=166, max_run_len=200
+            S_ball_gate <= 32'h014C_1C60;      // gate_x=96, y0=14, y1=166
             S_key1_evt <= 1'b0;
+            S_key2_evt <= 1'b0;
+            S_seg_dash <= 1'b0;
             for (i = 0; i < 8; i = i + 1) S_overlay[i] <= 64'd0;
         end else begin
             // run_mem B 口同步读输出锁存（每拍把 I_run_rd_data 入 r_run_dat）
             r_run_dat <= I_run_rd_data;
 
-            // KEY1 长按事件：置位；MCU 写 0x50=1 清零
+            // KEY1/KEY2 长按事件：置位；MCU 写 0x50 对应 bit=1 清零
             if (key1_long_rise) S_key1_evt <= 1'b1;
+            if (key2_long_rise) S_key2_evt <= 1'b1;
 
             // 数据相（上一拍锁存的传输）：写
             if (xfer_prev && r_hwrite) begin
@@ -331,7 +355,12 @@ module ahb_status_slave #(
                     5'h11: S_count_bcd  <= I_hwdata[19:0];              // BCD_COUNT @0x44
                     5'h15: S_ball_now   <= I_hwdata[3:0];               // BALL_NOW @0x54
                     5'h12: S_ball_run_cfg <= I_hwdata;                  // BALL_RUN_CFG @0x48
-                    5'h14: if (I_hwdata[0]) S_key1_evt <= 1'b0;         // KEY_EVT: write 1 clear
+                    5'h14: begin                                       // KEY_EVT: write 1 clear
+                        if (I_hwdata[0]) S_key1_evt <= 1'b0;
+                        if (I_hwdata[1]) S_key2_evt <= 1'b0;
+                    end
+                    5'h16: S_seg_dash <= I_hwdata[0];                  // SEG_CTRL @0x58
+                    5'h17: S_ball_gate <= I_hwdata;                    // BALL_GATE @0x5C
                     5'h0D: begin                                       // BALL_CTRL
                         S_ball_en      <= I_hwdata[0];
                         S_ball_capture <= I_hwdata[1];

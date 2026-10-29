@@ -114,9 +114,6 @@ module design_top_wrapper (
     // 异步复位最稳、且 TD 可走全局网络避免高扇出 recovery 违例）。本工程沿用。
     wire S_rst_n = S_pll_lock;
 
-    // CV 开关（前向声明：r_cv_on 在像素域 KEY2 段赋值，此处先声明供 ae_set 早期引用）
-    reg r_cv_on;
-
     // MCU 钢珠前端参数（ahb_status_slave 驱动；先声明供 cv_top 使用）
     wire        S_ball_en, S_ball_capture;
     wire [7:0]  S_ball_bg_thr, S_ball_min_run;
@@ -580,23 +577,29 @@ module design_top_wrapper (
         else              S_ball_en_sync_pix <= {S_ball_en_sync_pix[1:0], S_ball_en};
     end
     wire S_ball_mode = S_ball_en_sync_pix[2];
-    wire S_cv_eff = r_cv_on | S_ball_mode;
-    // ============================================================ KEY2 → CV 开关（像素域去抖 + 翻转 + 跨域同步）
-    // KEY2=A9 板载按键（PULLUP，按下=0）。计数器采样去抖（~14ms），下降沿翻转 r_cv_on。
-    // 识别态 UI 由 S_ui_on=~SW1 统一开关；SW1=1 调试/测试图案时关闭，hdmi_mixer 直通。
+    wire S_cv_eff = S_ball_mode;
+    // ============================================================ KEY2 长按 → 背景重采事件
+    // KEY2=A9 板载按键（PULLUP，按下=0）。~14ms 采样去抖，长按 >=1s 置 r_key2_long。
+    // r_key2_long 保持到松手，由 ahb_status_slave 取上升沿生成 KEY_EVT[1]。
     reg [20:0] r_key2_cnt;
     reg [2:0]  r_key2_sync;
-    reg        r_key2_d;
-    wire       key2_fall = ~r_key2_sync[2] & r_key2_d;
+    reg [7:0]  r_key2_hold;
+    reg        r_key2_long;
     always @(posedge S_pixel_clk or negedge S_rst_n_pix) begin
         if (!S_rst_n_pix) begin
-            r_key2_cnt <= 21'd0; r_key2_sync <= 3'd0; r_key2_d <= 1'b0; r_cv_on <= 1'b0;
+            r_key2_cnt <= 21'd0; r_key2_sync <= 3'd0;
+            r_key2_hold <= 8'd0; r_key2_long <= 1'b0;
         end else begin
             r_key2_sync <= {r_key2_sync[1:0], I_key2};
             if (r_key2_cnt == 21'd1048575) begin   // ~14ms @75MHz
                 r_key2_cnt <= 21'd0;
-                r_key2_d   <= r_key2_sync[2];
-                if (key2_fall) r_cv_on <= ~r_cv_on;
+                if (!r_key2_sync[2]) begin
+                    if (r_key2_hold < 8'd70) r_key2_hold <= r_key2_hold + 8'd1;
+                    if (r_key2_hold == 8'd69) r_key2_long <= 1'b1;
+                end else begin
+                    r_key2_hold <= 8'd0;
+                    r_key2_long <= 1'b0;
+                end
             end else begin
                 r_key2_cnt <= r_key2_cnt + 21'd1;
             end
@@ -653,6 +656,9 @@ module design_top_wrapper (
     wire [511:0] S_overlay;        // slave → cv_top（叠加 bbox+ID）
     wire [15:0]  S_count;          // slave → cv_top（exit 计数显示）
     wire [19:0]  S_count_bcd;      // slave → cv_top / 数码管（5 位 BCD）
+    wire         S_seg_dash;       // slave → 数码管（背景重采样时全横线）
+    wire [8:0]   S_gate_x;         // slave → cv_top（门线 x，320x180）
+    wire [7:0]   S_gate_y0, S_gate_y1;
 
     // K3(B9)/K4(C7) 板载按键：CV 开时作阈值 ±1 调参（像素域去抖 → 单拍脉冲）
     // 注：脉冲必须单拍——cv_top 每周期判 I_thr_up/dn，若发 14ms 电平会被加到饱和
@@ -673,8 +679,9 @@ module design_top_wrapper (
             if (r_btn_cnt == 21'd1048575) begin
                 r_btn_cnt <= 21'd0;
                 // 用 OLD r_btn_d（按下前=1）与当前采样（按下=0）判下降沿，单拍置 1
-                R_thr_dn  <= r_cv_on & (~r_btn0_sync[2] & r_btn0_d);
-                R_thr_up  <= r_cv_on & (~r_btn1_sync[2] & r_btn1_d);
+                // K3/K4 legacy pulses; cv_top 当前不消费 I_thr_up/dn
+                R_thr_dn  <= ~r_btn0_sync[2] & r_btn0_d;
+                R_thr_up  <= ~r_btn1_sync[2] & r_btn1_d;
                 r_btn0_d  <= r_btn0_sync[2];
                 r_btn1_d  <= r_btn1_sync[2];
             end else begin
@@ -724,6 +731,9 @@ module design_top_wrapper (
         .I_overlay      ( S_overlay        ),
         .I_count        ( S_count          ),
         .I_count_bcd    ( S_count_bcd      ),
+        .I_gate_x       ( S_gate_x         ),
+        .I_gate_y0      ( S_gate_y0        ),
+        .I_gate_y1      ( S_gate_y1        ),
         .O_de           ( S_cv_de          ),
         .O_vs           ( S_cv_vs          ),
         .O_data         ( S_cv_data        ),
@@ -907,6 +917,7 @@ module design_top_wrapper (
         .I_max_y       ( S_cv_max_y         ),
         .I_vsync       ( S_hdmi_vsync       ),
         .I_key1_long   ( S_key1_long        ),
+        .I_key2_long   ( r_key2_long        ),
         .I_skip_roi_cnt( S_skip_roi_cnt     ),
         .I_skip_len_cnt( S_skip_len_cnt     ),
         // 钢珠前端参数（C 固件唯一定义）
@@ -926,6 +937,10 @@ module design_top_wrapper (
         .O_count       ( S_count            ),
         .O_count_bcd   ( S_count_bcd        ),
         .O_ball_now    ( S_ball_now         ),
+        .O_seg_dash    ( S_seg_dash         ),
+        .O_gate_x      ( S_gate_x           ),
+        .O_gate_y0     ( S_gate_y0          ),
+        .O_gate_y1     ( S_gate_y1          ),
         .O_heartbeat   ( S_mcu_heartbeat    ),
         .O_scratch     ( S_mcu_scratch      ),
         .O_frame_cnt   ( S_mcu_frame_cnt    )
@@ -961,6 +976,7 @@ module design_top_wrapper (
         .I_clk   ( I_sys_clk       ),
         .I_rst_n ( S_rst_n_50m     ),
         .I_bcd   ( S_count_bcd     ),
+        .I_dash  ( S_seg_dash      ),
         .O_seg   ( O_seg           ),
         .O_sel   ( O_sel           )
     );

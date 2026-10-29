@@ -18,6 +18,7 @@ module seg_count_display #(
     input  wire        I_clk,
     input  wire        I_rst_n,
     input  wire [19:0] I_bcd,      // [3:0]=个位 ... [19:16]=万位
+    input  wire        I_dash,     // 1=8 位全部显示 '-'（背景重采样）
     output reg  [7:0]  O_seg,
     output reg  [7:0]  O_sel
 );
@@ -26,9 +27,12 @@ module seg_count_display #(
 
     // BCD 来自 AHB/150MHz 域，先 2FF 同步到 50MHz
     reg [19:0] bcd_s1, bcd_s2;
+    reg        dash_s1, dash_s2;
     always @(posedge I_clk) begin
-        bcd_s1 <= I_bcd;
-        bcd_s2 <= bcd_s1;
+        bcd_s1  <= I_bcd;
+        bcd_s2  <= bcd_s1;
+        dash_s1 <= I_dash;
+        dash_s2 <= dash_s1;
     end
 
     // ---------------- 扫描 ----------------
@@ -80,12 +84,19 @@ module seg_count_display #(
         end
     endfunction
 
+    // 正常显示 BCD；重采样时 8 位全部显示 '-'
+    reg [7:0] seg_code;
+    always @(*) begin
+        if (dash_s2) seg_code = 8'hBF;       // 共阳 '-'：仅 g 段亮
+        else         seg_code = seg_decode(disp_val);
+    end
+
     always @(posedge I_clk or negedge I_rst_n) begin
         if (!I_rst_n) begin
             O_seg <= 8'hFF;
             O_sel <= 8'hFF;
         end else begin
-            O_seg <= seg_decode(disp_val);
+            O_seg <= seg_code;
             O_sel <= ~(8'h01 << scan_idx);   // 低电平选中
         end
     end

@@ -52,6 +52,7 @@ module tb_cv_ball;
         .O_run_rd_data(O_run_rd_data),
         .I_overlay(I_overlay), .I_count(I_count),
         .I_count_bcd(20'd0),
+        .I_gate_x(9'd4), .I_gate_y0(8'd0), .I_gate_y1(8'd11),
         .O_de(O_de), .O_vs(O_vs), .O_data(O_data),
         .O_run_cnt(O_run_cnt), .O_min_y(O_min_y), .O_max_y(O_max_y),
         .O_skip_roi_cnt(O_skip_roi_cnt), .O_skip_len_cnt(O_skip_len_cnt),

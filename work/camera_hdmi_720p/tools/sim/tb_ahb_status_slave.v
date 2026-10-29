@@ -25,6 +25,7 @@ module tb_ahb_status_slave;
     reg        run_overflow=0;
     reg        vsync = 0;
     reg        key1_long = 0;
+    reg        key2_long = 0;
     reg [15:0] skip_roi_cnt = 0;
     reg [15:0] skip_len_cnt = 0;
     reg        ball_bg_ready = 0;
@@ -48,11 +49,13 @@ module tb_ahb_status_slave;
         .I_run_overflow(run_overflow),
         .I_vsync(vsync),
         .I_key1_long(key1_long),
+        .I_key2_long(key2_long),
         .I_skip_roi_cnt(skip_roi_cnt), .I_skip_len_cnt(skip_len_cnt),
         .I_ball_bg_ready(ball_bg_ready), .I_ball_capturing(ball_capturing),
         .I_run_rd_data(run_rd_data),
         .O_run_rd_addr(),
-        .O_overlay(), .O_count(), .O_count_bcd(), .O_ball_now(),
+        .O_overlay(), .O_count(), .O_count_bcd(), .O_ball_now(), .O_seg_dash(),
+        .O_gate_x(), .O_gate_y0(), .O_gate_y1(),
         .O_ball_en(), .O_ball_bg_thr(), .O_ball_min_run(),
         .O_ball_roi_y1(), .O_ball_max_run_len(), .O_ball_capture(),
         .O_heartbeat(heartbeat), .O_scratch(scratch), .O_frame_cnt(frame_cnt)
@@ -166,7 +169,33 @@ module tb_ahb_status_slave;
         ahb_read(32'h54, rd);
         chk("BALL_NOW readback", rd, 32'd5);
 
-        // === 8. 未映射地址读 = 0 ===
+        // === 8. KEY2 长按事件 + SEG_CTRL ===
+        key2_long = 1'b1;
+        repeat (3) @(negedge hclk);
+        key2_long = 1'b0;
+        repeat (2) @(negedge hclk);
+        ahb_read(32'h50, rd);
+        chk("KEY_EVT bit1 set", rd, 32'h2);
+        ahb_write(32'h50, 32'h2, 3'b010);
+        repeat (2) @(negedge hclk);
+        ahb_read(32'h50, rd);
+        chk("KEY_EVT bit1 clear", rd, 32'h0);
+
+        ahb_write(32'h58, 32'h1, 3'b010);
+        repeat (2) @(negedge hclk);
+        ahb_read(32'h58, rd);
+        chk("SEG_CTRL dash readback", rd, 32'h1);
+        ahb_write(32'h58, 32'h0, 3'b010);
+        repeat (2) @(negedge hclk);
+        ahb_read(32'h58, rd);
+        chk("SEG_CTRL dash clear", rd, 32'h0);
+
+        ahb_write(32'h5C, 32'h014C1C60, 3'b010);
+        repeat (2) @(negedge hclk);
+        ahb_read(32'h5C, rd);
+        chk("BALL_GATE readback", rd, 32'h014C1C60);
+
+        // === 9. 未映射地址读 = 0 ===
         ahb_read(32'h3C, rd);
         chk("unmapped read", rd, 32'h0);
 

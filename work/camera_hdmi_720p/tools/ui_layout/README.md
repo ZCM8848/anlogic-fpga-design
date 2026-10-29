@@ -109,7 +109,7 @@
 | 钢珠计数 | `cv_top.v` → `CNT_X / CNT_Y / CNT_W / CNT_H` | X/Y/W/H 直接写回；MiSans 30×34 数字，标准 150×34 |
 | 当前球数 | `hdmi_mixer.v` → `DETECTED_X / DETECTED_Y` | X/Y 可直接写回；`DETECTED N` ROM 固定 112×20，W/H 仅预览 |
 | OSD 文本 | `hdmi_mixer.v` → `DYN_OSD_X / DYN_OSD_Y` | X/Y 可直接写回；W/H 仅预览 |
-| 门线 | 检测逻辑固定 `x = 0.30 × 1280 = 384` | 仅预览，移动不会改变检测 |
+| 门线 | `cv_top.v` 从 `BALL_GATE@0x5C` 画线（MCU `gate_x/y0/y1`） | 识别态/动态调试态实时显示；编辑器位置仅预览 |
 | 检测 ROI | MCU `roi_y1`（小分辨率 166 → 全分辨率 664） | 仅预览 |
 | 球框 | 运行时动态叠加 | 仅样例 |
 | 帧计数 / 标签 / 调试统计 / 十字 / 彩条 | 固件或后续功能 | 规划位置用 |

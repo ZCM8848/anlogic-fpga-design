@@ -39,8 +39,10 @@ extern void al_simp_putchar(char c);
 #define BCD_COUNT   (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x44))
 #define BALL_RUN_CFG (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x48))
 #define SKIP_CNT    (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x4C))
+#define BALL_GATE   (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x5C))
 #define KEY_EVT     (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x50))
 #define BALL_NOW    (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x54))
+#define SEG_CTRL    (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x58))
 
 #define VER_MAGIC   0x4D435602U
 
@@ -65,6 +67,7 @@ typedef struct {
     int min_run;                /* run 最短长度（320 尺度；1=不过滤，2=去孤立点） */
     int bg_capture_delay;       /* 相机配置/DDR 就绪后再等多少帧采背景 */
     int bg_settle_frames;       /* 采背景前先让 edge/OSD 关闭并清空流水线的帧数 */
+    int bg_recalc_settle_frames;/* K2 重采背景前稳定帧数（横线显示期间） */
 
     /* ---- 连通域筛选（320x180）---- */
     int min_area;               /* 面积下限 */
@@ -105,6 +108,7 @@ static const vision_params_t VISION_PARAMS = {
     .min_run             = 2,
     .bg_capture_delay    = 120,   /* ≈2s @60fps，等相机/补光稳定 */
     .bg_settle_frames    = 10,    /* 关 edge/OSD 后清 4 帧 DDR 流水线 */
+    .bg_recalc_settle_frames = 30,/* K2 重采前 0.5s 稳定窗口（横线可见） */
 
     .min_area            = 100,
     .max_area            = 1500,
@@ -120,8 +124,8 @@ static const vision_params_t VISION_PARAMS = {
 
     .box_w_small         = 43,
     .gate_x              = 96,
-    .gate_y0             = 14,
-    .gate_y1             = 166,
+    .gate_y0             = 0,
+    .gate_y1             = 180,
     .roi_y1              = 180,   /* 现场调优：180=不启用 ROI 底边过滤，底部球堆进入 CCL */
 
     .track_gate          = 55,    /* 220 / 4 */
@@ -756,6 +760,49 @@ static void wait_frames(uint32_t n, uint32_t *hb)
     }
 }
 
+static void recapture_background(uint32_t *hb)
+{
+    int i;
+    uint32_t guard;
+
+    if (!VISION_PARAMS.enable) return;
+
+    /* 重采样开始：数码管显示 --------，清轨迹/绿框，Count 保持不变 */
+    SEG_CTRL = 1u;
+    n_det = 0;
+    n_dbg = 0;
+    next_label = 0;
+    next_id = 1;
+    ccl_overflow = 0;
+    skip_roi_cnt = 0;
+    skip_len_cnt = 0;
+    bkt_a = bkt_b = bkt_c = 0;
+    for (i = 0; i < MAX_TRK; i++) {
+        trk[i].valid = 0;
+        trk[i].visible = 0;
+    }
+    write_overlay();                 /* 清 8 个框，BALL_NOW=0 */
+
+    BALL_CTRL = 0u;                  /* 停检测，给现场稳定时间 */
+    wait_frames((uint32_t)VISION_PARAMS.bg_recalc_settle_frames, hb);
+
+    BALL_CTRL = 3u;                  /* enable=1, capture=1 */
+    guard = 0;
+    while (!(BALL_STATUS & 2u) && guard < 60000000u) {
+        HEARTBEAT = ++(*hb);
+        guard++;
+    }
+    guard = 0;
+    while (!(BALL_STATUS & 1u) && guard < 60000000u) {
+        HEARTBEAT = ++(*hb);
+        guard++;
+    }
+    BALL_CTRL = 1u;                  /* enable=1, capture=0 */
+    SEG_CTRL = 0u;                   /* 重采样结束，恢复数码管 */
+
+    al_simp_printf("KEY2 RECAPTURE BG ready=%d\r\n", (int)(BALL_STATUS & 1u));
+}
+
 int main(void)
 {
     uint32_t ver = VER_REG;
@@ -784,6 +831,9 @@ int main(void)
                           ((VISION_PARAMS.min_run & 0xFF) << 8));
     BALL_RUN_CFG = (uint32_t)((VISION_PARAMS.roi_y1 & 0x1FF) |
                               ((VISION_PARAMS.max_run_len & 0x3FF) << 10));
+    BALL_GATE = (uint32_t)((VISION_PARAMS.gate_x & 0x1FF) |
+                           ((VISION_PARAMS.gate_y0 & 0xFF) << 9) |
+                           ((VISION_PARAMS.gate_y1 & 0xFF) << 17));
     BALL_CTRL = 0u;
 
     if (VISION_PARAMS.enable) {
@@ -819,10 +869,15 @@ int main(void)
     uint32_t last_frame = FRAME_REG;
 
     while (1) {
-        if (KEY_EVT & 1u) {
+        uint32_t evt = KEY_EVT;
+        if (evt) KEY_EVT = evt;           /* write back 1s to clear */
+        if (evt & 1u) {
             reset_count_and_tracks();
-            KEY_EVT = 1u;                 /* write 1 clear */
             al_simp_printf("KEY1 RESET count/tracks\r\n");
+        }
+        if (evt & 2u) {
+            recapture_background(&hb);
+            last_frame = FRAME_REG;
         }
         uint32_t fr = FRAME_REG;
         if (fr != last_frame) {

@@ -62,6 +62,10 @@ module cv_top #(
     input  wire [511:0] I_overlay,
     input  wire [15:0]  I_count,
     input  wire [19:0]  I_count_bcd,
+    // 门线（320x180 小像素坐标；RTL 负责画到视频上）
+    input  wire [8:0]   I_gate_x,
+    input  wire [7:0]   I_gate_y0,
+    input  wire [7:0]   I_gate_y1,
 
     // meta（给 ahb_status_slave）
     output wire [10:0] O_run_cnt,
@@ -522,10 +526,22 @@ module cv_top #(
     wire [23:0] dbg_color = (I_disp_mode == 2'd2) ? mask_color :
                             (I_disp_mode == 2'd1) ? score_color : I_data;
     assign O_de=I_de; assign O_vs=I_vs;
-    // 优先级：Count 字模 > ID 字模 > 绿框边 > 机器视角/原画
+
+    // 门线：MCU 的 320x180 坐标 ×4 映射到 1280x720，宽 2 像素
+    wire [11:0] S_gate_x_px  = {I_gate_x, 2'b00};
+    wire [11:0] S_gate_y0_px = {I_gate_y0, 2'b00};
+    wire [11:0] S_gate_y1_px = {I_gate_y1, 2'b00};
+    wire S_gate_line = (r_x >= S_gate_x_px) &&
+                       (r_x <  S_gate_x_px + 12'd2) &&
+                       (r_y >= S_gate_y0_px) &&
+                       (r_y <= S_gate_y1_px);
+    wire S_gate_show = I_ui_on || I_debug_view;
+
+    // 优先级：Count 字模 > ID 字模 > 门线 > 绿框边 > 机器视角/原画
     assign O_data = ((I_cv_on || I_ui_on) && I_de) ? (I_debug_view ? dbg_color :
                                          (r_cnt_digit ? 24'h00E6FF :
                                          (r_id_digit ? 24'hFFFFFF :
-                                         (r_border ? 24'h00FF00 : cv_base)))) : I_data;
+                                         ((S_gate_show && S_gate_line) ? 24'hFF3366 :
+                                         (r_border ? 24'h00FF00 : cv_base))))) : I_data;
 
 endmodule

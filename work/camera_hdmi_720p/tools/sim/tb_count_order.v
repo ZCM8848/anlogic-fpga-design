@@ -28,6 +28,7 @@ module tb_count_order;
         .O_ball_bg_ready(), .O_ball_capturing(),
         .I_ahb_clk(clk), .I_run_rd_addr(10'd0), .O_run_rd_data(),
         .I_overlay(512'd0), .I_count(16'd0), .I_count_bcd(I_count_bcd),
+        .I_gate_x(9'd4), .I_gate_y0(8'd0), .I_gate_y1(8'd47),
         .O_de(), .O_vs(), .O_data(O_data),
         .O_run_cnt(), .O_min_y(), .O_max_y(),
         .O_skip_roi_cnt(), .O_skip_len_cnt(),
@@ -50,6 +51,28 @@ module tb_count_order;
             $display("TB_COUNT_ORDER FAIL");
         end else begin
             $display("TB_COUNT_ORDER PASS (leftmost=0, rightmost=1)");
+        end
+        release dut.r_x;
+        release dut.r_y;
+
+        // 门线：x=4*4=16, y=0..47*4=188，2 像素宽
+        force dut.r_x = 12'd16;
+        force dut.r_y = 12'd40;
+        #2;
+        if (O_data !== 24'hFF3366) begin
+            $display("FAIL gate line expected FF3366, got %06h", O_data);
+            $display("TB_COUNT_ORDER FAIL");
+        end else begin
+            $display("TB_GATE_LINE PASS");
+        end
+        // y 超出 gate_y1*4 时不应画线
+        force dut.r_y = 12'd200;
+        #2;
+        if (O_data === 24'hFF3366) begin
+            $display("FAIL gate line drawn outside y range");
+            $display("TB_COUNT_ORDER FAIL");
+        end else begin
+            $display("TB_GATE_CLIP PASS");
         end
         release dut.r_x;
         release dut.r_y;

@@ -27,6 +27,7 @@ switch ($Tb) {
     "tb_cv_ball"           { $rtlFiles += "rtl\cv\cv_top.v"; $rtlFiles += "rtl\video\mi_digit_rom.v" }
     "tb_count_order"       { $rtlFiles += "rtl\cv\cv_top.v"; $rtlFiles += "rtl\video\mi_digit_rom.v" }
     "tb_test_pattern"      { $rtlFiles += "rtl\video\test_pattern.v"; $rtlFiles += "rtl\video\tp_text_rom.v" }
+    "tb_seg_count_display" { $rtlFiles += "rtl\video\seg_count_display.v" }
     default { Write-Error "Unknown testbench: $Tb (register its RTL in this script)"; exit 2 }
 }
 
