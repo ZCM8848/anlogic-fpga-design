@@ -39,6 +39,7 @@ extern void al_simp_putchar(char c);
 #define BCD_COUNT   (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x44))
 #define BALL_RUN_CFG (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x48))
 #define SKIP_CNT    (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x4C))
+#define KEY_EVT     (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x50))
 
 #define VER_MAGIC   0x4D435602U
 
@@ -709,6 +710,21 @@ static void write_count_bcd(void)
     BCD_COUNT = bcd;
 }
 
+/* KEY1 长按：清零 Count 与全部轨迹，下一帧从干净状态开始 */
+static void reset_count_and_tracks(void)
+{
+    int i;
+    count = 0;
+    OV_COUNT = 0;
+    BCD_COUNT = 0;
+    n_det = 0;
+    next_id = 1;
+    for (i = 0; i < MAX_TRK; i++) {
+        trk[i].valid = 0;
+        trk[i].visible = 0;
+    }
+}
+
 static void report_debug(uint32_t frame, int run_cnt, int ovf)
 {
     int i;
@@ -800,6 +816,11 @@ int main(void)
     uint32_t last_frame = FRAME_REG;
 
     while (1) {
+        if (KEY_EVT & 1u) {
+            reset_count_and_tracks();
+            KEY_EVT = 1u;                 /* write 1 clear */
+            al_simp_printf("KEY1 RESET count/tracks\r\n");
+        }
         uint32_t fr = FRAME_REG;
         if (fr != last_frame) {
             last_frame = fr;

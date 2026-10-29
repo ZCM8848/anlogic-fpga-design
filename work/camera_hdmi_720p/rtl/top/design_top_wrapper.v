@@ -46,7 +46,7 @@ module design_top_wrapper (
     input  wire        I_sw2,            // B4（调试子选：0=静态测试图案，1=动态调试画面）
     input  wire        I_sw4,            // D11（保留/留空）
     input  wire        I_sw3,            // E11（保留；当前不控制识别态 UI，仍进 SW_STAT）
-    input  wire        I_key1,           // D5 板载 KEY1（动态调试：RGB → score → mask）
+    input  wire        I_key1,           // D5 板载 KEY1（短按：动态调试 RGB/score/mask；长按>=1s：清零 Count+轨迹）
     input  wire        I_key2,           // A9 板载 KEY2（CV 叠加开关：按下切换 CV 开/关）
     input  wire        I_key3,           // B9 板载 KEY3（CV 开时：阈值 -1）
     input  wire        I_key4,           // C7 板载 KEY4（CV 开时：阈值 +1）
@@ -528,22 +528,40 @@ module design_top_wrapper (
     wire S_debug_static  = S_debug_mode & ~S_sw2_sync_pix[2];
     wire S_camera_sel    = ~S_debug_static;   // 0=测试图案，1=摄像头/CV
 
-    // KEY1=D5：动态调试画面循环 RGB(纯净) -> score -> mask
+    // KEY1=D5：短按动态调试循环 RGB(纯净) -> score -> mask
+    //             长按 >=1s：发出 KEY_EVT，MCU 清零计数与轨迹
     reg [20:0] r_key1_cnt;
     reg [2:0]  r_key1_sync;
     reg        r_key1_d;
+    reg [7:0]  r_key1_hold;
+    reg        r_key1_long_done;
+    reg        S_key1_long;
     reg [1:0]  S_disp_mode;
     wire       key1_fall = ~r_key1_sync[2] & r_key1_d;
     always @(posedge S_pixel_clk or negedge S_rst_n_pix) begin
         if (!S_rst_n_pix) begin
             r_key1_cnt <= 21'd0; r_key1_sync <= 3'd0; r_key1_d <= 1'b0;
+            r_key1_hold <= 8'd0; r_key1_long_done <= 1'b0; S_key1_long <= 1'b0;
             S_disp_mode <= 2'd3;
         end else begin
             r_key1_sync <= {r_key1_sync[1:0], I_key1};
             if (r_key1_cnt == 21'd1048575) begin   // ~14ms @75MHz
                 r_key1_cnt <= 21'd0;
                 r_key1_d   <= r_key1_sync[2];
-                if (key1_fall && S_debug_dynamic) begin
+                if (!r_key1_sync[2]) begin
+                    if (r_key1_hold < 8'd70) r_key1_hold <= r_key1_hold + 8'd1;
+                    if (r_key1_hold == 8'd69) begin
+                        S_key1_long     <= 1'b1;
+                        r_key1_long_done <= 1'b1;
+                    end else begin
+                        S_key1_long <= 1'b0;
+                    end
+                end else begin
+                    r_key1_hold      <= 8'd0;
+                    S_key1_long      <= 1'b0;
+                    r_key1_long_done <= 1'b0;
+                end
+                if (key1_fall && S_debug_dynamic && !r_key1_long_done) begin
                     if (S_disp_mode == 2'd3)      S_disp_mode <= 2'd1;
                     else if (S_disp_mode == 2'd1) S_disp_mode <= 2'd2;
                     else                          S_disp_mode <= 2'd3;
@@ -886,6 +904,7 @@ module design_top_wrapper (
         .I_min_y       ( S_cv_min_y         ),
         .I_max_y       ( S_cv_max_y         ),
         .I_vsync       ( S_hdmi_vsync       ),
+        .I_key1_long   ( S_key1_long        ),
         .I_skip_roi_cnt( S_skip_roi_cnt     ),
         .I_skip_len_cnt( S_skip_len_cnt     ),
         // 钢珠前端参数（C 固件唯一定义）

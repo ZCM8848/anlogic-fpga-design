@@ -487,13 +487,13 @@ module cv_top #(
         if (r_x>=CNT_X && r_x<CNT_X+CNT_W && r_y>=CNT_Y && r_y<CNT_Y+CNT_H) begin
             dg_row = (r_y - CNT_Y) >> CNT_SCALE_SHIFT;
             dg_col = (r_x - CNT_X) >> CNT_SCALE_SHIFT;  // 0..39
-            cnt_idx = dg_col[5:3];         // 0..4（每 8px 一位）
+            cnt_idx = dg_col[5:3];         // 0..4（左→右：万→个）
             case (cnt_idx)
-                3'd0: cnt_nib = I_count_bcd[3:0];
-                3'd1: cnt_nib = I_count_bcd[7:4];
-                3'd2: cnt_nib = I_count_bcd[11:8];
-                3'd3: cnt_nib = I_count_bcd[15:12];
-                3'd4: cnt_nib = I_count_bcd[19:16];
+                3'd0: cnt_nib = I_count_bcd[19:16];  // 万位（左）
+                3'd1: cnt_nib = I_count_bcd[15:12];  // 千位
+                3'd2: cnt_nib = I_count_bcd[11:8];   // 百位
+                3'd3: cnt_nib = I_count_bcd[7:4];    // 十位
+                3'd4: cnt_nib = I_count_bcd[3:0];    // 个位（右）
                 default: cnt_nib = 4'h0;
             endcase
             if (dg_col[2:0] < 5) begin     // 位内 col 0-4 画字模，5-7 间隙

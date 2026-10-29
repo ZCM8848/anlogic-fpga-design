@@ -221,6 +221,9 @@ MCU 通过 AHB-Lite 访问 `0x8000_0000`：
 | 0x44 | BCD_COUNT | W | 5 位 BCD 计数（给数码管/HDMI） |
 | 0x48 | BALL_RUN_CFG | W | `[8:0]=roi_y1`，`[19:10]=max_run_len` |
 | 0x4C | SKIP_CNT | R | `[15:0]=ROI 丢弃 run 数`，`[31:16]=超长 run 丢弃数` |
+| 0x50 | KEY_EVT | R/W | `[0]=KEY1 长按事件`；写 1 清零 |
+
+> KEY1 长按 ≥1s：FPGA 置 `KEY_EVT[0]`，MCU 清零 Count / OV_COUNT / BCD_COUNT 并清空全部轨迹。
 
 `run_mem` 项格式：`{2'b0, y[7:0], 2'b0, xs[8:0], 2'b0, xe[8:0]}`（32 bit，320×180 坐标）。
 `overlay` 项格式：`{valid, id[3:0], x0[11:0], y0[11:0], x1[11:0], y1[11:0]}`（64 bit，1280×720 坐标）。
