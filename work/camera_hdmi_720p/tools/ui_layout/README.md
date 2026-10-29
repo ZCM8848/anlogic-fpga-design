@@ -6,7 +6,7 @@
 
 ## 能做什么
 
-- 11 种可放置元素：安路 Logo、钢珠计数、OSD 文本、帧计数、标签、调试统计、球框样例、门线、检测 ROI、十字准线、彩条。
+- 12 种可放置元素：安路 Logo、钢珠计数、当前球数、OSD 文本、帧计数、标签、调试统计、球框样例、门线、检测 ROI、十字准线、彩条。
 - 拖拽移动，或右侧直接输入 `X / Y / W / H` 精确排版。
 - 网格吸附、元素边缘/中心对齐吸附、画布中心吸附；按住 `Alt` 临时关闭吸附。
 - 8 个缩放手柄；`Shift` 拖拽锁定单轴。
@@ -80,8 +80,8 @@
 `define UI_COUNT_Y 12'd638
 `define UI_COUNT_W 12'd150
 `define UI_COUNT_H 12'd34
-`define UI_COUNT_SCALE_SHIFT 12'd2
-`define UI_COUNT_SCALE 4
+`define UI_DETECTED_X 12'd24
+`define UI_DETECTED_Y 12'd204
 ...
 `define UI_EL0_X 12'd24
 ...
@@ -97,8 +97,8 @@
 #define UI_COUNT_Y 638
 #define UI_COUNT_W 150
 #define UI_COUNT_H 34
-#define UI_COUNT_SCALE_SHIFT 2
-#define UI_COUNT_SCALE 4
+#define UI_DETECTED_X 24
+#define UI_DETECTED_Y 204
 ```
 
 ## 与当前 RTL 的对应关系
@@ -106,14 +106,15 @@
 | 工具元素 | RTL 参数 | 当前状态 |
 |---|---|---|
 | 安路 Logo | `hdmi_mixer.v` → `LOGO_X / LOGO_Y` | X/Y 可直接写回；Logo ROM 固定 160×160，W/H 仅预览 |
-| 钢珠计数 | `cv_top.v` → `CNT_X / CNT_Y / CNT_W / CNT_H / CNT_SCALE_SHIFT` | X/Y 直接写回；W/H 换算成 1/2/4/8 倍整数缩放（150×34 → 4×，实际 160×28） |
+| 钢珠计数 | `cv_top.v` → `CNT_X / CNT_Y / CNT_W / CNT_H` | X/Y/W/H 直接写回；MiSans 30×34 数字，标准 150×34 |
+| 当前球数 | `hdmi_mixer.v` → `DETECTED_X / DETECTED_Y` | X/Y 可直接写回；`DETECTED N` ROM 固定 112×20，W/H 仅预览 |
 | OSD 文本 | `hdmi_mixer.v` → `DYN_OSD_X / DYN_OSD_Y` | X/Y 可直接写回；W/H 仅预览 |
 | 门线 | 检测逻辑固定 `x = 0.30 × 1280 = 384` | 仅预览，移动不会改变检测 |
 | 检测 ROI | MCU `roi_y1`（小分辨率 166 → 全分辨率 664） | 仅预览 |
 | 球框 | 运行时动态叠加 | 仅样例 |
 | 帧计数 / 标签 / 调试统计 / 十字 / 彩条 | 固件或后续功能 | 规划位置用 |
 
-> Count 的 W/H 是 **1/2/4/8 倍整数缩放**，实际尺寸为 40/80/160/320 × 7/14/28/56；任意字号仍需要 24×24 字库。Logo / OSD 的 W/H 目前仅预览。
+> Count 现在是 MiSans 30×34 数字，5 位总宽 150、总高 34；Logo / 当前球数 / OSD 的 W/H 目前仅预览。所有可见文字统一使用 MiSans Medium 1-bit ROM。
 
 ## 写回 RTL：apply_layout.py
 
@@ -127,7 +128,7 @@ python tools/ui_layout/apply_layout.py path/to/ui_layout.json --dry-run
 python tools/ui_layout/apply_layout.py path/to/ui_layout.json
 ```
 
-脚本只替换 `localparam ... = 12'dN;` 中的数字，保留原有换行和其余格式；Count 额外写 `CNT_W / CNT_H / CNT_SCALE_SHIFT`；Logo / OSD 的 W/H 不改，也不会动门线/ROI。写回后需要重新综合：
+脚本只替换 `localparam ... = 12'dN;` 中的数字，保留原有换行和其余格式；Count 额外写 `CNT_W / CNT_H`；Logo / 当前球数 / OSD 的 W/H 不改，也不会动门线/ROI。写回后需要重新综合：
 
 ```text
 syn_1 -> phy_1 -> 新 bit -> 上板
@@ -137,8 +138,8 @@ syn_1 -> phy_1 -> 新 bit -> 上板
 
 | 预设 | 内容 |
 |---|---|
-| 当前 RTL 布局 | Logo `(0,0,160,160)`，动态 OSD `(375,120,200,24)`，Count `(24,56,40,7)` |
-| 比赛 OSD（Logo + 计数） | Logo 左上 160×160，Count 左下 150×34，右上赛事文本，右下帧计数 |
+| 当前 RTL 布局 | Logo `(0,0,160,160)`，动态 OSD `(375,120,200,24)`，Count `(24,56,150,34)` |
+| 比赛 OSD（Logo + 计数） | Logo 左上 160×160，Count 左下 150×34，左上赛事文本，Count 上方 `DETECTED N`，右下帧计数 |
 | 调试叠加 | ROI、门线 x=384、左上 Count、调试统计、球框样例、十字 |
 | 空白画布 | 清空 |
 
@@ -146,21 +147,26 @@ syn_1 -> phy_1 -> 新 bit -> 上板
 
 - Logo `(24,24)` 160×160
 - 标签 `STEEL BALL (24,612)`
-- Count `(24,638)` 150×34 → RTL 4× 整数缩放，实际 160×28
+- Count `(24,638)` 150×34（MiSans 30×34 × 5）
 - OSD 文本 `(24,172)`
+- 当前球数 `DETECTED N (184,652)` 112×20（Count 右侧）
 - 帧计数 `(24,680)`
 
 ## MiSans Medium 1-bit（已应用）
 
-识别态静态文字现在由 MiSans Medium 1-bit ROM 渲染：
+所有可见文字由 MiSans Medium 1-bit ROM 渲染：
 
-- 生成脚本：`gen_ui_text_rom.py`
-- RTL ROM：`rtl/video/ui_text_rom.v`
+- 生成脚本：`gen_ui_text_rom.py`、`gen_mi_fonts.py`
+- RTL ROM：`rtl/video/ui_text_rom.v`、`mi_digit_rom.v`、`detected_text_rom.v`、`tp_text_rom.v`
 - `STEEL BALL`：160×18
 - `Anlogic HX1P35A`：160×24
 - `FRAME` 前缀：80×20
 - 帧计数数字：16×20 × 10
-- 预览图：`misans_text_preview.png`
+- Count：30×34 × 10
+- 球框 ID：8×12 × 10
+- `DETECTED ` 前缀：96×20；数字 16×20
+- 测试图案 `HDMI TEST 1280X720`：288×20
+- 预览图：`misans_text_preview.png`、`misans_more_preview.png`
 
 排布器画布里的文字仍是浏览器系统字体（只用于排版示意）；实际 FPGA 输出使用上面的 MiSans ROM。
 
@@ -168,8 +174,9 @@ syn_1 -> phy_1 -> 新 bit -> 上板
 
 - 预览里的“安路 Logo”由 `anlogic_logo_rom.v` 导出的 160×160 PNG（`logo_anlogic.png`）渲染，透明底；实际 OSD 仍是同一 Logo ROM。
 - Logo 的 W/H 只改变预览缩放，不会缩放 RTL 的 160×160 ROM；写回脚本只应用 X/Y。
-- Count 的 W/H 按 1/2/4/8 倍整数缩放写回，不是任意尺寸；150×34 对应 4×（160×28）。
-- `STEEL BALL`、`Anlogic HX1P35A`、`FRAME 000123` 已在识别态（SW1=0）由 MiSans ROM 渲染；调试态/测试图案下关闭。
+- Count 使用固定 30×34 的 MiSans 数字位图，不支持任意字号；标准 5 位尺寸 150×34。
+- `STEEL BALL`、`Anlogic HX1P35A`、`FRAME 000123`、`DETECTED N` 已在识别态（SW1=0）由 MiSans ROM 渲染；调试态/测试图案下关闭。
+- 测试图案顶部文字、球框 ID、Count 也全部使用 MiSans ROM。
 - PNG 导出会临时关闭网格/安全框/选择框，输出 1280×720 纯画面。
 - 背景图只存在浏览器内存，不写入 JSON，也不参与导出。
 - 识别态 UI 由 `S_ui_on = ~SW1` 统一开关；SW3 不再控制这套 UI。
@@ -182,9 +189,11 @@ tools/ui_layout/
 ├─ index.html          # 页面结构
 ├─ style.css           # 深色 UI
 ├─ app.js              # 编辑器 / 渲染 / 导出
-├─ apply_layout.py     # JSON -> RTL X/Y + Count 整数缩放
+├─ apply_layout.py     # JSON -> RTL X/Y + Count 尺寸
 ├─ gen_ui_text_rom.py  # MiSans Medium -> 1-bit 静态文字 ROM
+├─ gen_mi_fonts.py     # MiSans -> Count / ID / DETECTED / 测试图案 ROM
 ├─ misans_text_preview.png
+├─ misans_more_preview.png
 ├─ logo_anlogic.png    # 从 Logo ROM 导出的 160×160 预览图
 ├─ preview.png         # 完整界面截图
 ├─ preview_canvas.png  # 纯画面预览（1280×720）

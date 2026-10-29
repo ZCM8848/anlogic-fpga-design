@@ -59,12 +59,25 @@
       "locked": false
     },
     {
+      "id": "el_mvsbl7b4_6",
+      "type": "detected",
+      "name": "当前球数",
+      "x": 184,
+      "y": 652,
+      "w": 112,
+      "h": 20,
+      "color": "#8be9fd",
+      "text": "DETECTED 3",
+      "visible": true,
+      "locked": false
+    },
+    {
       "id": "el_mvsbl7b4_5",
       "type": "frame",
       "name": "帧计数",
       "x": 24,
       "y": 680,
-      "w": 240,
+      "w": 248,
       "h": 20,
       "color": "#9aa7bd",
       "text": "FRAME 000123",

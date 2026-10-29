@@ -22,10 +22,11 @@ switch ($Tb) {
     "tb_apb_status_slave"  { $rtlFiles += "rtl\mcu\apb_status_slave.v" }
     "tb_ahb_status_slave"  { $rtlFiles += "rtl\mcu\ahb_status_slave.v" }
     "tb_video_mux"         { $rtlFiles += "rtl\video\video_mux.v" }
-    "tb_hdmi_logo"         { $rtlFiles += "rtl\video\hdmi_mixer.v"; $rtlFiles += "rtl\video\anlogic_logo_rom.v"; $rtlFiles += "rtl\video\osd_char_lib.v"; $rtlFiles += "rtl\video\ui_text_rom.v" }
-    "tb_ui_overlay"        { $rtlFiles += "rtl\video\hdmi_mixer.v"; $rtlFiles += "rtl\video\anlogic_logo_rom.v"; $rtlFiles += "rtl\video\osd_char_lib.v"; $rtlFiles += "rtl\video\ui_text_rom.v" }
-    "tb_cv_ball"           { $rtlFiles += "rtl\cv\cv_top.v" }
-    "tb_count_order"       { $rtlFiles += "rtl\cv\cv_top.v" }
+    "tb_hdmi_logo"         { $rtlFiles += "rtl\video\hdmi_mixer.v"; $rtlFiles += "rtl\video\anlogic_logo_rom.v"; $rtlFiles += "rtl\video\osd_char_lib.v"; $rtlFiles += "rtl\video\ui_text_rom.v"; $rtlFiles += "rtl\video\mi_digit_rom.v"; $rtlFiles += "rtl\video\detected_text_rom.v" }
+    "tb_ui_overlay"        { $rtlFiles += "rtl\video\hdmi_mixer.v"; $rtlFiles += "rtl\video\anlogic_logo_rom.v"; $rtlFiles += "rtl\video\osd_char_lib.v"; $rtlFiles += "rtl\video\ui_text_rom.v"; $rtlFiles += "rtl\video\mi_digit_rom.v"; $rtlFiles += "rtl\video\detected_text_rom.v" }
+    "tb_cv_ball"           { $rtlFiles += "rtl\cv\cv_top.v"; $rtlFiles += "rtl\video\mi_digit_rom.v" }
+    "tb_count_order"       { $rtlFiles += "rtl\cv\cv_top.v"; $rtlFiles += "rtl\video\mi_digit_rom.v" }
+    "tb_test_pattern"      { $rtlFiles += "rtl\video\test_pattern.v"; $rtlFiles += "rtl\video\tp_text_rom.v" }
     default { Write-Error "Unknown testbench: $Tb (register its RTL in this script)"; exit 2 }
 }
 

@@ -20,10 +20,16 @@ module tb_ahb_status_slave;
 
     // 状态输入
     reg [15:0] cam_id = 0; reg cam_id_ok=0, cam_i2c_err=0, cam_cfg_done=0;
-    reg        ddr_rdy=0, sw4=0, sw3=0, cv_on=0;
+    reg        ddr_rdy=0, sw4=0, sw3=0, sw2=0, sw1=0, cv_on=0;
     reg [5:0]  blob_cnt=0; reg [7:0] bin_thr=0; reg [10:0] run_cnt=0;
-    reg        ccl_busy=0, run_overflow=0;
+    reg        run_overflow=0;
     reg        vsync = 0;
+    reg        key1_long = 0;
+    reg [15:0] skip_roi_cnt = 0;
+    reg [15:0] skip_len_cnt = 0;
+    reg        ball_bg_ready = 0;
+    reg        ball_capturing = 0;
+    reg [31:0] run_rd_data = 0;
     wire [31:0] heartbeat, scratch, frame_cnt;
 
     integer npass = 0, nfail = 0;
@@ -36,10 +42,19 @@ module tb_ahb_status_slave;
         .O_hrdata(hrdata), .O_hreadyout(hreadyout), .O_hresp(hresp),
         .I_cam_id(cam_id), .I_cam_id_ok(cam_id_ok), .I_cam_i2c_err(cam_i2c_err),
         .I_cam_cfg_done(cam_cfg_done), .I_ddr_rdy(ddr_rdy),
-        .I_sw4(sw4), .I_sw3(sw3), .I_cv_on(cv_on), .I_blob_cnt(blob_cnt),
+        .I_sw1(sw1), .I_sw2(sw2), .I_sw4(sw4), .I_sw3(sw3),
+        .I_cv_on(cv_on), .I_blob_cnt(blob_cnt),
         .I_bin_thr(bin_thr), .I_run_cnt(run_cnt),
-        .I_ccl_busy(ccl_busy), .I_run_overflow(run_overflow),
+        .I_run_overflow(run_overflow),
         .I_vsync(vsync),
+        .I_key1_long(key1_long),
+        .I_skip_roi_cnt(skip_roi_cnt), .I_skip_len_cnt(skip_len_cnt),
+        .I_ball_bg_ready(ball_bg_ready), .I_ball_capturing(ball_capturing),
+        .I_run_rd_data(run_rd_data),
+        .O_run_rd_addr(),
+        .O_overlay(), .O_count(), .O_count_bcd(), .O_ball_now(),
+        .O_ball_en(), .O_ball_bg_thr(), .O_ball_min_run(),
+        .O_ball_roi_y1(), .O_ball_max_run_len(), .O_ball_capture(),
         .O_heartbeat(heartbeat), .O_scratch(scratch), .O_frame_cnt(frame_cnt)
     );
 
@@ -104,9 +119,9 @@ module tb_ahb_status_slave;
         chk("CAM_REG", rd, exp_cam);
 
         // === 3. CV_REG ===
-        bin_thr=8'h5B; run_cnt=11'h140; ccl_busy=1; run_overflow=0;
+        bin_thr=8'h5B; run_cnt=11'h140; run_overflow=0;
         repeat (4) @(negedge hclk);
-        exp_cv = {8'h5B, 1'b0, 11'h140, 1'b1, 1'b0, 1'b0, frame_cnt[7:0]};
+        exp_cv = {8'h5B, 3'b000, 11'h140, 2'b00, frame_cnt[7:0]};
         ahb_read(32'h04, rd);
         chk("CV_REG", rd, exp_cv);
 
@@ -145,7 +160,13 @@ module tb_ahb_status_slave;
         ahb_read(32'h14, rd);
         chk("SCRATCH halfword low merge (bytes1:0=0x7777)", rd, 32'h00FF7777);
 
-        // === 7. 未映射地址读 = 0 ===
+        // === 7. BALL_NOW @0x54 ===
+        ahb_write(32'h54, 32'd5, 3'b010);
+        repeat (2) @(negedge hclk);
+        ahb_read(32'h54, rd);
+        chk("BALL_NOW readback", rd, 32'd5);
+
+        // === 8. 未映射地址读 = 0 ===
         ahb_read(32'h3C, rd);
         chk("unmapped read", rd, 32'h0);
 

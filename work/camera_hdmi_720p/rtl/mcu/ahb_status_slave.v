@@ -31,6 +31,7 @@
 //   0x48 BALL_RUN_CFG [8:0]=roi_y1 [19:10]=max_run_len（前端 run 过滤）
 //   0x4C SKIP_CNT  [15:0]=ROI 丢弃 run 数 [31:16]=超长 run 丢弃数（只读）
 //   0x50 KEY_EVT   [0]=KEY1 长按事件（写 1 清零；MCU 清零 count/tracks）
+//   0x54 BALL_NOW  [3:0]=当前实际框住的球数（MCU 每帧写 oi，0..8）
 //
 // overlay 项字段（64bit = {W0[31:0], W1[31:0]}，cv_top 叠加解析）：
 //   [63] valid  [62:59] id[3:0]  [58:47] x0[11:0]  [46:35] y0[11:0]  [34:32] pad
@@ -100,6 +101,7 @@ module ahb_status_slave #(
     output wire [511:0] O_overlay,
     output wire [15:0]  O_count,
     output wire [19:0]  O_count_bcd,
+    output wire [3:0]   O_ball_now,
 
     // ---- MCU 写回暴露 ----
     output wire [31:0] O_heartbeat,
@@ -209,8 +211,10 @@ module ahb_status_slave #(
     reg [31:0] r_ov_w0;
     reg [15:0] S_count;
     reg [19:0] S_count_bcd;
+    reg [3:0]  S_ball_now;
     assign O_count = S_count;
     assign O_count_bcd = S_count_bcd;
+    assign O_ball_now = S_ball_now;
 
     // overlay 总线打包：{ov7, ov6, ..., ov0}
     assign O_overlay = {S_overlay[7], S_overlay[6], S_overlay[5], S_overlay[4],
@@ -281,6 +285,7 @@ module ahb_status_slave #(
                 5'h12: rdata_mux = S_ball_run_cfg;    // 0x48: [8:0]=roi_y1 [19:10]=max_run_len
                 5'h13: rdata_mux = SKIP_REG;          // 0x4C: [15:0]=skip_roi [31:16]=skip_len
                 5'h14: rdata_mux = {31'b0, S_key1_evt}; // 0x50: KEY_EVT, write 1 clear
+                5'h15: rdata_mux = {28'b0, S_ball_now}; // 0x54: current boxed balls
                 default: rdata_mux = 32'h0;
             endcase
         end
@@ -301,6 +306,7 @@ module ahb_status_slave #(
             r_ov_w0   <= 32'd0;
             S_count   <= 16'd0;
             S_count_bcd <= 20'd0;
+            S_ball_now <= 4'd0;
             S_ball_en <= 1'b0; S_ball_capture <= 1'b0; S_ball_thr <= 16'd0;
             S_ball_run_cfg <= 32'h0003_20A6;   // roi_y1=166, max_run_len=200
             S_key1_evt <= 1'b0;
@@ -323,6 +329,7 @@ module ahb_status_slave #(
                     5'h0A: S_overlay[r_ov_idx] <= {r_ov_w0, I_hwdata};  // OV_W1 触发提交
                     5'h0C: S_count      <= I_hwdata[15:0];              // OV_COUNT
                     5'h11: S_count_bcd  <= I_hwdata[19:0];              // BCD_COUNT @0x44
+                    5'h15: S_ball_now   <= I_hwdata[3:0];               // BALL_NOW @0x54
                     5'h12: S_ball_run_cfg <= I_hwdata;                  // BALL_RUN_CFG @0x48
                     5'h14: if (I_hwdata[0]) S_key1_evt <= 1'b0;         // KEY_EVT: write 1 clear
                     5'h0D: begin                                       // BALL_CTRL

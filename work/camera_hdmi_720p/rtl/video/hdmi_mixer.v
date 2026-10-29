@@ -15,6 +15,7 @@ module hdmi_mixer #(
     input wire        I_video_last,
     input wire        I_osd_on,
     input wire        I_ui_on,
+    input wire [3:0]  I_ball_now,
 
     input wire[3:0]   I_debug_status,
 
@@ -137,6 +138,15 @@ module hdmi_mixer #(
     localparam UI_COLOR_LABEL    = 24'h8be9fd;
     localparam UI_COLOR_TEXT     = 24'hfff200;
     localparam UI_COLOR_FRAME    = 24'h9aa7bd;
+    localparam UI_COLOR_DETECTED = 24'h8be9fd;
+
+    // 识别态 "DETECTED N"（当前实际框住的球数）
+    localparam DETECTED_X        = 12'd184;
+    localparam DETECTED_Y        = 12'd652;
+    localparam DETECTED_W        = 12'd112;
+    localparam DETECTED_H        = 12'd20;
+    localparam DET_PREFIX_W      = 12'd96;
+    localparam DET_DIGIT_W       = 12'd16;
     localparam CHAR_AN           = 8'h80;
     localparam CHAR_LU           = 8'h81;
     localparam CHAR_C            = 8'h43;
@@ -510,6 +520,43 @@ module hdmi_mixer #(
     wire [3:0] S_frame_digit_idx = S_frame_lx[7:4] - 4'd5;
     wire [3:0] S_frame_digit_x   = S_frame_lx[3:0];
     wire       S_label_bit, S_text_bit, S_frame_prefix_bit, S_frame_digit_bit;
+
+    // DETECTED N（MiSans 前缀 + 1 位数字）
+    wire [6:0] S_det_lx = S_x_2d - DETECTED_X;
+    wire [4:0] S_det_ly = S_y_2d - DETECTED_Y;
+    wire       S_det_prefix_bit, S_det_digit_bit;
+    reg  [3:0] S_ball_now_1d, S_ball_now;
+
+    always @(posedge I_clk or negedge I_rst_n) begin
+        if (!I_rst_n) begin
+            S_ball_now_1d <= 4'd0;
+            S_ball_now    <= 4'd0;
+        end else begin
+            S_ball_now_1d <= I_ball_now;
+            S_ball_now    <= S_ball_now_1d;
+        end
+    end
+
+    detected_text_rom u_detected_text_rom (
+        .I_X   ( S_det_lx[6:0]    ),
+        .I_Y   ( S_det_ly         ),
+        .O_BIT ( S_det_prefix_bit )
+    );
+
+    mi_digit_rom u_det_digit_rom (
+        .I_CNT_DIGIT ( 4'd0           ),
+        .I_CNT_X     ( 5'd0           ),
+        .I_CNT_Y     ( 6'd0           ),
+        .O_CNT       (                ),
+        .I_ID_DIGIT  ( 4'd0           ),
+        .I_ID_X      ( 4'd0           ),
+        .I_ID_Y      ( 4'd0           ),
+        .O_ID        (                ),
+        .I_SM_DIGIT  ( S_ball_now     ),
+        .I_SM_X      ( S_det_lx[3:0]  ),
+        .I_SM_Y      ( S_det_ly       ),
+        .O_SM        ( S_det_digit_bit)
+    );
 
     ui_text_rom u_ui_text_rom (
         .I_LABEL_X ( S_label_lx             ),
@@ -923,6 +970,23 @@ module hdmi_mixer #(
                     if(S_frame_digit_bit) begin
                         S_ui_text_hit   = 1'b1;
                         S_ui_text_color = UI_COLOR_FRAME;
+                    end
+                end
+            end
+
+            // 识别态 "DETECTED N"（当前实际框住的球数，MiSans 1-bit）
+            if((S_x_2d >= DETECTED_X) && (S_x_2d < (DETECTED_X + DETECTED_W)) &&
+               (S_y_2d >= DETECTED_Y) && (S_y_2d < (DETECTED_Y + DETECTED_H))) begin
+                if(S_det_lx < DET_PREFIX_W) begin
+                    if(S_det_prefix_bit) begin
+                        S_ui_text_hit   = 1'b1;
+                        S_ui_text_color = UI_COLOR_DETECTED;
+                    end
+                end
+                else if(S_det_lx < (DET_PREFIX_W + DET_DIGIT_W)) begin
+                    if(S_det_digit_bit) begin
+                        S_ui_text_hit   = 1'b1;
+                        S_ui_text_color = UI_COLOR_DETECTED;
                     end
                 end
             end

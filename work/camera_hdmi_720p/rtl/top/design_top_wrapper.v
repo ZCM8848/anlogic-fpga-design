@@ -610,6 +610,7 @@ module design_top_wrapper (
     wire        S_hdmi_out_hsync;
     wire        S_hdmi_out_de;
     wire [23:0] S_hdmi_out_data;
+    wire [3:0]  S_ball_now;       // slave → hdmi_mixer（当前框数）
 
     hdmi_mixer #(
         .H_OFFSET   ( 0    ),
@@ -627,6 +628,7 @@ module design_top_wrapper (
         .I_video_last    ( S_hdmi_last         ),
         .I_osd_on        ( 1'b0                ),
         .I_ui_on         ( S_ui_on             ),
+        .I_ball_now      ( S_ball_now          ),
         .I_debug_status  ( 4'd0                ),
         .O_video_rd_en   ( S_hdmi_window_rd_en ),
         .I_video_rd_data ( S_video_rd_data     ),
@@ -923,6 +925,7 @@ module design_top_wrapper (
         .O_overlay     ( S_overlay          ),
         .O_count       ( S_count            ),
         .O_count_bcd   ( S_count_bcd        ),
+        .O_ball_now    ( S_ball_now         ),
         .O_heartbeat   ( S_mcu_heartbeat    ),
         .O_scratch     ( S_mcu_scratch      ),
         .O_frame_cnt   ( S_mcu_frame_cnt    )

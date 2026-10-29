@@ -4,8 +4,9 @@
 应用范围：
 
     Logo      -> hdmi_mixer.v : LOGO_X / LOGO_Y            (ROM 固定 160x160，W/H 仅预览)
-    Count     -> cv_top.v      : CNT_X / CNT_Y / CNT_W / CNT_H / CNT_SCALE_SHIFT
-                                 (5x7 字模，按 W/H 换算 1/2/4/8 倍整数缩放)
+    Count     -> cv_top.v      : CNT_X / CNT_Y / CNT_W / CNT_H
+                                 (MiSans 30x34 数字，标准 150x34)
+    当前球数  -> hdmi_mixer.v : DETECTED_X / DETECTED_Y     (ROM 固定 112x20，W/H 仅预览)
     OSD 文本  -> hdmi_mixer.v : DYN_OSD_X / DYN_OSD_Y       (W/H 仅预览)
 
 门线、ROI、球框、标签、帧计数等属于“预览元素”，不会写回 RTL。
@@ -33,6 +34,7 @@ CV_TOP = PROJECT / "rtl" / "cv" / "cv_top.v"
 MAPPING = {
     "logo":     (HDMI_MIXER, "LOGO_X", "LOGO_Y", "安路 Logo"),
     "count":    (CV_TOP, "CNT_X", "CNT_Y", "钢珠计数"),
+    "detected": (HDMI_MIXER, "DETECTED_X", "DETECTED_Y", "当前球数"),
     "osd_text": (HDMI_MIXER, "DYN_OSD_X", "DYN_OSD_Y", "动态 OSD 文本"),
 }
 
@@ -74,20 +76,6 @@ def load_elements(path: Path):
     if not isinstance(data, dict) or not isinstance(data.get("elements"), list):
         raise ValueError("不是 UI Layout Studio 导出的 JSON（缺少 elements 数组）")
     return data["elements"]
-
-
-def count_scale_shift(w, h) -> int:
-    """把 Count 的 W/H 换算成 1/2/4/8 倍整数缩放（返回 shift）。"""
-    if not isinstance(w, (int, float)) or not isinstance(h, (int, float)):
-        return 0
-    desired = min(float(w) / 40.0, float(h) / 7.0)
-    if desired < 1.5:
-        return 0
-    if desired < 3.0:
-        return 1
-    if desired < 6.0:
-        return 2
-    return 3
 
 
 def main() -> int:
@@ -153,21 +141,25 @@ def main() -> int:
                 continue
             changes.append((path, name, old, value, changed))
 
-        # Count 额外写回整数缩放参数
+        # Count 额外写回尺寸（MiSans 30x34 数字，标准 150x34）
         if el_type == "count":
-            shift = count_scale_shift(el.get("w"), el.get("h"))
-            cw, ch = 40 << shift, 7 << shift
-            notes.append(f"{label}: {1 << shift}x 整数缩放 -> {cw}x{ch}")
-            for name, value in (("CNT_W", cw), ("CNT_H", ch), ("CNT_SCALE_SHIFT", shift)):
-                try:
-                    text, old, changed, count = patch_param(text, name, value)
-                except RuntimeError as exc:
-                    warnings.append(str(exc))
-                    continue
-                if count == 0:
-                    warnings.append(f"{path.name} 中找不到 {name}，计数缩放未启用")
-                    continue
-                changes.append((path, name, old, value, changed))
+            cw, ch = el.get("w"), el.get("h")
+            if not isinstance(cw, (int, float)) or not isinstance(ch, (int, float)):
+                warnings.append(f"{label} 的 W/H 不是数字，跳过 CNT_W/CNT_H")
+            else:
+                cw, ch = int(round(cw)), int(round(ch))
+                if (cw, ch) != (150, 34):
+                    warnings.append(f"{label} 建议尺寸 150x34，当前 {cw}x{ch} 可能裁剪数字")
+                for name, value in (("CNT_W", cw), ("CNT_H", ch)):
+                    try:
+                        text, old, changed, count = patch_param(text, name, value)
+                    except RuntimeError as exc:
+                        warnings.append(str(exc))
+                        continue
+                    if count == 0:
+                        warnings.append(f"{path.name} 中找不到 {name}，计数尺寸未启用")
+                        continue
+                    changes.append((path, name, old, value, changed))
 
         file_text[path] = text
 

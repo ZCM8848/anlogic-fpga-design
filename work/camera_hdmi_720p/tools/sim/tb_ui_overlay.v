@@ -11,6 +11,7 @@ module tb_ui_overlay;
     reg         last = 1'b0;
     reg         osd_on = 1'b0;
     reg         ui_on = 1'b1;
+    reg  [3:0]  ball_now = 4'd3;
     reg  [3:0]  debug_status = 4'd0;
     reg  [23:0] rd_data = 24'h112233;
 
@@ -30,6 +31,7 @@ module tb_ui_overlay;
         .I_video_last    ( last          ),
         .I_osd_on        ( osd_on        ),
         .I_ui_on         ( ui_on         ),
+        .I_ball_now      ( ball_now      ),
         .I_debug_status  ( debug_status  ),
         .O_video_rd_en   ( rd_en         ),
         .I_video_rd_data ( rd_data       ),
@@ -47,9 +49,12 @@ module tb_ui_overlay;
     integer label_hits = 0;
     integer text_hits = 0;
     integer frame_hits = 0;
+    integer det_prefix_hits = 0;
+    integer det_digit_hits = 0;
     integer label_first_x = -1;
     integer text_first_x = -1;
     integer frame_first_x = -1;
+    integer det_first_x = -1;
     integer logo_first_x = -1;
     integer logo_first_y = -1;
 
@@ -66,6 +71,11 @@ module tb_ui_overlay;
             if ((out_y >= 680) && (out_y < 700) && (hdmi_data == 24'h9aa7bd)) begin
                 if (frame_hits == 0) frame_first_x = out_x;
                 frame_hits = frame_hits + 1;
+            end
+            if ((out_y >= 652) && (out_y < 672) && (hdmi_data == 24'h8be9fd)) begin
+                if (det_first_x < 0) det_first_x = out_x;
+                if (out_x < 280) det_prefix_hits = det_prefix_hits + 1;
+                else if (out_x < 296) det_digit_hits = det_digit_hits + 1;
             end
             if ((logo_first_x < 0) && (hdmi_data == 24'hd3d4d8)) begin
                 logo_first_x = out_x;
@@ -106,9 +116,13 @@ module tb_ui_overlay;
         $display("LABEL hits=%0d first_x=%0d (y=612)", label_hits, label_first_x);
         $display("TEXT  hits=%0d first_x=%0d (y=172)", text_hits, text_first_x);
         $display("FRAME hits=%0d first_x=%0d (y=680)", frame_hits, frame_first_x);
+        $display("DET   prefix=%0d digit=%0d first_x=%0d (y=652, N=3)",
+                 det_prefix_hits, det_digit_hits, det_first_x);
 
         if ((logo_first_x == 78) && (logo_first_y == 58) &&
-            (label_hits > 0) && (text_hits > 0) && (frame_hits > 0))
+            (label_hits > 0) && (text_hits > 0) && (frame_hits > 0) &&
+            (det_prefix_hits > 0) && (det_digit_hits > 0) &&
+            (det_first_x >= 184) && (det_first_x <= 300))
             $display("TB_UI_OVERLAY PASS");
         else
             $display("TB_UI_OVERLAY FAIL");

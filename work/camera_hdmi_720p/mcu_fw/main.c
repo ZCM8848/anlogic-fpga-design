@@ -40,6 +40,7 @@ extern void al_simp_putchar(char c);
 #define BALL_RUN_CFG (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x48))
 #define SKIP_CNT    (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x4C))
 #define KEY_EVT     (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x50))
+#define BALL_NOW    (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x54))
 
 #define VER_MAGIC   0x4D435602U
 
@@ -88,7 +89,7 @@ typedef struct {
     int track_gate;             /* 最近邻关联半径（320 尺度，欧氏距离） */
     int max_miss;               /* 连续丢失多少帧删轨迹 */
     int min_hits;               /* 确认所需命中数 */
-    int min_move;               /* 总位移门限（320 尺度，约 0.2D=9） */
+    int min_move;               /* 总位移门限（320 尺度；默认约 0.2D=9，现场调为 5） */
     int min_window;             /* 最近 5 帧位移门限（320 尺度，约 0.5D=21） */
     int vx_max;                 /* 左向速度门限（320 尺度，负数，约 -1） */
     int static_max_age;         /* 静态轨迹最多存活帧数 */
@@ -126,7 +127,7 @@ static const vision_params_t VISION_PARAMS = {
     .track_gate          = 55,    /* 220 / 4 */
     .max_miss            = 5,
     .min_hits            = 2,
-    .min_move            = 9,     /* 0.2 * 171 / 4 */
+    .min_move            = 5,     /* 现场调优 5（原 0.2D≈9），慢速球更早确认 */
     .min_window          = 21,    /* 0.5 * 171 / 4 */
     .vx_max              = -1,
     .static_max_age      = 30,
@@ -640,6 +641,7 @@ static void write_overlay(void)
         OV_W1 = w1;
         oi++;
     }
+    BALL_NOW = (uint32_t)oi;
 }
 
 static void report_params(void)
@@ -717,6 +719,7 @@ static void reset_count_and_tracks(void)
     count = 0;
     OV_COUNT = 0;
     BCD_COUNT = 0;
+    BALL_NOW = 0;
     n_det = 0;
     next_id = 1;
     for (i = 0; i < MAX_TRK; i++) {
@@ -731,9 +734,9 @@ static void report_debug(uint32_t frame, int run_cnt, int ovf)
     uint32_t sk = SKIP_CNT;
     int sr = (int)(sk & 0xFFFFu);
     int sl = (int)((sk >> 16) & 0xFFFFu);
-    al_simp_printf("D F=%d RUN=%d NC=%d DET=%d OVF=%d LBL=%d SR=%d SL=%d B=%d,%d,%d | ",
+    al_simp_printf("D F=%d RUN=%d NC=%d DET=%d OVF=%d LBL=%d SR=%d SL=%d BN=%d B=%d,%d,%d | ",
                    (int)(frame & 0xFFFFFFu), run_cnt, next_label, n_det, ovf,
-                   ccl_overflow, sr, sl,
+                   ccl_overflow, sr, sl, (int)(BALL_NOW & 0xFu),
                    bkt_a, bkt_b, bkt_c);
     for (i = 0; i < n_dbg; i++) {
         al_simp_putchar(dbg[i].pass ? '*' : '.');

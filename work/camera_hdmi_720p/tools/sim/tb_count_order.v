@@ -41,9 +41,9 @@ module tb_count_order;
         rst_n = 1'b1;
         repeat (2) @(posedge clk);
         // 左起第 1 位（万位）在 count=1 时应显示 '0'；
-        // '0' 的 row0=01110，local col=1 -> bit3=1，命中计数颜色。
-        force dut.r_x = 12'd29;   // CNT_X=24, dg_col=1, local col=1
-        force dut.r_y = 12'd638;  // CNT_Y
+        // MiSans 30x34 的 '0' 在 local (13,3) 有像素。
+        force dut.r_x = 12'd37;   // CNT_X=24 + 13
+        force dut.r_y = 12'd641;  // CNT_Y=638 + 3
         #2;
         if (O_data !== 24'h00E6FF) begin
             $display("FAIL leftmost digit expected count color, got %06h", O_data);

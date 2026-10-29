@@ -18,7 +18,8 @@
 
   const TYPES = {
     logo:      { label: '安路 Logo',  icon: '▣', prefix: 'LOGO',   w: 160, h: 160, color: '#1f315c', text: '',           hasText: false },
-    count:     { label: '钢珠计数',   icon: '#', prefix: 'COUNT',  w: 120, h: 24,  color: '#00e6ff', text: '00000',      hasText: true  },
+    count:     { label: '钢珠计数',   icon: '#', prefix: 'COUNT',  w: 150, h: 34,  color: '#00e6ff', text: '00000',      hasText: true  },
+    detected:  { label: '当前球数',   icon: '◉', prefix: 'DETECTED', w: 112, h: 20, color: '#8be9fd', text: 'DETECTED 3', hasText: false },
     osd_text:  { label: 'OSD 文本',   icon: 'A', prefix: 'OSD',    w: 200, h: 24,  color: '#fff200', text: 'ANLU FPGA',  hasText: true  },
     frame:     { label: '帧计数',     icon: 'F', prefix: 'FRAME',  w: 200, h: 22,  color: '#ffffff', text: 'FRAME 000123', hasText: true },
     label:     { label: '标签',       icon: 'T', prefix: 'LABEL',  w: 140, h: 20,  color: '#8be9fd', text: 'LABEL',      hasText: true  },
@@ -32,11 +33,12 @@
 
   const NOTES = {
     logo: 'RTL 中 Logo 是 160×160 的 ROM 图案：X/Y 可直接用于布局，W/H 目前仅作预览。',
-    count: '当前 RTL Count 是 5×7 字模；X/Y 直接生效，W/H 按 1/2/4/8 倍整数缩放写回（例如 150×34 → 4×，实际 160×28）。',
+    count: 'Count 使用 MiSans 30×34 数字；X/Y 直接生效，标准尺寸 150×34（5 位）。',
     gate: '识别门线固定为 x = 0.30·W = 384，移动它只改变预览，不会改变检测逻辑。',
     roi: '检测 ROI 由 MCU 参数 roi_y1 控制（小分辨率 166 → 全分辨率 664），此处仅预览。',
     box: '球框是运行时动态叠加，位置仅作样例参考。',
     debug: '调试统计文本由固件经串口/调试叠加上屏，布局用于规划位置。',
+    detected: '实时值来自 BALL_NOW（MCU 每帧写入实际绿框数 0..8）；X/Y 写回 hdmi_mixer 的 DETECTED_X/Y，W/H 仅预览。',
   };
 
   const PRESETS = {
@@ -49,7 +51,8 @@
       el('logo', 24, 24, { w: 160, h: 160, name: '安路 Logo' }),
       el('label', 24, 612, { w: 160, h: 18, text: 'STEEL BALL', name: '计数标题' }),
       el('count', 24, 638, { w: 150, h: 34, text: '00000', name: '钢珠计数' }),
-      el('osd_text', 1016, 24, { w: 240, h: 24, text: 'ANLU HX1P35A', name: '赛事文本' }),
+      el('osd_text', 24, 172, { w: 160, h: 24, text: 'Anlogic HX1P35A', name: '赛事文本' }),
+      el('detected', 184, 652, { w: 112, h: 20, text: 'DETECTED 3', name: '当前球数' }),
       el('frame', 1016, 676, { w: 240, h: 20, text: 'FRAME 000123', color: '#9aa7bd', name: '帧计数' }),
     ]),
     debug: () => ([
@@ -140,15 +143,6 @@
       visible: raw.visible !== false,
       locked: raw.locked === true,
     };
-  }
-
-  function countScaleShift(w, h) {
-    const desired = Math.min(Number(w) / 40, Number(h) / 7);
-    if (!Number.isFinite(desired)) return 0;
-    if (desired < 1.5) return 0;
-    if (desired < 3) return 1;
-    if (desired < 6) return 2;
-    return 3;
   }
 
   function uniqueName(base) {
@@ -319,6 +313,7 @@
     switch (item.type) {
       case 'logo': drawLogo(c, w, h, item); break;
       case 'count': drawCount(c, w, h, color, item.text); break;
+      case 'detected': drawDetected(c, w, h, color, item.text); break;
       case 'osd_text':
       case 'frame':
       case 'label':
@@ -407,14 +402,26 @@
     c.globalAlpha = 1;
 
     const cell = w / 5;
-    const fs = Math.min(h * 1.30, cell * 2.0);
-    c.font = `700 ${fs}px ${MONO}`;
+    const fs = Math.min(h * 0.96, cell * 1.12);
+    c.font = `600 ${fs}px ${SANS}`;
     c.textAlign = 'center';
     c.textBaseline = 'middle';
     c.fillStyle = color;
     for (let i = 0; i < 5; i++) {
       c.fillText(digits[i], cell * i + cell / 2, h * 0.53);
     }
+    c.restore();
+  }
+
+  function drawDetected(c, w, h, color, text) {
+    c.save();
+    c.font = `600 ${Math.max(6, h * 0.78)}px ${SANS}`;
+    c.textAlign = 'left';
+    c.textBaseline = 'middle';
+    c.shadowColor = 'rgba(0, 0, 0, 0.9)';
+    c.shadowBlur = Math.max(2, h * 0.25 / state.zoom);
+    c.fillStyle = color;
+    c.fillText(text || 'DETECTED 3', 0, h * 0.55);
     c.restore();
   }
 
@@ -1077,7 +1084,7 @@
     const before = snapshot();
     const def = TYPES[type];
     const base = {
-      logo: [24, 24], count: [24, H - 64], osd_text: [W / 2 - 100, 80],
+      logo: [24, 24], count: [24, H - 64], detected: [184, H - 68], osd_text: [W / 2 - 100, 80],
       frame: [W - 260, H - 44], label: [64, 64], debug: [24, 60],
       box: [W / 2 - 28, H / 2 - 28], gate: [Math.round(W * 0.3), 0],
       roi: [64, 64], crosshair: [W / 2 - 16, H / 2 - 16], colorbar: [W - 240, H - 160],
@@ -1219,11 +1226,6 @@
       `\`define UI_${nm}_W 12'd${item.w}`,
       `\`define UI_${nm}_H 12'd${item.h}`,
     ];
-    if (item.type === 'count') {
-      const shift = countScaleShift(item.w, item.h);
-      lines.push(`\`define UI_${nm}_SCALE_SHIFT 12'd${shift}`);
-      lines.push(`\`define UI_${nm}_SCALE ${1 << shift}`);
-    }
     return lines.join('\n');
   }
 
@@ -1261,11 +1263,6 @@
       out.push(`\`define UI_${nm}_Y 12'd${item.y}`);
       out.push(`\`define UI_${nm}_W 12'd${item.w}`);
       out.push(`\`define UI_${nm}_H 12'd${item.h}`);
-      if (item.type === 'count') {
-        const shift = countScaleShift(item.w, item.h);
-        out.push(`\`define UI_${nm}_SCALE_SHIFT 12'd${shift}`);
-        out.push(`\`define UI_${nm}_SCALE ${1 << shift}`);
-      }
       out.push(`\`define UI_EL${i}_X 12'd${item.x}`);
       out.push(`\`define UI_EL${i}_Y 12'd${item.y}`);
       out.push(`\`define UI_EL${i}_W 12'd${item.w}`);
@@ -1299,11 +1296,6 @@
       out.push(`#define UI_${nm}_Y ${item.y}`);
       out.push(`#define UI_${nm}_W ${item.w}`);
       out.push(`#define UI_${nm}_H ${item.h}`);
-      if (item.type === 'count') {
-        const shift = countScaleShift(item.w, item.h);
-        out.push(`#define UI_${nm}_SCALE_SHIFT ${shift}`);
-        out.push(`#define UI_${nm}_SCALE ${1 << shift}`);
-      }
       out.push(`#define UI_EL${i}_X ${item.x}`);
       out.push(`#define UI_EL${i}_Y ${item.y}`);
       out.push(`#define UI_EL${i}_W ${item.w}`);

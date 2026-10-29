@@ -338,34 +338,8 @@ module cv_top #(
     assign O_ball_capturing = r_cap_active;
 
     //=============================================================================
-    // OSD 叠加：绿框 + ID 字模（来自 I_overlay）；Count（来自 I_count，4 位 hex）
+    // OSD 叠加：绿框 + MiSans ID 数字（来自 I_overlay）；Count（MiSans 30x34）
     //=============================================================================
-
-    // 0-F 字模（5x7），复用原 f_digit
-    function [4:0] f_digit;
-        input [3:0] id; input [2:0] row;
-        begin
-            case(id)
-                4'd0: case(row) 0:f_digit=5'b01110;1:f_digit=5'b10001;2:f_digit=5'b10011;3:f_digit=5'b10101;4:f_digit=5'b11001;5:f_digit=5'b10001;6:f_digit=5'b01110;default:f_digit=0;endcase
-                4'd1: case(row) 0:f_digit=5'b00100;1:f_digit=5'b01100;2:f_digit=5'b00100;3:f_digit=5'b00100;4:f_digit=5'b00100;5:f_digit=5'b00100;6:f_digit=5'b01110;default:f_digit=0;endcase
-                4'd2: case(row) 0:f_digit=5'b01110;1:f_digit=5'b10001;2:f_digit=5'b00001;3:f_digit=5'b00010;4:f_digit=5'b00100;5:f_digit=5'b01000;6:f_digit=5'b11111;default:f_digit=0;endcase
-                4'd3: case(row) 0:f_digit=5'b11110;1:f_digit=5'b00001;2:f_digit=5'b00001;3:f_digit=5'b01110;4:f_digit=5'b00001;5:f_digit=5'b00001;6:f_digit=5'b11110;default:f_digit=0;endcase
-                4'd4: case(row) 0:f_digit=5'b00010;1:f_digit=5'b00110;2:f_digit=5'b01010;3:f_digit=5'b10010;4:f_digit=5'b11111;5:f_digit=5'b00010;6:f_digit=5'b00010;default:f_digit=0;endcase
-                4'd5: case(row) 0:f_digit=5'b11111;1:f_digit=5'b10000;2:f_digit=5'b11110;3:f_digit=5'b00001;4:f_digit=5'b00001;5:f_digit=5'b10001;6:f_digit=5'b01110;default:f_digit=0;endcase
-                4'd6: case(row) 0:f_digit=5'b00110;1:f_digit=5'b01000;2:f_digit=5'b10000;3:f_digit=5'b11110;4:f_digit=5'b10001;5:f_digit=5'b10001;6:f_digit=5'b01110;default:f_digit=0;endcase
-                4'd7: case(row) 0:f_digit=5'b11111;1:f_digit=5'b00001;2:f_digit=5'b00010;3:f_digit=5'b00100;4:f_digit=5'b01000;5:f_digit=5'b01000;6:f_digit=5'b01000;default:f_digit=0;endcase
-                4'd8: case(row) 0:f_digit=5'b01110;1:f_digit=5'b10001;2:f_digit=5'b10001;3:f_digit=5'b01110;4:f_digit=5'b10001;5:f_digit=5'b10001;6:f_digit=5'b01110;default:f_digit=0;endcase
-                4'd9: case(row) 0:f_digit=5'b01110;1:f_digit=5'b10001;2:f_digit=5'b10001;3:f_digit=5'b01111;4:f_digit=5'b00001;5:f_digit=5'b00010;6:f_digit=5'b11100;default:f_digit=0;endcase
-                4'ha: case(row) 0:f_digit=5'b01110;1:f_digit=5'b10001;2:f_digit=5'b10001;3:f_digit=5'b11111;4:f_digit=5'b10001;5:f_digit=5'b10001;6:f_digit=5'b10001;default:f_digit=0;endcase
-                4'hb: case(row) 0:f_digit=5'b11110;1:f_digit=5'b10001;2:f_digit=5'b10001;3:f_digit=5'b11110;4:f_digit=5'b10001;5:f_digit=5'b10001;6:f_digit=5'b11110;default:f_digit=0;endcase
-                4'hc: case(row) 0:f_digit=5'b01110;1:f_digit=5'b10001;2:f_digit=5'b10000;3:f_digit=5'b10000;4:f_digit=5'b10000;5:f_digit=5'b10001;6:f_digit=5'b01110;default:f_digit=0;endcase
-                4'hd: case(row) 0:f_digit=5'b11110;1:f_digit=5'b10001;2:f_digit=5'b10001;3:f_digit=5'b10001;4:f_digit=5'b10001;5:f_digit=5'b10001;6:f_digit=5'b11110;default:f_digit=0;endcase
-                4'he: case(row) 0:f_digit=5'b11111;1:f_digit=5'b10000;2:f_digit=5'b10000;3:f_digit=5'b11110;4:f_digit=5'b10000;5:f_digit=5'b10000;6:f_digit=5'b11111;default:f_digit=0;endcase
-                4'hf: case(row) 0:f_digit=5'b11111;1:f_digit=5'b10000;2:f_digit=5'b10000;3:f_digit=5'b11110;4:f_digit=5'b10000;5:f_digit=5'b10000;6:f_digit=5'b10000;default:f_digit=0;endcase
-                default: f_digit=0;
-            endcase
-        end
-    endfunction
 
     // overlay 项解析（8 项，每项 64bit）
     // 字段：[63]valid [62:59]id [58:47]x0 [46:35]y0 [31:20]x1 [19:8]y1
@@ -378,21 +352,40 @@ module cv_top #(
     wire [63:0] ov6 = I_overlay[447:384];
     wire [63:0] ov7 = I_overlay[511:448];
 
-    // Count 显示：5 位 BCD，5x7 字模，每位 8px；CNT_SCALE_SHIFT 控制 1/2/4/8 倍整数缩放
+    // Count 显示：5 位 BCD，MiSans 30x34 数字（5*30 x 34）
     localparam [11:0] CNT_X = 12'd24;
     localparam [11:0] CNT_Y = 12'd638;
-    localparam [11:0] CNT_W = 12'd160;          // 40 * 2^CNT_SCALE_SHIFT
-    localparam [11:0] CNT_H = 12'd28;           // 7  * 2^CNT_SCALE_SHIFT
-    localparam [11:0] CNT_SCALE_SHIFT = 12'd2;  // 0=1x, 1=2x, 2=4x, 3=8x
+    localparam [11:0] CNT_W = 12'd150;
+    localparam [11:0] CNT_H = 12'd34;
 
     integer oi;
     reg r_border, r_id_digit, r_cnt_digit;
-    reg [4:0] dg_bits;
-    reg [11:0] dg_row, dg_col;
     reg [3:0]  cnt_nib;
     reg [2:0]  cnt_idx;
+    reg [7:0]  cnt_dx;
+    reg [4:0]  cnt_dx_l;
+    reg [5:0]  cnt_row;
+    reg [3:0]  S_id_digit, S_id_x, S_id_y;
+    reg        S_id_hit;
+    wire       O_cnt_pixel, O_id_pixel;
+
+    mi_digit_rom u_mi_digit_rom (
+        .I_CNT_DIGIT ( cnt_nib      ),
+        .I_CNT_X     ( cnt_dx_l     ),
+        .I_CNT_Y     ( cnt_row      ),
+        .O_CNT       ( O_cnt_pixel  ),
+        .I_ID_DIGIT  ( S_id_digit   ),
+        .I_ID_X      ( S_id_x       ),
+        .I_ID_Y      ( S_id_y       ),
+        .O_ID        ( O_id_pixel   ),
+        .I_SM_DIGIT  ( 4'd0         ),
+        .I_SM_X      ( 4'd0         ),
+        .I_SM_Y      ( 5'd0         ),
+        .O_SM        (              )
+    );
+
     always @(*) begin
-        r_border=1'b0; r_id_digit=1'b0; r_cnt_digit=1'b0;
+        r_border=1'b0; r_id_digit=1'b0; r_cnt_digit=1'b0; S_id_hit=1'b0;
         // ---- overlay 绿框 + ID ----
         // 8 项展开（避免循环内数组变址导致的组合复杂度）
         if (ov0[63]) begin
@@ -400,10 +393,11 @@ module cv_top #(
                 (r_y>=ov0[46:35])&&(r_y<=ov0[19:8])) r_border=1;
             if ((((r_y>=ov0[46:35])&&(r_y<ov0[46:35]+FBOX_W)) || ((r_y<=ov0[19:8])&&(r_y>ov0[19:8]-FBOX_W))) &&
                 (r_x>=ov0[58:47])&&(r_x<=ov0[31:20])) r_border=1;
-            if (r_x>=ov0[58:47] && r_x<ov0[58:47]+5 && r_y>=ov0[46:35] && r_y<ov0[46:35]+7) begin
-                dg_row=r_y-ov0[46:35]; dg_col=r_x-ov0[58:47];
-                dg_bits=f_digit(ov0[62:59], dg_row[2:0]);
-                if (dg_bits[4-dg_col[2:0]]) r_id_digit=1;
+            if (r_x>=ov0[58:47] && r_x<ov0[58:47]+8 && r_y>=ov0[46:35] && r_y<ov0[46:35]+12) begin
+                S_id_digit = ov0[62:59];
+                S_id_x = r_x - ov0[58:47];
+                S_id_y = r_y - ov0[46:35];
+                S_id_hit = 1'b1;
             end
         end
         if (ov1[63]) begin
@@ -411,10 +405,11 @@ module cv_top #(
                 (r_y>=ov1[46:35])&&(r_y<=ov1[19:8])) r_border=1;
             if ((((r_y>=ov1[46:35])&&(r_y<ov1[46:35]+FBOX_W)) || ((r_y<=ov1[19:8])&&(r_y>ov1[19:8]-FBOX_W))) &&
                 (r_x>=ov1[58:47])&&(r_x<=ov1[31:20])) r_border=1;
-            if (r_x>=ov1[58:47] && r_x<ov1[58:47]+5 && r_y>=ov1[46:35] && r_y<ov1[46:35]+7) begin
-                dg_row=r_y-ov1[46:35]; dg_col=r_x-ov1[58:47];
-                dg_bits=f_digit(ov1[62:59], dg_row[2:0]);
-                if (dg_bits[4-dg_col[2:0]]) r_id_digit=1;
+            if (r_x>=ov1[58:47] && r_x<ov1[58:47]+8 && r_y>=ov1[46:35] && r_y<ov1[46:35]+12) begin
+                S_id_digit = ov1[62:59];
+                S_id_x = r_x - ov1[58:47];
+                S_id_y = r_y - ov1[46:35];
+                S_id_hit = 1'b1;
             end
         end
         if (ov2[63]) begin
@@ -422,10 +417,11 @@ module cv_top #(
                 (r_y>=ov2[46:35])&&(r_y<=ov2[19:8])) r_border=1;
             if ((((r_y>=ov2[46:35])&&(r_y<ov2[46:35]+FBOX_W)) || ((r_y<=ov2[19:8])&&(r_y>ov2[19:8]-FBOX_W))) &&
                 (r_x>=ov2[58:47])&&(r_x<=ov2[31:20])) r_border=1;
-            if (r_x>=ov2[58:47] && r_x<ov2[58:47]+5 && r_y>=ov2[46:35] && r_y<ov2[46:35]+7) begin
-                dg_row=r_y-ov2[46:35]; dg_col=r_x-ov2[58:47];
-                dg_bits=f_digit(ov2[62:59], dg_row[2:0]);
-                if (dg_bits[4-dg_col[2:0]]) r_id_digit=1;
+            if (r_x>=ov2[58:47] && r_x<ov2[58:47]+8 && r_y>=ov2[46:35] && r_y<ov2[46:35]+12) begin
+                S_id_digit = ov2[62:59];
+                S_id_x = r_x - ov2[58:47];
+                S_id_y = r_y - ov2[46:35];
+                S_id_hit = 1'b1;
             end
         end
         if (ov3[63]) begin
@@ -433,10 +429,11 @@ module cv_top #(
                 (r_y>=ov3[46:35])&&(r_y<=ov3[19:8])) r_border=1;
             if ((((r_y>=ov3[46:35])&&(r_y<ov3[46:35]+FBOX_W)) || ((r_y<=ov3[19:8])&&(r_y>ov3[19:8]-FBOX_W))) &&
                 (r_x>=ov3[58:47])&&(r_x<=ov3[31:20])) r_border=1;
-            if (r_x>=ov3[58:47] && r_x<ov3[58:47]+5 && r_y>=ov3[46:35] && r_y<ov3[46:35]+7) begin
-                dg_row=r_y-ov3[46:35]; dg_col=r_x-ov3[58:47];
-                dg_bits=f_digit(ov3[62:59], dg_row[2:0]);
-                if (dg_bits[4-dg_col[2:0]]) r_id_digit=1;
+            if (r_x>=ov3[58:47] && r_x<ov3[58:47]+8 && r_y>=ov3[46:35] && r_y<ov3[46:35]+12) begin
+                S_id_digit = ov3[62:59];
+                S_id_x = r_x - ov3[58:47];
+                S_id_y = r_y - ov3[46:35];
+                S_id_hit = 1'b1;
             end
         end
         if (ov4[63]) begin
@@ -444,10 +441,11 @@ module cv_top #(
                 (r_y>=ov4[46:35])&&(r_y<=ov4[19:8])) r_border=1;
             if ((((r_y>=ov4[46:35])&&(r_y<ov4[46:35]+FBOX_W)) || ((r_y<=ov4[19:8])&&(r_y>ov4[19:8]-FBOX_W))) &&
                 (r_x>=ov4[58:47])&&(r_x<=ov4[31:20])) r_border=1;
-            if (r_x>=ov4[58:47] && r_x<ov4[58:47]+5 && r_y>=ov4[46:35] && r_y<ov4[46:35]+7) begin
-                dg_row=r_y-ov4[46:35]; dg_col=r_x-ov4[58:47];
-                dg_bits=f_digit(ov4[62:59], dg_row[2:0]);
-                if (dg_bits[4-dg_col[2:0]]) r_id_digit=1;
+            if (r_x>=ov4[58:47] && r_x<ov4[58:47]+8 && r_y>=ov4[46:35] && r_y<ov4[46:35]+12) begin
+                S_id_digit = ov4[62:59];
+                S_id_x = r_x - ov4[58:47];
+                S_id_y = r_y - ov4[46:35];
+                S_id_hit = 1'b1;
             end
         end
         if (ov5[63]) begin
@@ -455,10 +453,11 @@ module cv_top #(
                 (r_y>=ov5[46:35])&&(r_y<=ov5[19:8])) r_border=1;
             if ((((r_y>=ov5[46:35])&&(r_y<ov5[46:35]+FBOX_W)) || ((r_y<=ov5[19:8])&&(r_y>ov5[19:8]-FBOX_W))) &&
                 (r_x>=ov5[58:47])&&(r_x<=ov5[31:20])) r_border=1;
-            if (r_x>=ov5[58:47] && r_x<ov5[58:47]+5 && r_y>=ov5[46:35] && r_y<ov5[46:35]+7) begin
-                dg_row=r_y-ov5[46:35]; dg_col=r_x-ov5[58:47];
-                dg_bits=f_digit(ov5[62:59], dg_row[2:0]);
-                if (dg_bits[4-dg_col[2:0]]) r_id_digit=1;
+            if (r_x>=ov5[58:47] && r_x<ov5[58:47]+8 && r_y>=ov5[46:35] && r_y<ov5[46:35]+12) begin
+                S_id_digit = ov5[62:59];
+                S_id_x = r_x - ov5[58:47];
+                S_id_y = r_y - ov5[46:35];
+                S_id_hit = 1'b1;
             end
         end
         if (ov6[63]) begin
@@ -466,10 +465,11 @@ module cv_top #(
                 (r_y>=ov6[46:35])&&(r_y<=ov6[19:8])) r_border=1;
             if ((((r_y>=ov6[46:35])&&(r_y<ov6[46:35]+FBOX_W)) || ((r_y<=ov6[19:8])&&(r_y>ov6[19:8]-FBOX_W))) &&
                 (r_x>=ov6[58:47])&&(r_x<=ov6[31:20])) r_border=1;
-            if (r_x>=ov6[58:47] && r_x<ov6[58:47]+5 && r_y>=ov6[46:35] && r_y<ov6[46:35]+7) begin
-                dg_row=r_y-ov6[46:35]; dg_col=r_x-ov6[58:47];
-                dg_bits=f_digit(ov6[62:59], dg_row[2:0]);
-                if (dg_bits[4-dg_col[2:0]]) r_id_digit=1;
+            if (r_x>=ov6[58:47] && r_x<ov6[58:47]+8 && r_y>=ov6[46:35] && r_y<ov6[46:35]+12) begin
+                S_id_digit = ov6[62:59];
+                S_id_x = r_x - ov6[58:47];
+                S_id_y = r_y - ov6[46:35];
+                S_id_hit = 1'b1;
             end
         end
         if (ov7[63]) begin
@@ -477,17 +477,28 @@ module cv_top #(
                 (r_y>=ov7[46:35])&&(r_y<=ov7[19:8])) r_border=1;
             if ((((r_y>=ov7[46:35])&&(r_y<ov7[46:35]+FBOX_W)) || ((r_y<=ov7[19:8])&&(r_y>ov7[19:8]-FBOX_W))) &&
                 (r_x>=ov7[58:47])&&(r_x<=ov7[31:20])) r_border=1;
-            if (r_x>=ov7[58:47] && r_x<ov7[58:47]+5 && r_y>=ov7[46:35] && r_y<ov7[46:35]+7) begin
-                dg_row=r_y-ov7[46:35]; dg_col=r_x-ov7[58:47];
-                dg_bits=f_digit(ov7[62:59], dg_row[2:0]);
-                if (dg_bits[4-dg_col[2:0]]) r_id_digit=1;
+            if (r_x>=ov7[58:47] && r_x<ov7[58:47]+8 && r_y>=ov7[46:35] && r_y<ov7[46:35]+12) begin
+                S_id_digit = ov7[62:59];
+                S_id_x = r_x - ov7[58:47];
+                S_id_y = r_y - ov7[46:35];
+                S_id_hit = 1'b1;
             end
         end
-        // ---- Count（5 位 BCD，可 1/2/4/8 倍整数缩放）----
+        // ---- Count：5 位 BCD，MiSans 30x34 数字，左→右：万→个 ----
         if (r_x>=CNT_X && r_x<CNT_X+CNT_W && r_y>=CNT_Y && r_y<CNT_Y+CNT_H) begin
-            dg_row = (r_y - CNT_Y) >> CNT_SCALE_SHIFT;
-            dg_col = (r_x - CNT_X) >> CNT_SCALE_SHIFT;  // 0..39
-            cnt_idx = dg_col[5:3];         // 0..4（左→右：万→个）
+            cnt_row = r_y - CNT_Y;          // 0..33
+            cnt_dx  = r_x - CNT_X;          // 0..149
+            if (cnt_dx < 30) begin
+                cnt_idx = 3'd0; cnt_dx_l = cnt_dx;
+            end else if (cnt_dx < 60) begin
+                cnt_idx = 3'd1; cnt_dx_l = cnt_dx - 30;
+            end else if (cnt_dx < 90) begin
+                cnt_idx = 3'd2; cnt_dx_l = cnt_dx - 60;
+            end else if (cnt_dx < 120) begin
+                cnt_idx = 3'd3; cnt_dx_l = cnt_dx - 90;
+            end else begin
+                cnt_idx = 3'd4; cnt_dx_l = cnt_dx - 120;
+            end
             case (cnt_idx)
                 3'd0: cnt_nib = I_count_bcd[19:16];  // 万位（左）
                 3'd1: cnt_nib = I_count_bcd[15:12];  // 千位
@@ -496,11 +507,9 @@ module cv_top #(
                 3'd4: cnt_nib = I_count_bcd[3:0];    // 个位（右）
                 default: cnt_nib = 4'h0;
             endcase
-            if (dg_col[2:0] < 5) begin     // 位内 col 0-4 画字模，5-7 间隙
-                dg_bits = f_digit(cnt_nib, dg_row[2:0]);
-                if (dg_bits[4 - dg_col[2:0]]) r_cnt_digit=1;
-            end
+            if (O_cnt_pixel) r_cnt_digit = 1'b1;
         end
+        if (S_id_hit && O_id_pixel) r_id_digit = 1'b1;
     end
 
     wire [23:0] cv_base = I_data;   // ball mode: camera + green boxes

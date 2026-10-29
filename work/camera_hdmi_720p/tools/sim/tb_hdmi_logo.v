@@ -30,6 +30,7 @@ module tb_hdmi_logo;
         .I_video_last    ( last          ),
         .I_osd_on        ( osd_on        ),
         .I_ui_on         ( ui_on         ),
+        .I_ball_now      ( 4'd0          ),
         .I_debug_status  ( debug_status  ),
         .O_video_rd_en   ( rd_en         ),
         .I_video_rd_data ( rd_data       ),
