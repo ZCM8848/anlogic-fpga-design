@@ -30,6 +30,7 @@ module design_top_wrapper (
     output wire [3:0]  O_led,            // D10/E10/C6/D6（高电平点亮）
     output wire [7:0]  O_seg,            // 8 位数码管段选（低有效，SW6 拨上）
     output wire [7:0]  O_sel,            // 8 位数码管位选（低有效）
+    output wire        O_buzzer,         // C12 蜂鸣器（低电平响，SW5 控制回路）
 
     // 摄像头控制（BANK21，3V3；经 TXS0104E 电平转换）
     output wire        O_cam_scl,        // K3
@@ -150,6 +151,8 @@ module design_top_wrapper (
     wire [15:0] S_ae;
     wire [15:0] S_ag;
     wire [15:0] S_cam_ae_ahb, S_cam_ag_ahb;
+    wire        S_buzz_toggle_ahb;
+    wire [31:0] S_buzz_cfg_ahb;
     reg  [15:0] S_cam_ae_24m_a, S_cam_ae_24m;
     reg  [15:0] S_cam_ag_24m_a, S_cam_ag_24m;
     wire        S_cam_cfg_done;
@@ -955,6 +958,8 @@ module design_top_wrapper (
         .O_gate_y1     ( S_gate_y1          ),
         .O_cam_ae      ( S_cam_ae_ahb       ),
         .O_cam_ag      ( S_cam_ag_ahb       ),
+        .O_buzz_toggle ( S_buzz_toggle_ahb  ),
+        .O_buzz_cfg    ( S_buzz_cfg_ahb     ),
         .O_heartbeat   ( S_mcu_heartbeat    ),
         .O_scratch     ( S_mcu_scratch      ),
         .O_frame_cnt   ( S_mcu_frame_cnt    )
@@ -993,6 +998,16 @@ module design_top_wrapper (
         .I_dash  ( S_seg_dash      ),
         .O_seg   ( O_seg           ),
         .O_sel   ( O_sel           )
+    );
+
+    // ---- 蜂鸣器：钢珠过门线短鸣，SW5 控制硬件回路 ----
+    buzzer_beep u_buzzer_beep (
+        .I_clk        ( I_sys_clk          ),
+        .I_rst_n      ( S_rst_n_50m        ),
+        .I_trig_toggle( S_buzz_toggle_ahb  ),
+        .I_half_clks  ( S_buzz_cfg_ahb[31:16] ),
+        .I_beep_ms    ( S_buzz_cfg_ahb[15:0]  ),
+        .O_buzzer     ( O_buzzer           )
     );
 
 endmodule

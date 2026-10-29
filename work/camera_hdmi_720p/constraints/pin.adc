@@ -47,7 +47,10 @@ set_pin_assignment { I_sw1 }         { LOCATION = A4;  IOSTANDARD = LVCMOS33; PU
 set_pin_assignment { I_sw2 }         { LOCATION = B4;  IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
 set_pin_assignment { I_sw4 }         { LOCATION = D11; IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
 set_pin_assignment { I_sw3 }         { LOCATION = E11; IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
-# ---- 8 λ����ܣ���˫ɫ LED ���ã�SW6 ���벦��=����ܣ�----
+
+# ---- 蜂鸣器（C12，低电平响；SW5 串在回路中）----
+set_pin_assignment { O_buzzer }      { LOCATION = C12; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+# ---- 8 λ����ܣ���˫ɫ LED ���ã�SW6 ���벦��=����ܣ�----
 set_pin_assignment { O_seg[0] } { LOCATION = C9;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }  # a
 set_pin_assignment { O_seg[1] } { LOCATION = C11; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }  # b
 set_pin_assignment { O_seg[2] } { LOCATION = B11; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }  # c

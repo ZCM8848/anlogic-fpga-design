@@ -36,6 +36,8 @@
 //   0x5C BALL_GATE [8:0]=gate_x [16:9]=gate_y0 [24:17]=gate_y1（320x180 坐标；RTL 画门线）
 //   0x60 CAM_AE    [15:0]=曝光目标（半行，2..1991）
 //   0x64 CAM_AG    [15:0]=增益目标（16..176）
+//   0x68 BUZZ_CTRL [0]=蜂鸣触发翻转位（MCU 每次计数翻转）
+//   0x6C BUZZ_CFG  [15:0]=beep_ms [31:16]=half_clks（50MHz/(2*freq)）
 //
 // overlay 项字段（64bit = {W0[31:0], W1[31:0]}，cv_top 叠加解析）：
 //   [63] valid  [62:59] id[3:0]  [58:47] x0[11:0]  [46:35] y0[11:0]  [34:32] pad
@@ -113,6 +115,8 @@ module ahb_status_slave #(
     output wire [7:0]   O_gate_y1,
     output wire [15:0]  O_cam_ae,        // 曝光目标（半行）
     output wire [15:0]  O_cam_ag,        // 增益目标
+    output wire         O_buzz_toggle,   // 蜂鸣触发翻转位
+    output wire [31:0]  O_buzz_cfg,      // [15:0]=beep_ms [31:16]=half_clks
 
     // ---- MCU 写回暴露 ----
     output wire [31:0] O_heartbeat,
@@ -211,6 +215,8 @@ module ahb_status_slave #(
     reg [31:0] S_ball_run_cfg;
     reg [31:0] S_ball_gate;
     reg [15:0] S_cam_ae, S_cam_ag;
+    reg        S_buzz_ctrl;
+    reg [31:0] S_buzz_cfg;
     assign O_ball_en      = S_ball_en;
     assign O_ball_capture = S_ball_capture;
     assign O_ball_bg_thr  = S_ball_thr[7:0];
@@ -222,6 +228,8 @@ module ahb_status_slave #(
     assign O_gate_y1 = S_ball_gate[24:17];
     assign O_cam_ae  = S_cam_ae;
     assign O_cam_ag  = S_cam_ag;
+    assign O_buzz_toggle = S_buzz_ctrl;
+    assign O_buzz_cfg = S_buzz_cfg;
 
     // run_mem 间接读
     reg [9:0]  r_run_idx;           // MCU 写 RUN_IDX
@@ -315,6 +323,8 @@ module ahb_status_slave #(
                 5'h17: rdata_mux = S_ball_gate;       // 0x5C: gate x/y0/y1
                 5'h18: rdata_mux = {16'b0, S_cam_ae};  // 0x60: camera exposure
                 5'h19: rdata_mux = {16'b0, S_cam_ag};  // 0x64: camera gain
+                5'h1A: rdata_mux = {31'b0, S_buzz_ctrl}; // 0x68: buzzer trigger
+                5'h1B: rdata_mux = S_buzz_cfg;           // 0x6C: buzzer config
                 default: rdata_mux = 32'h0;
             endcase
         end
@@ -341,6 +351,8 @@ module ahb_status_slave #(
             S_ball_gate <= 32'h014C_1C60;      // gate_x=96, y0=14, y1=166
             S_cam_ae <= 16'd1991;              // safe default; MCU may lower
             S_cam_ag <= 16'd144;
+            S_buzz_ctrl <= 1'b0;
+            S_buzz_cfg <= 32'h61A8_0032;       // half=25000(1kHz), beep_ms=50
             S_key1_evt <= 1'b0;
             S_key2_evt <= 1'b0;
             S_seg_dash <= 1'b0;
@@ -374,6 +386,8 @@ module ahb_status_slave #(
                     5'h17: S_ball_gate <= I_hwdata;                    // BALL_GATE @0x5C
                     5'h18: S_cam_ae <= I_hwdata[15:0];                 // CAM_AE @0x60
                     5'h19: S_cam_ag <= I_hwdata[15:0];                 // CAM_AG @0x64
+                    5'h1A: S_buzz_ctrl <= I_hwdata[0];                 // BUZZ_CTRL @0x68
+                    5'h1B: S_buzz_cfg <= I_hwdata;                     // BUZZ_CFG @0x6C
                     5'h0D: begin                                       // BALL_CTRL
                         S_ball_en      <= I_hwdata[0];
                         S_ball_capture <= I_hwdata[1];

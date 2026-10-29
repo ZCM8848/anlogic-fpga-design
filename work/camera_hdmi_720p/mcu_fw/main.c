@@ -45,6 +45,8 @@ extern void al_simp_putchar(char c);
 #define SEG_CTRL    (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x58))
 #define CAM_AE      (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x60))
 #define CAM_AG      (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x64))
+#define BUZZ_CTRL   (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x68))
+#define BUZZ_CFG    (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x6C))
 
 #define VER_MAGIC   0x4D435602U
 
@@ -104,6 +106,8 @@ typedef struct {
     /* ---- 调试 ---- */
     int debug;                  /* 1=输出 D 行调试信息 */
     int debug_div;              /* 每多少帧输出一行 D */
+    int beep_ms;                /* 蜂鸣短鸣时长 ms */
+    int beep_freq_hz;           /* 蜂鸣频率 Hz */
 } vision_params_t;
 
 static const vision_params_t VISION_PARAMS = {
@@ -144,6 +148,8 @@ static const vision_params_t VISION_PARAMS = {
 
     .debug               = 1,
     .debug_div           = 30,
+    .beep_ms             = 50,    /* 短鸣 50 ms */
+    .beep_freq_hz        = 1000,  /* 1 kHz，接近 BIOS 提示音 */
 };
 /* ============================ 调参区结束 ============================ */
 
@@ -192,6 +198,8 @@ static int            next_id;
 static int            count;
 static int            ccl_overflow;
 static int            skip_roi_cnt, skip_len_cnt;
+static int            beep_toggle;
+static int            beep_req;
 
 struct DbgComp { int area, x0, y0, x1, y1, pass; };
 static struct DbgComp dbg[DBG_TOPK];
@@ -556,6 +564,7 @@ static void track_update(void)
             trk[ti].cy <= VISION_PARAMS.gate_y1) {
             trk[ti].counted = 1;
             count++;
+            beep_req = 1;
         }
     }
 
@@ -844,6 +853,9 @@ int main(void)
                            ((VISION_PARAMS.gate_y1 & 0xFF) << 17));
     CAM_AE = (uint32_t)(VISION_PARAMS.exposure & 0xFFFF);
     CAM_AG = (uint32_t)(VISION_PARAMS.gain & 0xFFFF);
+    BUZZ_CFG = ((50000000u / (2u * (uint32_t)VISION_PARAMS.beep_freq_hz)) << 16)
+             | ((uint32_t)VISION_PARAMS.beep_ms & 0xFFFF);
+    BUZZ_CTRL = (uint32_t)(beep_toggle & 1u);
     BALL_CTRL = 0u;
 
     if (VISION_PARAMS.enable) {
@@ -912,6 +924,11 @@ int main(void)
                 ccl_finalize();
             }
             track_update();
+            if (beep_req) {
+                beep_toggle ^= 1;
+                BUZZ_CTRL = (uint32_t)(beep_toggle & 1u);
+                beep_req = 0;
+            }
             write_overlay();
             OV_COUNT = (uint32_t)count;
             write_count_bcd();
