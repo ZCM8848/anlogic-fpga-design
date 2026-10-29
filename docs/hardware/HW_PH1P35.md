@@ -27,7 +27,7 @@
 | ERAM20K 块数 | **108** | 每块 20 Kbit |
 | ERAM 总容量 | **2,160 Kbit** | 108 × 20 Kbit |
 | DSP | **40** | 预加器 + 三输入加法器 + 乘法器 + ALU |
-| PLL | **6** | 每 PLL 7 路输出（可相位/占空比调整、小数分频、SSC） |
+| PLL | **6** | 每 PLL 7 路输出（可相位/占空比调整、小数分频、SSC）。**频率公式见 [`HW_CLOCKS_RESET.md`](HW_CLOCKS_RESET.md) §2 与 [`HW_ETH_RGMII.md`](HW_ETH_RGMII.md) §2**：`C0=(FIN/REFCLK_DIV)×FBCLK_DIV`、`VCO=C0×CLKC0_DIV`，只改 `CLKCn_DIV` 不会改变输出频率 |
 | GCLK | **32 路全局时钟网络** | 另有 MLCLK / LCLK / IOCLK |
 | MIPI DPHY | **2 组** | 每组最大 1 clk lane + 4 data lane |
 | 内嵌 MCU | **1**（RISC-V） | 见 §5 |

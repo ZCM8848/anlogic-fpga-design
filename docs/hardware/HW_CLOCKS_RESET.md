@@ -15,6 +15,26 @@
 
 ## 2. PLL 配置（`ip/pll/`，厂商已验证配置，本项目未改）
 
+### ⚠️ 频率公式（2026-10-27 上板实测确认，非常重要）
+
+```
+C0  = (FIN / REFCLK_DIV) × FBCLK_DIV          ← 输出频率由这两个参数决定
+VCO = C0 × CLKC0_DIV                          ← CLKC0_DIV 只改 VCO，不改 C0！
+Cn  = VCO / CLKCn_DIV  （相位 = CLKCn_CPHASE / CLKCn_DIV × 360°）
+```
+
+**踩过的坑**：想把 100 MHz 改成 125 MHz 时只把 `CLKC0_DIV` 15→12，
+结果 VCO 从 1500 变成 1200，`C0 = 1200/12` 仍然是 **100 MHz** —— 频率纹丝不动。
+正确做法是改 `REFCLK_DIV` / `FBCLK_DIV`：
+
+| 目标 C0 | REFCLK_DIV | FBCLK_DIV | CLKC0_DIV（定 VCO） |
+|---|---|---|---|
+| 100 MHz | 1 | 2 | 15（VCO=1500） |
+| **125 MHz** | **2** | **5** | **12（VCO=1500）** |
+
+> 本板 50 MHz 参考下，`REFCLK_DIV=2, FBCLK_DIV=5` 才得到 125 MHz；
+> VCO 保持 1500 MHz 时，`LPF_RES/LPF_CAP/ICP_CUR`（0/13/29）无需改动。
+
 - 输入 `FIN = 50 MHz`，环路反馈 `FBCLK_DIV = 2` → 参考 100 MHz；
 - **VCO = 1,500 MHz**。
 - 顶层实例名必须是 **`u_pll`**（`timing.sdc` 的 `rename_clock` 依赖完整层次

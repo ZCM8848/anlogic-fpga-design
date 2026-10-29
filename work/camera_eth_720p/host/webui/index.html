@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CAMERA_ETH_720P // HOST CONSOLE</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div class="scanlines"></div>
+
+<header>
+  <div class="brand">
+    <div class="mark">◤</div>
+    <div class="brand-txt">
+      <h1>CAMERA_ETH_720P</h1>
+      <p>HOST CONTROL CONSOLE <span>//</span> RAW10 UPLINK</p>
+    </div>
+  </div>
+
+  <div class="chips">
+    <div class="chip" id="chip-link"><i></i><span>LINK</span></div>
+    <div class="chip" id="chip-cam"><i></i><span>CAM</span></div>
+    <div class="chip rec" id="chip-rec"><i></i><span>REC</span></div>
+    <div class="chip" id="chip-job"><i></i><span>JOB</span></div>
+  </div>
+
+  <div class="clock">
+    <b id="clock">--:--:--</b>
+    <em>LOCAL / UTC+8</em>
+  </div>
+</header>
+
+<main>
+  <section class="panel feed-panel">
+    <div class="panel-head">
+      <span>LIVE FEED</span>
+      <em>1280 × 720 / 60 FPS / BGGR</em>
+    </div>
+    <div class="feed">
+      <img id="feed" alt="">
+      <div class="feed-corners"></div>
+      <div class="nosignal" id="nosignal">NO SIGNAL</div>
+      <div class="rec-flag" id="rec-flag">● REC</div>
+    </div>
+    <div class="hud">
+      <div><em>FRAME</em><b id="hud-frame">—</b></div>
+      <div><em>FPS</em><b id="hud-fps">—</b></div>
+      <div><em>AE</em><b id="hud-ae">—</b></div>
+      <div><em>AG</em><b id="hud-ag">—</b></div>
+      <div><em>PACKETS</em><b id="hud-pkts">—</b></div>
+    </div>
+  </section>
+
+  <aside>
+    <section class="panel">
+      <div class="panel-head"><span>DEVICE</span><em>SERIAL</em></div>
+      <div class="dev-grid">
+        <div class="dev"><em>N</em><b id="st-n">—</b><i>RX FRAMES</i></div>
+        <div class="dev"><em>T</em><b id="st-t">—</b><i>TX FRAMES</i></div>
+        <div class="dev"><em>C</em><b id="st-c">—</b><i>CAM FRAMES</i></div>
+        <div class="dev"><em>S</em><b id="st-s">—</b><i>SENSOR ID</i></div>
+      </div>
+      <div class="statusline">
+        <span>V <b id="st-v">—</b></span>
+        <span id="st-flags">—</span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><span>IMAGE</span><em>PROCESSING</em></div>
+      <div class="seg" id="awb-seg">
+        <button data-mode="auto" class="on">AWB AUTO</button>
+        <button data-mode="lock">LOCK</button>
+        <button data-mode="off">OFF</button>
+      </div>
+      <div class="hint" id="awb-hint">灰世界 · 逐帧</div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><span>RECORD</span><em>DUMPCAP</em></div>
+      <label class="field">SESSION
+        <input id="rec-name" spellcheck="false" placeholder="auto">
+      </label>
+      <label class="field">DURATION
+        <select id="rec-dur">
+          <option value="5">5 s</option>
+          <option value="10" selected>10 s</option>
+          <option value="20">20 s</option>
+          <option value="30">30 s</option>
+          <option value="60">60 s</option>
+        </select>
+      </label>
+      <div class="row">
+        <button class="btn primary" id="btn-rec">● START</button>
+        <button class="btn danger" id="btn-stop" disabled>■ STOP</button>
+      </div>
+      <div class="hint" id="rec-hint">STANDBY</div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><span>OUTPUT</span><em>PIPELINE</em></div>
+      <label class="chk"><input type="checkbox" id="opt-meta" checked><span>meta.jsonl + run.json</span></label>
+      <label class="chk"><input type="checkbox" id="opt-png" checked><span>preview.png（单帧）</span></label>
+      <label class="chk"><input type="checkbox" id="opt-mp4" checked><span>out_60fps.mp4（渲染）</span></label>
+      <label class="chk"><input type="checkbox" id="opt-raw"><span>raw10.npy（无损 10bit 原始帧）</span></label>
+      <label class="chk"><input type="checkbox" id="opt-auto" checked><span>录制完自动处理</span></label>
+      <div class="note">原始流 raw.pcapng 始终保留 · raw10.npy ≈ 1.84 MB/帧</div>
+      <button class="btn" id="btn-run">▶ PROCESS SELECTED</button>
+      <div class="hint" id="job-hint">IDLE</div>
+    </section>
+
+    <section class="panel sessions">
+      <div class="panel-head"><span>SESSIONS</span><em id="sess-count">0</em></div>
+      <div id="sess-list" class="sess-list"></div>
+    </section>
+  </aside>
+</main>
+
+<footer class="logbar">
+  <div class="log-head"><span>// SYSTEM LOG</span><em id="log-n">0</em></div>
+  <pre id="log"></pre>
+</footer>
+
+<script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Frame Viewer — 逐帧查看</title>
+<style>
+  :root{
+    --bg:#080b11; --bg1:#0d121c; --panel:#0e1521; --line:#1d2839; --line2:#2a3952;
+    --text:#e7eef9; --muted:#8b9bb5; --muted2:#62718a;
+    --accent:#5b8cff; --cyan:#22d3ee; --yellow:#ffcf5c; --red:#ff5c7a;
+    --mono:ui-monospace,"Cascadia Code",Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:12.5px;overflow:hidden}
+  button,input,select{font-family:inherit;color:inherit}
+  .hidden{display:none!important}
+  .btn{height:30px;padding:0 11px;border-radius:7px;border:1px solid var(--line2);background:linear-gradient(180deg,#182338,#121a29);font-size:11.5px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap}
+  .btn:hover{border-color:#3a5177;background:#1b2942}
+  .btn:active{transform:translateY(1px)}
+  .btn-primary{border-color:#3c6ae0;background:linear-gradient(180deg,#5b8cff,#3f6fe8);font-weight:600}
+  .btn-primary:hover{background:linear-gradient(180deg,#6d9aff,#4c7cf5)}
+  .btn-small{height:27px;padding:0 9px;font-size:10.5px}
+  .icon{font-family:var(--mono);font-size:14px;line-height:1}
+  .topbar{height:56px;display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid var(--line);background:rgba(11,16,25,.94);position:relative;z-index:10}
+  .brand{display:flex;align-items:center;gap:10px;min-width:210px}
+  .brand-mark{width:29px;height:29px;border-radius:8px;background:radial-gradient(circle at 30% 30%,rgba(255,255,255,.5),transparent 38%),linear-gradient(135deg,var(--accent),#7b5cff 55%,var(--cyan));box-shadow:0 0 20px rgba(91,140,255,.4)}
+  .brand-title{font-size:13.5px;font-weight:700}
+  .brand-sub{font-size:10px;color:var(--muted);margin-top:2px}
+  .file-name{color:var(--muted);font-size:11px;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .spacer{flex:1}
+  .segmented{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .segmented button{height:27px;min-width:34px;border:0;border-right:1px solid var(--line);background:#0b111b;color:var(--muted);font-size:10.5px;cursor:pointer;padding:0 7px}
+  .segmented button:last-child{border-right:0}
+  .segmented button.active{background:rgba(91,140,255,.18);color:#dce9ff}
+  .segmented button:hover{background:#162135}
+  .inline{display:inline-flex;align-items:center;gap:5px;color:var(--muted);font-size:10.5px;white-space:nowrap}
+  .inline select,.inline input{height:27px;border:1px solid var(--line);background:#0b111b;border-radius:6px;font-size:10.5px;padding:0 6px;color:var(--text)}
+  .inline input[type=number]{width:66px;font-family:var(--mono)}
+  .workspace{height:calc(100vh - 56px);display:flex;flex-direction:column;min-height:0}
+  .stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;position:relative;padding:20px;background:radial-gradient(900px 500px at 50% 0%,rgba(42,70,120,.14),transparent 70%),var(--bg1)}
+  #view{max-width:100%;max-height:100%;width:auto;height:auto;background:#000;border-radius:5px;box-shadow:0 0 0 1px rgba(120,160,220,.25),0 22px 60px rgba(0,0,0,.55);display:none}
+  #view.ready{display:block}
+  .empty{position:absolute;inset:20px;border:1px dashed #2a3952;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--muted2);text-align:center;pointer-events:none;transition:.15s}
+  .empty strong{color:#c9d6ea;font-size:14px;font-weight:600}
+  .empty .big{font-size:30px;color:#3d5f96;font-family:var(--mono)}
+  .empty.drag{border-color:var(--accent);background:rgba(91,140,255,.06);color:#bcd0ec}
+  .badge-row{position:absolute;left:28px;top:28px;display:flex;flex-direction:column;gap:5px;pointer-events:none}
+  .badge-row .b{background:rgba(4,8,14,.78);border:1px solid rgba(91,140,255,.32);border-radius:5px;padding:4px 8px;font-family:var(--mono);font-size:11px;color:#dce9ff;width:max-content;max-width:100%}
+  .badge-row .b.frame{font-size:15px;font-weight:600;color:var(--yellow);border-color:rgba(255,207,92,.45)}
+  .badge-row .b.time{color:var(--cyan);border-color:rgba(34,211,238,.28)}
+  .badge-row .b.hint{color:var(--muted);border-color:var(--line);font-size:9.5px}
+  .timeline{padding:7px 18px 4px;display:flex;align-items:center;gap:9px;border-top:1px solid var(--line);background:var(--panel)}
+  #scrub{flex:1;accent-color:var(--accent);height:22px}
+  .transport{height:48px;display:flex;align-items:center;gap:8px;padding:0 18px;border-top:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+  .transport .status{margin-left:auto;color:var(--muted2);font-family:var(--mono);font-size:9.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:45vw}
+  .toast{position:fixed;left:50%;bottom:74px;transform:translate(-50%,10px);background:#121c2c;border:1px solid #2c4262;border-radius:99px;padding:8px 16px;font-size:11px;box-shadow:0 18px 50px rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:.18s;z-index:99}
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+  @media (max-width:1100px){.file-name{display:none}.brand-sub{display:none}}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark"></span>
+    <div>
+      <div class="brand-title">Frame Viewer</div>
+      <div class="brand-sub">本地视频逐帧查看 · 实时帧号</div>
+    </div>
+  </div>
+  <button id="openBtn" class="btn btn-primary">打开视频</button>
+  <span id="fileName" class="file-name">未加载</span>
+  <span class="spacer"></span>
+
+  <span class="inline"><span>步长</span>
+    <span class="segmented" id="stepGroup">
+      <button data-step="1" class="active">1</button>
+      <button data-step="10">10</button>
+      <button data-step="100">100</button>
+    </span>
+  </span>
+
+  <span class="inline"><span>FPS</span>
+    <select id="fpsSelect">
+      <option value="23.976">23.976</option>
+      <option value="24">24</option>
+      <option value="25">25</option>
+      <option value="29.97">29.97</option>
+      <option value="30">30</option>
+      <option value="50">50</option>
+      <option value="59.94">59.94</option>
+      <option value="60" selected>60</option>
+      <option value="custom">自定义…</option>
+    </select>
+    <input id="fpsCustom" type="number" min="1" max="240" step="0.001" value="60" title="自定义 FPS">
+    <button id="detectFps" class="btn btn-small" title="播放约 1 秒，用实际帧间隔估算 FPS">检测</button>
+  </span>
+</header>
+
+<main class="workspace">
+  <section class="stage" id="stage">
+    <canvas id="view"></canvas>
+    <div class="empty" id="empty">
+      <div class="big">▣</div>
+      <strong>拖入视频，或点击“打开视频”</strong>
+      <div>支持浏览器能解码的 MP4 / WebM / MKV（H.264 最稳）</div>
+      <div style="font-size:10px">← 左键后退 · 右键前进 · 空格播放/暂停</div>
+    </div>
+    <div class="badge-row" id="badges" style="display:none">
+      <div class="b frame" id="frameBadge">FRAME — / —</div>
+      <div class="b time" id="timeBadge">00:00:00.000</div>
+      <div class="b hint" id="stepBadge">步长 1 · ← / →</div>
+    </div>
+  </section>
+
+  <div class="timeline">
+    <button id="prevBtn" class="btn btn-small">◀ -<span id="prevStep">1</span></button>
+    <input id="scrub" type="range" min="0" max="0" value="0" step="1">
+    <button id="nextBtn" class="btn btn-small">+<span id="nextStep">1</span> ▶</button>
+  </div>
+
+  <div class="transport">
+    <button id="firstBtn" class="btn btn-small" title="第一帧">⏮</button>
+    <button id="playBtn" class="btn btn-primary">▶ 播放</button>
+    <button id="lastBtn" class="btn btn-small" title="最后一帧">⏭</button>
+    <button id="pngBtn" class="btn btn-small">保存 PNG</button>
+    <span class="inline">跳转帧 <input id="gotoInput" type="number" min="0" step="1" value="0"><button id="gotoBtn" class="btn btn-small">Go</button></span>
+    <span class="status" id="status">未加载视频</span>
+  </div>
+</main>
+
+<video id="video" playsinline muted preload="auto" style="display:none"></video>
+<input id="fileInput" type="file" accept="video/*" hidden>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  'use strict';
+
+  const $ = (id) => document.getElementById(id);
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+  const video = $('video');
+  const canvas = $('view');
+  const ctx = canvas.getContext('2d');
+
+  const state = {
+    url: null,
+    file: null,
+    fps: 60,
+    step: 1,
+    frame: 0,
+    total: 0,
+    duration: 0,
+    width: 0,
+    height: 0,
+    loaded: false,
+    playing: false,
+    seeking: false,
+    seekSeq: 0,
+    detectMode: false,
+    rvfcId: 0,
+  };
+
+  function toast(msg) {
+    const t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => t.classList.remove('show'), 1800);
+  }
+
+  function fmtTime(sec) {
+    sec = Math.max(0, sec);
+    const ms = Math.floor((sec - Math.floor(sec)) * 1000);
+    const s = Math.floor(sec) % 60;
+    const m = Math.floor(sec / 60) % 60;
+    const h = Math.floor(sec / 3600);
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
+  }
+
+  function frameFromTime(t) {
+    return clamp(Math.floor(t * state.fps + 1e-6), 0, Math.max(0, state.total - 1));
+  }
+
+  function targetTime(frame) {
+    // +0.5 frame to land inside the requested frame, not on a boundary
+    return Math.min(Math.max(0, state.duration - 1e-5), (frame + 0.5) / state.fps);
+  }
+
+  function draw() {
+    if (!state.loaded || !state.width || !state.height) return;
+    if (canvas.width !== state.width) canvas.width = state.width;
+    if (canvas.height !== state.height) canvas.height = state.height;
+    try {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    } catch (_) { /* ignore */ }
+  }
+
+  function updateUI() {
+    if (!state.loaded) {
+      $('frameBadge').textContent = 'FRAME — / —';
+      $('timeBadge').textContent = '00:00:00.000';
+      $('status').textContent = '未加载视频';
+      return;
+    }
+    const f = state.frame;
+    $('frameBadge').textContent = `FRAME ${f} / ${state.total - 1}`;
+    $('timeBadge').textContent = fmtTime(f / state.fps);
+    $('stepBadge').textContent = `步长 ${state.step} · ← / →`;
+    $('prevStep').textContent = state.step;
+    $('nextStep').textContent = state.step;
+    $('scrub').max = Math.max(0, state.total - 1);
+    $('scrub').value = f;
+    $('gotoInput').max = Math.max(0, state.total - 1);
+    $('gotoInput').value = f;
+    $('status').textContent =
+      `${state.file ? state.file.name : ''} · ${state.width}×${state.height} · ` +
+      `${state.fps.toFixed(3)} fps · ${state.total} 帧 · ${fmtTime(state.duration)}` +
+      (state.playing ? ' · 播放中' : '');
+  }
+
+  function pause() {
+    if (!state.playing && video.paused) return;
+    video.pause();
+    state.playing = false;
+    $('playBtn').textContent = '▶ 播放';
+    draw();
+    updateUI();
+  }
+
+  async function play() {
+    if (!state.loaded) { toast('先打开一个视频'); return; }
+    if (state.frame >= state.total - 1) seekToFrame(0);
+    try {
+      await video.play();
+      state.playing = true;
+      $('playBtn').textContent = '⏸ 暂停';
+      startFrameLoop();
+      updateUI();
+    } catch (err) {
+      toast('无法播放：' + err.message);
+    }
+  }
+
+  function togglePlay() {
+    if (state.playing) pause(); else play();
+  }
+
+  function startFrameLoop() {
+    if ('requestVideoFrameCallback' in video) {
+      const cb = (now, meta) => {
+        if (!state.playing) return;
+        state.frame = clamp(Math.floor(meta.mediaTime * state.fps + 1e-6), 0, state.total - 1);
+        draw();
+        updateUI();
+        state.rvfcId = video.requestVideoFrameCallback(cb);
+      };
+      state.rvfcId = video.requestVideoFrameCallback(cb);
+    } else {
+      const cb = () => {
+        if (!state.playing) return;
+        state.frame = frameFromTime(video.currentTime);
+        draw();
+        updateUI();
+        requestAnimationFrame(cb);
+      };
+      requestAnimationFrame(cb);
+    }
+  }
+
+  function seekToFrame(frame) {
+    if (!state.loaded) return;
+    pause();
+    frame = clamp(Math.round(frame), 0, state.total - 1);
+    state.frame = frame;
+    const t = targetTime(frame);
+    if (Math.abs(video.currentTime - t) < 1e-6) {
+      draw();
+      updateUI();
+      return;
+    }
+    state.seeking = true;
+    const seq = ++state.seekSeq;
+    const onSeeked = () => {
+      if (seq !== state.seekSeq) return;
+      state.seeking = false;
+      state.frame = frameFromTime(video.currentTime);
+      draw();
+      updateUI();
+    };
+    video.addEventListener('seeked', onSeeked, { once: true });
+    video.currentTime = t;
+  }
+
+  function step(delta) {
+    if (!state.loaded) return;
+    seekToFrame(state.frame + delta * state.step);
+  }
+
+  function setStep(n) {
+    state.step = n;
+    document.querySelectorAll('#stepGroup button').forEach((b) => {
+      b.classList.toggle('active', Number(b.dataset.step) === n);
+    });
+    updateUI();
+  }
+
+  function nearestFpsOption(fps) {
+    const opts = [23.976, 24, 25, 29.97, 30, 50, 59.94, 60];
+    let best = opts[0];
+    for (const o of opts) if (Math.abs(o - fps) < Math.abs(best - fps)) best = o;
+    return Math.abs(best - fps) < 0.05 ? String(best) : 'custom';
+  }
+
+  function setFps(fps) {
+    if (!isFinite(fps) || fps <= 0) return;
+    fps = clamp(fps, 1, 240);
+    const t = state.loaded ? video.currentTime : 0;
+    state.fps = fps;
+    if (state.loaded && state.duration > 0) {
+      state.total = Math.max(1, Math.round(state.duration * fps));
+      state.frame = clamp(Math.round(t * fps), 0, state.total - 1);
+    }
+    $('fpsCustom').value = fps;
+    $('fpsSelect').value = nearestFpsOption(fps);
+    if (state.loaded && !state.playing) seekToFrame(state.frame);
+    updateUI();
+  }
+
+  function loadFile(file) {
+    if (!file) return;
+    if (state.url) URL.revokeObjectURL(state.url);
+    state.url = URL.createObjectURL(file);
+    state.file = file;
+    state.loaded = false;
+    state.total = 0;
+    state.frame = 0;
+    state.duration = 0;
+    pause();
+    $('fileName').textContent = file.name;
+    $('empty').style.display = 'none';
+    $('badges').style.display = 'none';
+    $('view').classList.remove('ready');
+    $('status').textContent = '加载中…';
+    video.src = state.url;
+    video.load();
+  }
+
+  function onLoadedMetadata() {
+    state.duration = video.duration;
+    state.width = video.videoWidth;
+    state.height = video.videoHeight;
+    if (!isFinite(state.duration) || state.duration <= 0) {
+      toast('这个视频没有有效时长（可能是流式 WebM），无法逐帧定位');
+      return;
+    }
+    state.loaded = true;
+    state.total = Math.max(1, Math.round(state.duration * state.fps));
+    canvas.width = state.width;
+    canvas.height = state.height;
+    $('view').classList.add('ready');
+    $('badges').style.display = 'flex';
+    state.frame = 0;
+    draw();
+    seekToFrame(0);
+    updateUI();
+    toast(`已加载 ${state.width}×${state.height} · ${state.total} 帧 @ ${state.fps} fps`);
+  }
+
+  async function detectFps() {
+    if (!state.loaded) { toast('先打开一个视频'); return; }
+    if (!('requestVideoFrameCallback' in video)) {
+      toast('当前浏览器不支持 requestVideoFrameCallback，请手动选 FPS');
+      return;
+    }
+    if (state.detectMode) return;
+    state.detectMode = true;
+    const savedFrame = state.frame;
+    pause();
+    const prevMuted = video.muted;
+    video.muted = true;
+    try {
+      await video.play();
+    } catch (err) {
+      state.detectMode = false;
+      video.muted = prevMuted;
+      toast('检测失败，无法播放：' + err.message);
+      return;
+    }
+    const times = [];
+    await new Promise((resolve) => {
+      const start = performance.now();
+      const cb = (now, meta) => {
+        times.push(meta.mediaTime);
+        if (times.length < 45 && performance.now() - start < 1600) {
+          video.requestVideoFrameCallback(cb);
+        } else {
+          resolve();
+        }
+      };
+      video.requestVideoFrameCallback(cb);
+    });
+    video.pause();
+    video.muted = prevMuted;
+    state.detectMode = false;
+    const deltas = [];
+    for (let i = 1; i < times.length; i++) {
+      const d = times[i] - times[i - 1];
+      if (d > 0.0005 && d < 0.1) deltas.push(d);
+    }
+    if (deltas.length < 4) {
+      toast('采样帧数不足，请手动选 FPS');
+      seekToFrame(savedFrame);
+      return;
+    }
+    deltas.sort((a, b) => a - b);
+    const median = deltas[Math.floor(deltas.length / 2)];
+    const fps = Math.round((1 / median) * 1000) / 1000;
+    setFps(fps);
+    seekToFrame(savedFrame);
+    toast(`检测到约 ${fps.toFixed(3)} fps`);
+  }
+
+  function savePng() {
+    if (!state.loaded) { toast('先打开一个视频'); return; }
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `frame_${String(state.frame).padStart(6, '0')}.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    }, 'image/png');
+  }
+
+  // ---------------- events ----------------
+  $('openBtn').addEventListener('click', () => $('fileInput').click());
+  $('fileInput').addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (f) loadFile(f);
+    e.target.value = '';
+  });
+
+  video.addEventListener('loadedmetadata', onLoadedMetadata);
+  video.addEventListener('loadeddata', () => { draw(); updateUI(); });
+  video.addEventListener('seeked', () => {
+    if (!state.seeking) {
+      state.frame = frameFromTime(video.currentTime);
+      draw();
+      updateUI();
+    }
+  });
+  video.addEventListener('timeupdate', () => {
+    if (state.playing) return;
+    state.frame = frameFromTime(video.currentTime);
+    draw();
+    updateUI();
+  });
+  video.addEventListener('ended', () => {
+    state.playing = false;
+    $('playBtn').textContent = '▶ 播放';
+    state.frame = state.total - 1;
+    draw();
+    updateUI();
+  });
+  video.addEventListener('error', () => {
+    const code = video.error ? video.error.code : '?';
+    $('status').textContent = '视频加载/解码失败（code ' + code + '）';
+    toast('无法解码这个视频，试试 H.264 MP4');
+  });
+
+  document.querySelectorAll('#stepGroup button').forEach((b) => {
+    b.addEventListener('click', () => setStep(Number(b.dataset.step)));
+  });
+
+  $('fpsSelect').addEventListener('change', (e) => {
+    if (e.target.value === 'custom') {
+      $('fpsCustom').focus();
+      $('fpsCustom').select();
+      return;
+    }
+    setFps(Number(e.target.value));
+  });
+  $('fpsCustom').addEventListener('change', (e) => setFps(Number(e.target.value)));
+  $('detectFps').addEventListener('click', detectFps);
+
+  $('playBtn').addEventListener('click', togglePlay);
+  $('prevBtn').addEventListener('click', () => step(-1));
+  $('nextBtn').addEventListener('click', () => step(1));
+  $('firstBtn').addEventListener('click', () => seekToFrame(0));
+  $('lastBtn').addEventListener('click', () => seekToFrame(state.total - 1));
+  $('pngBtn').addEventListener('click', savePng);
+  $('scrub').addEventListener('input', (e) => {
+    pause();
+    seekToFrame(Number(e.target.value));
+  });
+  $('gotoBtn').addEventListener('click', () => seekToFrame(Number($('gotoInput').value)));
+  $('gotoInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); seekToFrame(Number($('gotoInput').value)); }
+  });
+
+  canvas.addEventListener('mousedown', (e) => {
+    if (!state.loaded) return;
+    if (e.button === 0) { e.preventDefault(); step(-1); }
+    else if (e.button === 2) { e.preventDefault(); step(1); }
+  });
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  const stage = $('stage');
+  stage.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    $('empty').classList.add('drag');
+  });
+  stage.addEventListener('dragleave', () => $('empty').classList.remove('drag'));
+  stage.addEventListener('drop', (e) => {
+    e.preventDefault();
+    $('empty').classList.remove('drag');
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) loadFile(f);
+  });
+
+  window.addEventListener('keydown', (e) => {
+    const t = e.target;
+    if (t && (t.matches('input, select, textarea') || t.isContentEditable)) return;
+    if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+      e.preventDefault(); step(-1);
+    } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+      e.preventDefault(); step(1);
+    } else if (e.key === ' ') {
+      e.preventDefault(); togglePlay();
+    } else if (e.key === 'Home') {
+      e.preventDefault(); seekToFrame(0);
+    } else if (e.key === 'End') {
+      e.preventDefault(); seekToFrame(state.total - 1);
+    }
+  });
+
+  window.addEventListener('beforeunload', () => {
+    if (state.url) URL.revokeObjectURL(state.url);
+  });
+})();
+</script>
+</body>
+</html>

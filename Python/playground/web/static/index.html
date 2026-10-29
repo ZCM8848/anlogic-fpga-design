@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>钢珠视觉 Playground</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">BALL VISION <span>playground</span></div>
+  <div class="clipbox">
+    <label>片段</label>
+    <select id="clip"></select>
+    <span id="clipinfo" class="muted"></span>
+  </div>
+  <div class="transport">
+    <button id="prev" title="上一帧">◀</button>
+    <button id="play" title="播放/暂停">▶</button>
+    <button id="next" title="下一帧">▶|</button>
+    <input id="seek" type="range" min="0" max="0" value="0" />
+    <span id="framelabel" class="mono">0 / 0</span>
+  </div>
+  <div class="badge" id="countbadge">COUNT 0</div>
+</header>
+
+<main>
+  <section class="stage">
+    <figure>
+      <figcaption>原始输入</figcaption>
+      <img id="img-orig" alt="original" />
+    </figure>
+    <figure>
+      <figcaption>处理帧 · 50% 叠加</figcaption>
+      <img id="img-proc" alt="processed" />
+    </figure>
+    <figure>
+      <figcaption class="caprow">
+        处理帧 · 100%
+        <span>
+          <select id="proc-view">
+            <option value="score">score</option>
+            <option value="mask">mask</option>
+          </select>
+          <button id="proc-open" title="新标签页放大">放大</button>
+        </span>
+      </figcaption>
+      <img id="img-proc-full" alt="processed full" />
+    </figure>
+    <figure>
+      <figcaption>OSD</figcaption>
+      <img id="img-osd" alt="osd" />
+    </figure>
+  </section>
+
+  <aside class="side">
+    <div class="card">
+      <h3>当前帧</h3>
+      <div class="kv"><span>mode</span><b id="s-mode">-</b></div>
+      <div class="kv"><span>frame mean</span><b id="s-mean">-</b></div>
+      <div class="kv"><span>detections</span><b id="s-det">-</b></div>
+      <div class="kv"><span>tracks (visible)</span><b id="s-trk">-</b></div>
+      <div class="kv"><span>mask px</span><b id="s-mask">-</b></div>
+      <div class="kv"><span>score mean/max</span><b id="s-score">-</b></div>
+      <div class="kv"><span>count</span><b id="s-count">0</b></div>
+      <div class="kv"><span>gate x</span><b id="s-gate">-</b></div>
+      <p class="hint" id="s-reset"></p>
+    </div>
+
+    <div class="card">
+      <h3>参数</h3>
+      <div class="grid2">
+        <label>mode<select id="p-mode"><option value="auto">auto</option><option value="bright">bright</option><option value="dark">dark</option></select></label>
+        <label>球径 px<input id="p-diameter" type="number" min="20" max="600" /></label>
+        <label class="check"><input id="p-usebg" type="checkbox" /> 背景差分</label>
+        <label>bg thr<input id="p-bgthr" type="number" min="1" max="255" /></label>
+        <label>bright thr<input id="p-bright" type="number" min="0" max="255" /></label>
+        <label>dark win<input id="p-darkwin" type="number" min="3" max="160" /></label>
+        <label>dark thr<input id="p-darkthr" type="number" min="0" max="255" /></label>
+        <label>track gate px<input id="p-tgate" type="number" min="20" max="600" /></label>
+        <label>offset x<input id="p-ox" type="number" min="-200" max="200" /></label>
+        <label>offset y<input id="p-oy" type="number" min="-200" max="200" /></label>
+      </div>
+      <button id="apply" class="primary">应用参数</button>
+      <p class="hint">参数改动会重置跟踪与计数；整段计数请用 tools/count_clip.py。</p>
+    </div>
+
+    <div class="card">
+      <h3>标注 / 标定</h3>
+      <div class="row">
+        <button id="anno-open">标注当前帧</button>
+        <button id="anno-next">下一未标注</button>
+        <button id="anno-dense">密集帧</button>
+      </div>
+      <div class="row">
+        <button id="calib-open">标定</button>
+        <span id="calib-info" class="muted mono"></span>
+      </div>
+      <p class="hint">标注整条拖影；工具取框中心为球心，长边为运动方向。</p>
+      <p class="hint" id="anno-status"></p>
+    </div>
+
+    <div class="card">
+      <h3>计数事件</h3>
+      <div id="events" class="events"></div>
+    </div>
+  </aside>
+</main>
+
+<div id="modal" class="modal hidden">
+  <div class="modal-box">
+    <div class="modal-head">
+      <b id="modal-title">frame</b>
+      <div class="row">
+        <button id="modal-prev">◀</button>
+        <button id="modal-next">▶</button>
+        <button id="modal-close">×</button>
+      </div>
+    </div>
+    <div class="modal-body">
+      <canvas id="modal-canvas" width="1280" height="720"></canvas>
+    </div>
+    <div class="modal-foot">
+      <div id="modal-tools" class="row"></div>
+      <span id="modal-status" class="muted"></span>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

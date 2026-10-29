@@ -1,16 +1,18 @@
 /*******************************************************************************
  * camera_hdmi_720p — 板级顶层（M6 三模式重构）
  *
- * 模式（SW4 主选 + SW3 子选；拨上=1）：
- *   SW4=0            → 彩条测试图案（M1 基准，不退化）
- *   SW4=1, SW3=0     → 边缘提取（Sobel 二值图）
- *   SW4=1, SW3=1     → 彩色摄像头 + OSD（Anlogic logo + 帧计数）
+ * 模式（SW1 主选 + SW2 调试子选；拨上=1）：
+ *   SW1=0            → 识别/正常：摄像头 + 绿框 + Count（SW2 忽略）
+ *   SW1=1, SW2=0     → 静态 HDMI 测试图案（彩条+灰度+移动方块+文字）
+ *   SW1=1, SW2=1     → 动态调试画面；KEY1 循环 RGB888/score/mask
+ *   SW4              → 保留/留空
  *
- * 数据通路（SW4=1 时）：
+ * 数据通路（SW1=0 或 调试动态）：
  *   SC520CS → MIPI D-PHY RX(IP) → csi_unpacket_2lane → raw10_unpacket_2lane
- *   → uial2axis → isp_top[demosaic→awb→edge_detect_96(edge_on 门控 bypass)→pack]
+ *   → uial2axis → isp_top[demosaic→awb→pack]
  *   → video_in(async FIFO,4帧乒乓) → mc_to_user_interface → DDR2 IP
- *   → video_out(async FIFO) → hdmi_mixer[OSD(osd_on 门控)] → video_mux → hdmi_tx
+ *   → video_out(async FIFO) → hdmi_mixer[识别态 UI（SW1=0 统一叠加）]
+ *   → cv_top(CV/BALL 门控；调试态仍保持检测运行) → video_mux → hdmi_tx
  *
  * 时钟（ip/pll/PLL.v，厂商验证配置）：
  *   C0=100MHz 系统  C1=23.81MHz 摄像头XCLK  C4=75MHz 像素  C5=375MHz 串行
@@ -26,20 +28,25 @@
 module design_top_wrapper (
     input  wire        I_sys_clk,        // C4 板载 50MHz
     output wire [3:0]  O_led,            // D10/E10/C6/D6（高电平点亮）
+    output wire [7:0]  O_seg,            // 8 位数码管段选（低有效，SW6 拨上）
+    output wire [7:0]  O_sel,            // 8 位数码管位选（低有效）
 
     // 摄像头控制（BANK21，3V3；经 TXS0104E 电平转换）
     output wire        O_cam_scl,        // K3
     inout  wire        IO_cam_sda,       // J3
     output wire        O_cam_24m,        // L3 XCLK 23.81MHz
     output wire        O_cam_rst,        // L2 PWDNB（高=工作）
-    input  wire [1:0]  I_button,         // N2/J14 AE 按键
+    input  wire [1:0]  I_button,         // N2/J14（保留引脚；曝光/增益改由 MCU 控制）
 
     // USB-UART
     output wire        O_uart_tx,        // H1
 
-    // 模式切换
-    input  wire        I_sw4,            // D11（主选：0=彩条，1=摄像头）
-    input  wire        I_sw3,            // E11（子选：0=edge，1=OSD彩色）
+    // 模式切换（拨上=1）
+    input  wire        I_sw1,            // A4（0=识别/正常，1=调试）
+    input  wire        I_sw2,            // B4（调试子选：0=静态测试图案，1=动态调试画面）
+    input  wire        I_sw4,            // D11（保留/留空）
+    input  wire        I_sw3,            // E11（保留；当前不控制识别态 UI，仍进 SW_STAT）
+    input  wire        I_key1,           // D5 板载 KEY1（短按：动态调试 RGB/score/mask；长按>=1s：清零 Count+轨迹）
     input  wire        I_key2,           // A9 板载 KEY2（CV 叠加开关：按下切换 CV 开/关）
     input  wire        I_key3,           // B9 板载 KEY3（CV 开时：阈值 -1）
     input  wire        I_key4,           // C7 板载 KEY4（CV 开时：阈值 +1）
@@ -79,6 +86,7 @@ module design_top_wrapper (
     wire S_pixel_clk;    // C4 75MHz
     wire S_serial_clk;   // C5 375MHz
     wire S_pll_lock;
+    wire S_ahb_clk;      // 前向声明：MCU AHB 总线时钟（ps_wrapper 输出，cv_top/ahb_slave 用）
 
     PLL u_pll (
         .refclk   ( I_sys_clk    ),
@@ -95,8 +103,10 @@ module design_top_wrapper (
     wire S_rst_n_pix;
     wire S_rst_n_24m;
     wire S_rst_n_ddr;
+    wire S_rst_n_50m;
 
     reset_ctrl u_rst_100m (.clk(S_clk_100m), .pll_lock(S_pll_lock), .rst_n(S_rst_n_100m));
+    reset_ctrl u_rst_50m  (.clk(I_sys_clk),  .pll_lock(S_pll_lock), .rst_n(S_rst_n_50m));
     reset_ctrl u_rst_pix  (.clk(S_pixel_clk), .pll_lock(S_pll_lock), .rst_n(S_rst_n_pix));
     reset_ctrl u_rst_24m  (.clk(S_24m_clk),  .pll_lock(S_pll_lock), .rst_n(S_rst_n_24m));
 
@@ -104,8 +114,13 @@ module design_top_wrapper (
     // 异步复位最稳、且 TD 可走全局网络避免高扇出 recovery 违例）。本工程沿用。
     wire S_rst_n = S_pll_lock;
 
-    // CV 开关（前向声明：r_cv_on 在像素域 KEY2 段赋值，此处先声明供 ae_set/edge_on 早期引用）
-    reg r_cv_on;
+    // MCU 钢珠前端参数（ahb_status_slave 驱动；先声明供 cv_top 使用）
+    wire        S_ball_en, S_ball_capture;
+    wire [7:0]  S_ball_bg_thr, S_ball_min_run;
+    wire [8:0]  S_ball_roi_y1;
+    wire [9:0]  S_ball_max_run_len;
+    wire [15:0] S_skip_roi_cnt, S_skip_len_cnt;
+    wire        S_ball_bg_ready, S_ball_capturing;
 
     // ============================================================ 摄像头上电时序 + I2C 配置（参考件）
     reg  [17:0] S_cam_power_cnt;
@@ -134,9 +149,20 @@ module design_top_wrapper (
 
     wire [15:0] S_ae;
     wire [15:0] S_ag;
+    wire [15:0] S_cam_ae_ahb, S_cam_ag_ahb;
+    reg  [15:0] S_cam_ae_24m_a, S_cam_ae_24m;
+    reg  [15:0] S_cam_ag_24m_a, S_cam_ag_24m;
     wire        S_cam_cfg_done;
     wire        S_ae_cfg_done;
     wire        S_ae_req;
+
+    // AHB(150M) -> camera config clock(24M), values are static after boot.
+    always @(posedge S_24m_clk) begin
+        S_cam_ae_24m_a <= S_cam_ae_ahb;
+        S_cam_ae_24m   <= S_cam_ae_24m_a;
+        S_cam_ag_24m_a <= S_cam_ag_ahb;
+        S_cam_ag_24m   <= S_cam_ag_24m_a;
+    end
     wire [15:0] S_cam_sensor_id;
     wire        S_cam_sensor_id_ok;
     wire        S_cam_i2c_error;
@@ -144,7 +170,8 @@ module design_top_wrapper (
     ae_set u_ae_set (
         .I_clk        ( S_24m_clk         ),
         .I_rst        ( ~S_pll_lock       ),
-        .I_btn        ( {I_button, 2'b11} ),
+        .I_ae_set     ( S_cam_ae_24m      ),
+        .I_ag_set     ( S_cam_ag_24m      ),
         .I_cam_cfg_done( S_cam_cfg_done   ),
         .I_ae_cfg_done( S_ae_cfg_done     ),
         .O_ae_req     ( S_ae_req          ),
@@ -273,32 +300,12 @@ module design_top_wrapper (
         .axis_tlast    ( S_axis_tlast         )
     );
 
-    // ============================================================ ISP（参考件 + edge bypass）
+    // ============================================================ ISP（参考件；edge 模式已移除）
     wire        S_ISP_O_tready;
     wire [127:0] S_ISP_O_tdata;
     wire        S_ISP_O_tlast;
     wire        S_ISP_O_tuser;
     wire        S_ISP_O_tvalid;
-
-    // edge_on = SW4 & ~SW3（字节域同步）：1=走 edge_detect_96，0=彩色直通(喂 OSD)
-    reg  [2:0]  S_sw4_sync_rx;
-    reg  [2:0]  S_sw3_sync_rx;
-    always @(posedge S_csi_rx_clk or negedge S_rst_n_rx) begin
-        if (!S_rst_n_rx) begin
-            S_sw4_sync_rx <= 3'd0;
-            S_sw3_sync_rx <= 3'd0;
-        end else begin
-            S_sw4_sync_rx <= {S_sw4_sync_rx[1:0], I_sw4};
-            S_sw3_sync_rx <= {S_sw3_sync_rx[1:0], I_sw3};
-        end
-    end
-    // CV 开关（r_cv_on 在像素域 KEY2 段赋值；此处同步到字节域供 edge_on 门控）
-    reg [2:0]  r_cv_on_sync_rx;
-    always @(posedge S_csi_rx_clk or negedge S_rst_n_rx) begin
-        if (!S_rst_n_rx) r_cv_on_sync_rx <= 3'd0;
-        else             r_cv_on_sync_rx <= {r_cv_on_sync_rx[1:0], r_cv_on};
-    end
-    wire S_edge_on = S_sw4_sync_rx[2] & ~S_sw3_sync_rx[2] & ~r_cv_on_sync_rx[2];
 
     isp_top u_isp_top (
         .axi4s_video_aclk ( S_csi_rx_clk    ),
@@ -313,8 +320,7 @@ module design_top_wrapper (
         .O_tlast          ( S_ISP_O_tlast   ),
         .O_tuser          ( S_ISP_O_tuser   ),
         .O_tvalid         ( S_ISP_O_tvalid  ),
-        .I_tready         (                 ),
-        .I_edge_on        ( S_edge_on       )
+        .I_tready         (                 )
     );
 
     // ============================================================ DDR2 帧缓存（参考件 video_in/out + mc 桥 + IP）
@@ -492,7 +498,7 @@ module design_top_wrapper (
         .last  ( S_hdmi_last  )
     );
 
-    // ============================================================ 彩条测试图案（自研，SW4=0 时输出）
+    // ============================================================ 彩条测试图案（自研，SW1=1 & SW2=0 时输出）
     wire [23:0] S_pat_data;
     wire        S_pat_de;
     wire        S_pat_vs;
@@ -509,48 +515,117 @@ module design_top_wrapper (
         .vs_o  ( S_pat_vs     )
     );
 
-    // ============================================================ HDMI mixer（参考件 + osd_on 门控）
-    // osd_on = SW4 & SW3（像素域同步）：1=叠加 OSD，0=纯视频直通（edge 模式不叠 OSD）
-    reg  [2:0]  S_sw4_sync_pix;
+    // ============================================================ 模式同步 / 调试显示
+    // SW1=0 识别（正常），SW1=1 调试；SW2 只在调试态生效：
+    //   SW2=0 静态测试图案（带文字），SW2=1 动态调试（K1 循环 RGB/score/mask）
     reg  [2:0]  S_sw3_sync_pix;
+    reg  [2:0]  S_sw1_sync_pix;
+    reg  [2:0]  S_sw2_sync_pix;
     always @(posedge S_pixel_clk or negedge S_rst_n_pix) begin
         if (!S_rst_n_pix) begin
-            S_sw4_sync_pix <= 3'd0;
             S_sw3_sync_pix <= 3'd0;
+            S_sw1_sync_pix <= 3'd0;
+            S_sw2_sync_pix <= 3'd0;
         end else begin
-            S_sw4_sync_pix <= {S_sw4_sync_pix[1:0], I_sw4};
             S_sw3_sync_pix <= {S_sw3_sync_pix[1:0], I_sw3};
+            S_sw1_sync_pix <= {S_sw1_sync_pix[1:0], I_sw1};
+            S_sw2_sync_pix <= {S_sw2_sync_pix[1:0], I_sw2};
         end
     end
-    // ============================================================ KEY2 → CV 开关（像素域去抖 + 翻转 + 跨域同步）
-    // KEY2=A9 板载按键（PULLUP，按下=0）。计数器采样去抖（~14ms），下降沿翻转 r_cv_on。
-    // CV 开时强制 edge_on=0 / osd_on=0（让 hdmi_mixer/isp_top 直通纯摄像头画面供检测）。
-    reg [20:0] r_key2_cnt;
-    reg [2:0]  r_key2_sync;
-    reg        r_key2_d;
-    wire       key2_fall = ~r_key2_sync[2] & r_key2_d;
+    wire S_debug_mode    = S_sw1_sync_pix[2];
+    wire S_debug_dynamic = S_debug_mode &  S_sw2_sync_pix[2];
+    wire S_debug_static  = S_debug_mode & ~S_sw2_sync_pix[2];
+    wire S_camera_sel    = ~S_debug_static;   // 0=测试图案，1=摄像头/CV
+
+    // KEY1=D5：短按动态调试循环 RGB(纯净) -> score -> mask
+    //             长按 >=1s：发出 KEY_EVT，MCU 清零计数与轨迹
+    reg [20:0] r_key1_cnt;
+    reg [2:0]  r_key1_sync;
+    reg        r_key1_d;
+    reg [7:0]  r_key1_hold;
+    reg        r_key1_long_done;
+    reg        S_key1_long;
+    reg [1:0]  S_disp_mode;
+    wire       key1_fall = ~r_key1_sync[2] & r_key1_d;
     always @(posedge S_pixel_clk or negedge S_rst_n_pix) begin
         if (!S_rst_n_pix) begin
-            r_key2_cnt <= 21'd0; r_key2_sync <= 3'd0; r_key2_d <= 1'b0; r_cv_on <= 1'b0;
+            r_key1_cnt <= 21'd0; r_key1_sync <= 3'd0; r_key1_d <= 1'b0;
+            r_key1_hold <= 8'd0; r_key1_long_done <= 1'b0; S_key1_long <= 1'b0;
+            S_disp_mode <= 2'd3;
+        end else begin
+            r_key1_sync <= {r_key1_sync[1:0], I_key1};
+            if (r_key1_cnt == 21'd1048575) begin   // ~14ms @75MHz
+                r_key1_cnt <= 21'd0;
+                r_key1_d   <= r_key1_sync[2];
+                if (!r_key1_sync[2]) begin
+                    if (r_key1_hold < 8'd70) r_key1_hold <= r_key1_hold + 8'd1;
+                    if (r_key1_hold == 8'd69) begin
+                        S_key1_long     <= 1'b1;
+                        r_key1_long_done <= 1'b1;
+                    end else begin
+                        S_key1_long <= 1'b0;
+                    end
+                end else begin
+                    r_key1_hold      <= 8'd0;
+                    S_key1_long      <= 1'b0;
+                    r_key1_long_done <= 1'b0;
+                end
+                if (key1_fall && S_debug_dynamic && !r_key1_long_done) begin
+                    if (S_disp_mode == 2'd3)      S_disp_mode <= 2'd1;
+                    else if (S_disp_mode == 2'd1) S_disp_mode <= 2'd2;
+                    else                          S_disp_mode <= 2'd3;
+                end
+            end else begin
+                r_key1_cnt <= r_key1_cnt + 21'd1;
+            end
+        end
+    end
+
+    // ============================================================ CV / ball 前端
+    // 正常和调试态都保持检测运行；显示源由 SW1/SW2/K1 决定。
+    reg [2:0] S_ball_en_sync_pix;
+    always @(posedge S_pixel_clk or negedge S_rst_n_pix) begin
+        if (!S_rst_n_pix) S_ball_en_sync_pix <= 3'd0;
+        else              S_ball_en_sync_pix <= {S_ball_en_sync_pix[1:0], S_ball_en};
+    end
+    wire S_ball_mode = S_ball_en_sync_pix[2];
+    wire S_cv_eff = S_ball_mode;
+    // ============================================================ KEY2 长按 → 背景重采事件
+    // KEY2=A9 板载按键（PULLUP，按下=0）。~14ms 采样去抖，长按 >=1s 置 r_key2_long。
+    // r_key2_long 保持到松手，由 ahb_status_slave 取上升沿生成 KEY_EVT[1]。
+    reg [20:0] r_key2_cnt;
+    reg [2:0]  r_key2_sync;
+    reg [7:0]  r_key2_hold;
+    reg        r_key2_long;
+    always @(posedge S_pixel_clk or negedge S_rst_n_pix) begin
+        if (!S_rst_n_pix) begin
+            r_key2_cnt <= 21'd0; r_key2_sync <= 3'd0;
+            r_key2_hold <= 8'd0; r_key2_long <= 1'b0;
         end else begin
             r_key2_sync <= {r_key2_sync[1:0], I_key2};
             if (r_key2_cnt == 21'd1048575) begin   // ~14ms @75MHz
                 r_key2_cnt <= 21'd0;
-                r_key2_d   <= r_key2_sync[2];
-                if (key2_fall) r_cv_on <= ~r_cv_on;
+                if (!r_key2_sync[2]) begin
+                    if (r_key2_hold < 8'd70) r_key2_hold <= r_key2_hold + 8'd1;
+                    if (r_key2_hold == 8'd69) r_key2_long <= 1'b1;
+                end else begin
+                    r_key2_hold <= 8'd0;
+                    r_key2_long <= 1'b0;
+                end
             end else begin
                 r_key2_cnt <= r_key2_cnt + 21'd1;
             end
         end
     end
 
-    // osd_on = SW4&SW3 且 CV 关（CV 开时强制 0，纯摄像头画面）
-    wire S_osd_on = S_sw4_sync_pix[2] & S_sw3_sync_pix[2] & ~r_cv_on;
+    // 识别态 UI：SW1=0 整套 OSD 同时显示（Logo / 标签 / Count / 文本 / FRAME）
+    wire S_ui_on = ~S_debug_mode;
 
     wire        S_hdmi_out_vsync;
     wire        S_hdmi_out_hsync;
     wire        S_hdmi_out_de;
     wire [23:0] S_hdmi_out_data;
+    wire [3:0]  S_ball_now;       // slave → hdmi_mixer（当前框数）
 
     hdmi_mixer #(
         .H_OFFSET   ( 0    ),
@@ -566,7 +641,9 @@ module design_top_wrapper (
         .I_video_de      ( S_hdmi_de           ),
         .I_video_user    ( S_hdmi_user         ),
         .I_video_last    ( S_hdmi_last         ),
-        .I_osd_on        ( S_osd_on            ),
+        .I_osd_on        ( 1'b0                ),
+        .I_ui_on         ( S_ui_on             ),
+        .I_ball_now      ( S_ball_now          ),
         .I_debug_status  ( 4'd0                ),
         .O_video_rd_en   ( S_hdmi_window_rd_en ),
         .I_video_rd_data ( S_video_rd_data     ),
@@ -576,16 +653,24 @@ module design_top_wrapper (
         .O_hdmi_data     ( S_hdmi_out_data     )
     );
 
-    // ============================================================ CV 叠加（M7 钢珠检测）
-    // 串在 hdmi_mixer → video_mux 之间。组合直通保相位；I_cv_on=1 时叠加白框。
+    // ============================================================ CV 叠加 + 数据通路（v2）
+    // cv_top 只留像素级前端（Sobel/run 写）+ 叠加；CCL/跟踪/计数转 MCU。
+    // run_mem B 口：cv_top 写(pixel) / ahb slave 读(ahb_clk)；overlay/count：slave 写 / cv_top 读。
     wire [23:0] S_cv_data;
     wire        S_cv_de;
     wire        S_cv_vs;
-    wire [5:0]  S_cv_blob_cnt;
     wire [10:0] S_cv_run_cnt;
-    wire        S_cv_ccl_busy;
     wire        S_cv_run_overflow;
     wire [7:0]  S_cv_bin_thr;
+    wire [7:0]  S_cv_min_y, S_cv_max_y;
+    wire [9:0]  S_run_rd_addr;     // slave → cv_top（run_mem B 口地址）
+    wire [31:0] S_run_rd_data;    // cv_top → slave（run_mem B 口数据）
+    wire [511:0] S_overlay;        // slave → cv_top（叠加 bbox+ID）
+    wire [15:0]  S_count;          // slave → cv_top（exit 计数显示）
+    wire [19:0]  S_count_bcd;      // slave → cv_top / 数码管（5 位 BCD）
+    wire         S_seg_dash;       // slave → 数码管（背景重采样时全横线）
+    wire [8:0]   S_gate_x;         // slave → cv_top（门线 x，320x180）
+    wire [7:0]   S_gate_y0, S_gate_y1;
 
     // K3(B9)/K4(C7) 板载按键：CV 开时作阈值 ±1 调参（像素域去抖 → 单拍脉冲）
     // 注：脉冲必须单拍——cv_top 每周期判 I_thr_up/dn，若发 14ms 电平会被加到饱和
@@ -606,8 +691,9 @@ module design_top_wrapper (
             if (r_btn_cnt == 21'd1048575) begin
                 r_btn_cnt <= 21'd0;
                 // 用 OLD r_btn_d（按下前=1）与当前采样（按下=0）判下降沿，单拍置 1
-                R_thr_dn  <= r_cv_on & (~r_btn0_sync[2] & r_btn0_d);
-                R_thr_up  <= r_cv_on & (~r_btn1_sync[2] & r_btn1_d);
+                // K3/K4 legacy pulses; cv_top 当前不消费 I_thr_up/dn
+                R_thr_dn  <= ~r_btn0_sync[2] & r_btn0_d;
+                R_thr_up  <= ~r_btn1_sync[2] & r_btn1_d;
                 r_btn0_d  <= r_btn0_sync[2];
                 r_btn1_d  <= r_btn1_sync[2];
             end else begin
@@ -622,51 +708,77 @@ module design_top_wrapper (
         .IMG_W    ( 1280   ),
         .IMG_H    ( 720    ),
         .BIN_THR  ( 8'd91  ),
-        .MIN_AREA ( 16'd8  ),
-        .MAX_AREA ( 16'd20000 ),
-        .MIN_FILL ( 6'd15  ),
-        .MIN_RATIO( 6'd25  ),
-        .EDGE_MG  ( 12'd4  ),
-        .MASK_VIEW( 1      )
+        .EDGE_THR ( 11'd80 ),
+        .MASK_SRC ( 1      ),
+        .MAX_RUNS ( 1024   ),
+        .MASK_VIEW( 0      ),
+        .FBOX_W   ( 12'd2  ),
+        .MAX_OV   ( 8      ),
+        .BALL_W   ( 320    ),
+        .BALL_H   ( 180    ),
+        .BALL_SCALE ( 4    )
     ) u_cv_top (
         .I_clk          ( S_pixel_clk      ),
         .I_rst_n        ( S_rst_n_pix      ),
-        .I_cv_on        ( r_cv_on          ),
+        .I_cv_on        ( S_cv_eff         ),
+        .I_ui_on        ( S_ui_on          ),
         .I_thr_up       ( R_thr_up         ),
         .I_thr_dn       ( R_thr_dn         ),
         .I_de           ( S_hdmi_out_de    ),
         .I_vs           ( S_hdmi_out_vsync ),
         .I_data         ( S_hdmi_out_data  ),
+        .I_ball_en      ( S_ball_mode      ),
+        .I_ball_bg_thr  ( S_ball_bg_thr    ),
+        .I_ball_min_run ( S_ball_min_run   ),
+        .I_ball_roi_y1  ( S_ball_roi_y1    ),
+        .I_ball_max_run_len ( S_ball_max_run_len ),
+        .I_ball_capture ( S_ball_capture   ),
+        .I_disp_mode    ( S_disp_mode      ),
+        .I_debug_view   ( S_debug_dynamic  ),
+        .O_ball_bg_ready( S_ball_bg_ready  ),
+        .O_ball_capturing(S_ball_capturing ),
+        .I_ahb_clk      ( S_ahb_clk        ),
+        .I_run_rd_addr  ( S_run_rd_addr    ),
+        .O_run_rd_data  ( S_run_rd_data    ),
+        .I_overlay      ( S_overlay        ),
+        .I_count        ( S_count          ),
+        .I_count_bcd    ( S_count_bcd      ),
+        .I_gate_x       ( S_gate_x         ),
+        .I_gate_y0      ( S_gate_y0        ),
+        .I_gate_y1      ( S_gate_y1        ),
         .O_de           ( S_cv_de          ),
         .O_vs           ( S_cv_vs          ),
         .O_data         ( S_cv_data        ),
-        .O_blob_cnt     ( S_cv_blob_cnt    ),
         .O_run_cnt      ( S_cv_run_cnt     ),
-        .O_ccl_busy     ( S_cv_ccl_busy    ),
+        .O_min_y        ( S_cv_min_y       ),
+        .O_max_y        ( S_cv_max_y       ),
+        .O_skip_roi_cnt ( S_skip_roi_cnt   ),
+        .O_skip_len_cnt ( S_skip_len_cnt   ),
         .O_run_overflow ( S_cv_run_overflow),
         .O_bin_thr      ( S_cv_bin_thr     )
     );
 
-    // ============================================================ video_mux（自研，彩条 vs 摄像头二选一）
+    // CV 始终实时运行；run_cnt 直接送 MCU
+    // ============================================================ video_mux（自研，测试图案 vs 摄像头二选一）
     wire [23:0] S_vid_data;
     wire        S_vid_de;
     wire        S_vid_vs;
     wire        S_vid_sel;
 
     video_mux u_video_mux (
-        .clk        ( S_pixel_clk      ),
-        .rst_n      ( S_rst_n_pix      ),
-        .I_sw4      ( I_sw4            ),
-        .I_pat_data ( S_pat_data       ),
-        .I_pat_de   ( S_pat_de         ),
-        .I_pat_vs   ( S_pat_vs         ),
-        .I_cam_data ( S_cv_data        ),
-        .I_cam_de   ( S_cv_de          ),
-        .I_cam_vs   ( S_cv_vs          ),
-        .O_data     ( S_vid_data       ),
-        .O_de       ( S_vid_de         ),
-        .O_vs       ( S_vid_vs         ),
-        .O_sel      ( S_vid_sel        )
+        .clk          ( S_pixel_clk      ),
+        .rst_n        ( S_rst_n_pix      ),
+        .I_camera_sel ( S_camera_sel     ),
+        .I_pat_data   ( S_pat_data       ),
+        .I_pat_de     ( S_pat_de         ),
+        .I_pat_vs     ( S_pat_vs         ),
+        .I_cam_data   ( S_cv_data        ),
+        .I_cam_de     ( S_cv_de          ),
+        .I_cam_vs     ( S_cv_vs          ),
+        .O_data       ( S_vid_data       ),
+        .O_de         ( S_vid_de         ),
+        .O_vs         ( S_vid_vs         ),
+        .O_sel        ( S_vid_sel        )
     );
 
     // ============================================================ HDMI 1.4b TX（复用 IP）
@@ -710,45 +822,35 @@ module design_top_wrapper (
         else               S_ddr_rdy_s <= {S_ddr_rdy_s[0], S_ddr_rdy};
     end
 
-    // SW4/SW3 同步到 100M 域（供串口上报）
+    // SW1~SW4 同步到 100M 域（供串口上报）
+    reg [2:0] S_sw1_sync_100m;
+    reg [2:0] S_sw2_sync_100m;
     reg [2:0] S_sw4_sync_100m;
     reg [2:0] S_sw3_sync_100m;
     reg [2:0] S_cv_on_sync_100m;
-    reg [5:0] S_cv_blob_cnt_s1, S_cv_blob_cnt_s2;
     reg [7:0] S_cv_bin_thr_s1, S_cv_bin_thr_s2;
     always @(posedge S_clk_100m) begin
         if (!S_rst_n_100m) begin
+            S_sw1_sync_100m <= 3'd0;
+            S_sw2_sync_100m <= 3'd0;
             S_sw4_sync_100m <= 3'd0;
             S_sw3_sync_100m <= 3'd0;
             S_cv_on_sync_100m <= 3'd0;
-            S_cv_blob_cnt_s1 <= 6'd0; S_cv_blob_cnt_s2 <= 6'd0;
             S_cv_bin_thr_s1 <= 8'd0;  S_cv_bin_thr_s2 <= 8'd0;
         end else begin
+            S_sw1_sync_100m <= {S_sw1_sync_100m[1:0], I_sw1};
+            S_sw2_sync_100m <= {S_sw2_sync_100m[1:0], I_sw2};
             S_sw4_sync_100m <= {S_sw4_sync_100m[1:0], I_sw4};
             S_sw3_sync_100m <= {S_sw3_sync_100m[1:0], I_sw3};
-            S_cv_on_sync_100m <= {S_cv_on_sync_100m[1:0], r_cv_on};
-            S_cv_blob_cnt_s1 <= S_cv_blob_cnt;
-            S_cv_blob_cnt_s2 <= S_cv_blob_cnt_s1;
-            S_cv_bin_thr_s1  <= S_cv_bin_thr;        // 8bit 慢变（手动调），2FF 同步
+            S_cv_on_sync_100m <= {S_cv_on_sync_100m[1:0], S_cv_eff};
+            S_cv_bin_thr_s1  <= S_cv_bin_thr;
             S_cv_bin_thr_s2  <= S_cv_bin_thr_s1;
         end
     end
 
-    status_report u_status_report (
-        .clk           ( S_clk_100m          ),
-        .rst_n         ( S_rst_n_100m        ),
-        .I_cam_id      ( S_cam_sensor_id     ),
-        .I_cam_id_ok   ( S_cam_sensor_id_ok  ),
-        .I_cam_i2c_err ( S_cam_i2c_error     ),
-        .I_cam_cfg_done( S_cam_cfg_done      ),
-        .I_ddr_rdy     ( S_ddr_rdy_s[1]      ),
-        .I_sw4         ( S_sw4_sync_100m[2]  ),
-        .I_sw3         ( S_sw3_sync_100m[2]  ),
-        .I_cv_on       ( S_cv_on_sync_100m[2]),
-        .I_blob_cnt    ( S_cv_blob_cnt_s2    ),
-        .I_bin_thr     ( S_cv_bin_thr_s2     ),
-        .O_uart_tx     ( O_uart_tx           )
-    );
+    // B7: H1 切换给 MCU —— status_report 删除，O_uart_tx 由 MCU uart0_tx 驱动
+    wire S_mcu_uart0_tx;   // 前向声明（ps_wrapper 输出）
+    assign O_uart_tx = S_mcu_uart0_tx;
 
     // ============================================================ LED 状态指示
     reg [23:0] S_hb_cnt;    // 100MHz 域心跳（约 0.17s 翻转）
@@ -759,5 +861,138 @@ module design_top_wrapper (
 
     // LED1=PLL 锁定  LED2=100M 心跳  LED3=摄像头配置完成  LED4=DDR 校准完成
     assign O_led = { S_ddr_rdy_s[1], S_cam_cfg_done, S_hb_cnt[23], S_pll_lock };
+
+    // ============================================================ MCU 子系统（B6：状态走 AHB，窗口 0x80000000）
+    // fabric APB 窗口基址文档里找不到；fabric AHB 窗口 = 0x80000000（AHBDemo 验证）。
+    // 故状态从口改走 AHB：MCU AHB master → ahb_status_slave；APB master 内部悬空（ps_wrapper 默认返回）。
+    //   - core_clk ← pll_mcu 300MHz；timer_clk ← u_pll C0 100MHz
+    //   - ahb_clk ← MCU 输出（~150MHz）→ 喂回 ahb_status_slave 作时钟
+    //   - uart0_tx → H1（B7 切换：MCU 接管串口，status_report 已删）
+    wire        S_clk_300m;        // pll_mcu -> MCU core_clk
+    wire        S_pll_mcu_lock;
+    pll_mcu u_pll_mcu (
+        .refclk   ( I_sys_clk      ),   // 50MHz 板钟
+        .reset    ( 1'b0           ),   // 与 u_pll 一致：上电复位由芯片内建
+        .clk0_out ( S_clk_300m     ),
+        .lock     ( S_pll_mcu_lock )
+    );
+
+    // MCU 核复位（高有效；两 PLL 都锁定后释放）
+    wire S_mcu_core_reset = ~(S_pll_lock & S_pll_mcu_lock);
+
+    // ---- AHB 互连 ----
+    wire [1:0]  S_htrans;
+    wire        S_hwrite;
+    wire [30:0] S_haddr;
+    wire [2:0]  S_hsize, S_hburst;
+    wire [3:0]  S_hprot;
+    wire        S_hmastlock;
+    wire [31:0] S_hwdata, S_hrdata;
+    wire [1:0]  S_hresp;
+    wire        S_hready;
+    wire [31:0] S_mcu_heartbeat, S_mcu_scratch, S_mcu_frame_cnt;
+
+    // ahb_clk 域复位（MCU 起来后 ahb_clk 才稳，reset_ctrl 在 ahb_clk 上同步释放）
+    wire S_rst_n_ahb;
+    reset_ctrl u_rst_ahb (.clk(S_ahb_clk), .pll_lock(S_pll_lock & S_pll_mcu_lock), .rst_n(S_rst_n_ahb));
+
+    ahb_status_slave u_ahb_status (
+        .I_hclk        ( S_ahb_clk         ),
+        .I_hresetn     ( S_rst_n_ahb       ),
+        .I_htrans      ( S_htrans          ),
+        .I_hwrite      ( S_hwrite          ),
+        .I_haddr       ( S_haddr           ),
+        .I_hsize       ( S_hsize           ),
+        .I_hburst      ( S_hburst          ),
+        .I_hprot       ( S_hprot           ),
+        .I_hmastlock   ( S_hmastlock       ),
+        .I_hwdata      ( S_hwdata          ),
+        .O_hrdata      ( S_hrdata          ),
+        .O_hreadyout   ( S_hready          ),
+        .O_hresp       ( S_hresp           ),
+        // 状态输入（pixel/100M 域原信号；slave 内部 2FF 同步到 ahb_clk）
+        .I_cam_id      ( S_cam_sensor_id    ),
+        .I_cam_id_ok   ( S_cam_sensor_id_ok ),
+        .I_cam_i2c_err ( S_cam_i2c_error    ),
+        .I_cam_cfg_done( S_cam_cfg_done     ),
+        .I_ddr_rdy     ( S_ddr_rdy_s[1]     ),
+        .I_sw1         ( S_sw1_sync_100m[2] ),
+        .I_sw2         ( S_sw2_sync_100m[2] ),
+        .I_sw4         ( S_sw4_sync_100m[2] ),
+        .I_sw3         ( S_sw3_sync_100m[2] ),
+        .I_cv_on       ( S_cv_on_sync_100m[2]),
+        .I_blob_cnt    ( 6'd0              ),   // CCL 转 MCU，无硬件检测数
+        .I_bin_thr     ( S_cv_bin_thr_s2    ),
+        .I_run_cnt     ( S_cv_run_cnt       ),
+        .I_run_overflow( S_cv_run_overflow ),
+        .I_min_y       ( S_cv_min_y         ),
+        .I_max_y       ( S_cv_max_y         ),
+        .I_vsync       ( S_hdmi_vsync       ),
+        .I_key1_long   ( S_key1_long        ),
+        .I_key2_long   ( r_key2_long        ),
+        .I_skip_roi_cnt( S_skip_roi_cnt     ),
+        .I_skip_len_cnt( S_skip_len_cnt     ),
+        // 钢珠前端参数（C 固件唯一定义）
+        .O_ball_en       ( S_ball_en         ),
+        .O_ball_bg_thr   ( S_ball_bg_thr     ),
+        .O_ball_min_run  ( S_ball_min_run    ),
+        .O_ball_roi_y1   ( S_ball_roi_y1     ),
+        .O_ball_max_run_len ( S_ball_max_run_len ),
+        .O_ball_capture  ( S_ball_capture    ),
+        .I_ball_bg_ready ( S_ball_bg_ready   ),
+        .I_ball_capturing( S_ball_capturing  ),
+        // run_mem 间接读口（slave 发地址 → cv_top B 口出数据）
+        .O_run_rd_addr ( S_run_rd_addr     ),
+        .I_run_rd_data ( S_run_rd_data     ),
+        // overlay + count（MCU 写 → cv_top 叠加读）
+        .O_overlay     ( S_overlay          ),
+        .O_count       ( S_count            ),
+        .O_count_bcd   ( S_count_bcd        ),
+        .O_ball_now    ( S_ball_now         ),
+        .O_seg_dash    ( S_seg_dash         ),
+        .O_gate_x      ( S_gate_x           ),
+        .O_gate_y0     ( S_gate_y0          ),
+        .O_gate_y1     ( S_gate_y1          ),
+        .O_cam_ae      ( S_cam_ae_ahb       ),
+        .O_cam_ag      ( S_cam_ag_ahb       ),
+        .O_heartbeat   ( S_mcu_heartbeat    ),
+        .O_scratch     ( S_mcu_scratch      ),
+        .O_frame_cnt   ( S_mcu_frame_cnt    )
+    );
+
+    // ---- MCU（ps_wrapper，AHB master 暴露）----
+    // S_mcu_uart0_tx 已在 B7 assign 段前向声明
+    wire        S_mcu_core_sysrst;    // MCU 主动复位，暂悬空
+    ps_wrapper u_ps (
+        .I_core_clk   ( S_clk_300m        ),
+        .I_timer_clk  ( S_clk_100m        ),
+        .I_rst        ( S_mcu_core_reset  ),
+        .O_core_sysrst( S_mcu_core_sysrst  ),
+        .O_ahb_clk    ( S_ahb_clk        ),
+        .O_htrans     ( S_htrans          ),
+        .O_hwrite     ( S_hwrite          ),
+        .O_haddr      ( S_haddr           ),
+        .O_hsize      ( S_hsize           ),
+        .O_hburst     ( S_hburst          ),
+        .O_hprot      ( S_hprot           ),
+        .O_hmastlock  ( S_hmastlock       ),
+        .O_hwdata     ( S_hwdata          ),
+        .I_hrdata     ( S_hrdata          ),
+        .I_hresp      ( S_hresp           ),
+        .I_hready     ( S_hready          ),
+        .O_uart0_tx   ( S_mcu_uart0_tx    ),
+        .I_uart0_rx   ( 1'b1             )    // UART idle
+    );
+
+    // ---- 8 位数码管：5 位十进制 BCD 计数（右对齐，左 3 位灭）----
+    // SW6 必须拨到数码管一侧；数码管与双色 LED 复用 16 根引脚。
+    seg_count_display u_seg_count (
+        .I_clk   ( I_sys_clk       ),
+        .I_rst_n ( S_rst_n_50m     ),
+        .I_bcd   ( S_count_bcd     ),
+        .I_dash  ( S_seg_dash      ),
+        .O_seg   ( O_seg           ),
+        .O_sel   ( O_sel           )
+    );
 
 endmodule

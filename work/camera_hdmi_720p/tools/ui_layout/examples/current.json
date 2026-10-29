@@ -1,0 +1,49 @@
+{
+  "app": "fpga-ui-layout-studio",
+  "version": 1,
+  "canvas": {
+    "width": 1280,
+    "height": 720
+  },
+  "elements": [
+    {
+      "id": "el_mvsbjfd8_6",
+      "type": "logo",
+      "name": "安路 Logo",
+      "x": 0,
+      "y": 0,
+      "w": 160,
+      "h": 160,
+      "color": "#1f315c",
+      "text": "",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "el_mvsbjfd8_7",
+      "type": "osd_text",
+      "name": "动态 OSD",
+      "x": 375,
+      "y": 120,
+      "w": 200,
+      "h": 24,
+      "color": "#fff200",
+      "text": "ANLU  LOGO  0000",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "el_mvsbjfd8_8",
+      "type": "count",
+      "name": "钢珠计数",
+      "x": 24,
+      "y": 56,
+      "w": 40,
+      "h": 7,
+      "color": "#00e6ff",
+      "text": "00000",
+      "visible": true,
+      "locked": false
+    }
+  ]
+}

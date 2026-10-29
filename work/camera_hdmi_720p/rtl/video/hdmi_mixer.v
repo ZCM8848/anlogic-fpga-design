@@ -14,6 +14,8 @@ module hdmi_mixer #(
     input wire        I_video_user,
     input wire        I_video_last,
     input wire        I_osd_on,
+    input wire        I_ui_on,
+    input wire [3:0]  I_ball_now,
 
     input wire[3:0]   I_debug_status,
 
@@ -43,8 +45,9 @@ module hdmi_mixer #(
 
     reg        S_osd_hit;
     reg [23:0] S_osd_color;
-    reg [11:0] S_logo_x;
-    reg [11:0] S_logo_y;
+    reg        S_ui_text_hit;
+    reg [23:0] S_ui_text_color;
+    reg [3:0]  S_frame_digit;
     reg [3:0]  S_char_idx;
     reg [2:0]  S_char_row;
     reg [2:0]  S_char_col;
@@ -56,7 +59,10 @@ module hdmi_mixer #(
     reg [3:0]  S_logo_red_band;
     reg [11:0] S_logo_red_x_start;
     reg [11:0] S_logo_red_x_end;
-    reg [14:0] S_logo_addr;
+    reg [14:0] S_logo_addr_1d;
+    reg        S_logo_in_1d;
+    reg [24:0] S_logo_pix_2d;
+    reg        S_logo_hit_2d;
     wire[24:0] S_logo_pixel;
     reg [31:0] S_frame_cnt;
     reg [11:0] S_dyn_x;
@@ -99,20 +105,48 @@ module hdmi_mixer #(
     reg [9:0]  S_pf_scale_x;
     reg [9:0]  S_pf_scale_y;
 
-    localparam LOGO_X = 12'd0;
-    localparam LOGO_Y = 12'd0;
+    localparam LOGO_X = 12'd24;
+    localparam LOGO_Y = 12'd24;
     localparam LOGO_W = 12'd160;
     localparam LOGO_H = 12'd160;
 
     localparam COLOR_LOGO_BLUE   = 24'h1f315c;
     localparam COLOR_LOGO_RED    = 24'hec1c2d;
     localparam COLOR_TEXT        = 24'h00e6ff;
-    localparam DYN_OSD_X         = 12'd375;
-    localparam DYN_OSD_Y         = 12'd120;
+    localparam DYN_OSD_X         = 12'd24;
+    localparam DYN_OSD_Y         = 12'd172;
     localparam DYN_OSD_W         = 12'd200;
     localparam DYN_OSD_H         = 12'd24;
     localparam CN_Y_OFFSET       = 12'd2;
     localparam COLOR_DYN_TEXT    = 24'hfff200;
+
+    // 识别态 UI（SW1=0）文字/计数布局，来自 ui_layout 的 ball_counter.json
+    localparam UI_LABEL_X        = 12'd24;
+    localparam UI_LABEL_Y        = 12'd612;
+    localparam UI_LABEL_W        = 12'd160;
+    localparam UI_LABEL_H        = 12'd18;
+    localparam UI_TEXT_X         = 12'd24;
+    localparam UI_TEXT_Y         = 12'd172;
+    localparam UI_TEXT_W         = 12'd160;
+    localparam UI_TEXT_H         = 12'd24;
+    localparam UI_FRAME_X        = 12'd24;
+    localparam UI_FRAME_Y        = 12'd680;
+    localparam UI_FRAME_W        = 12'd240;
+    localparam UI_FRAME_H        = 12'd20;
+    localparam UI_FRAME_PREFIX_W = 12'd80;
+    localparam UI_FRAME_DIGITS_W = 12'd96;
+    localparam UI_COLOR_LABEL    = 24'h8be9fd;
+    localparam UI_COLOR_TEXT     = 24'hfff200;
+    localparam UI_COLOR_FRAME    = 24'h9aa7bd;
+    localparam UI_COLOR_DETECTED = 24'h8be9fd;
+
+    // 识别态 "DETECTED N"（当前实际框住的球数）
+    localparam DETECTED_X        = 12'd184;
+    localparam DETECTED_Y        = 12'd652;
+    localparam DETECTED_W        = 12'd112;
+    localparam DETECTED_H        = 12'd20;
+    localparam DET_PREFIX_W      = 12'd96;
+    localparam DET_DIGIT_W       = 12'd16;
     localparam CHAR_AN           = 8'h80;
     localparam CHAR_LU           = 8'h81;
     localparam CHAR_C            = 8'h43;
@@ -472,9 +506,85 @@ module hdmi_mixer #(
     assign O_video_rd_en = I_video_de;
 
     anlogic_logo_rom u_anlogic_logo_rom(
-        .I_addr  ( S_logo_addr  ),
+        .I_addr  ( S_logo_addr_1d ),
         .O_pixel ( S_logo_pixel )
     );
+
+    // 识别态静态文字 / 帧计数 ROM（MiSans Medium 1-bit）
+    wire [7:0] S_label_lx = S_x_2d - UI_LABEL_X;
+    wire [4:0] S_label_ly = S_y_2d - UI_LABEL_Y;
+    wire [7:0] S_text_lx  = S_x_2d - UI_TEXT_X;
+    wire [4:0] S_text_ly  = S_y_2d - UI_TEXT_Y;
+    wire [7:0] S_frame_lx = S_x_2d - UI_FRAME_X;
+    wire [4:0] S_frame_ly = S_y_2d - UI_FRAME_Y;
+    wire [3:0] S_frame_digit_idx = S_frame_lx[7:4] - 4'd5;
+    wire [3:0] S_frame_digit_x   = S_frame_lx[3:0];
+    wire       S_label_bit, S_text_bit, S_frame_prefix_bit, S_frame_digit_bit;
+
+    // DETECTED N（MiSans 前缀 + 1 位数字）
+    wire [6:0] S_det_lx = S_x_2d - DETECTED_X;
+    wire [4:0] S_det_ly = S_y_2d - DETECTED_Y;
+    wire       S_det_prefix_bit, S_det_digit_bit;
+    reg  [3:0] S_ball_now_1d, S_ball_now;
+
+    always @(posedge I_clk or negedge I_rst_n) begin
+        if (!I_rst_n) begin
+            S_ball_now_1d <= 4'd0;
+            S_ball_now    <= 4'd0;
+        end else begin
+            S_ball_now_1d <= I_ball_now;
+            S_ball_now    <= S_ball_now_1d;
+        end
+    end
+
+    detected_text_rom u_detected_text_rom (
+        .I_X   ( S_det_lx[6:0]    ),
+        .I_Y   ( S_det_ly         ),
+        .O_BIT ( S_det_prefix_bit )
+    );
+
+    mi_digit_rom u_det_digit_rom (
+        .I_CNT_DIGIT ( 4'd0           ),
+        .I_CNT_X     ( 5'd0           ),
+        .I_CNT_Y     ( 6'd0           ),
+        .O_CNT       (                ),
+        .I_ID_DIGIT  ( 4'd0           ),
+        .I_ID_X      ( 4'd0           ),
+        .I_ID_Y      ( 4'd0           ),
+        .O_ID        (                ),
+        .I_SM_DIGIT  ( S_ball_now     ),
+        .I_SM_X      ( S_det_lx[3:0]  ),
+        .I_SM_Y      ( S_det_ly       ),
+        .O_SM        ( S_det_digit_bit)
+    );
+
+    ui_text_rom u_ui_text_rom (
+        .I_LABEL_X ( S_label_lx             ),
+        .I_LABEL_Y ( S_label_ly             ),
+        .O_LABEL   ( S_label_bit            ),
+        .I_TEXT_X  ( S_text_lx              ),
+        .I_TEXT_Y  ( S_text_ly              ),
+        .O_TEXT    ( S_text_bit             ),
+        .I_FRAME_X ( S_frame_lx[6:0]        ),
+        .I_FRAME_Y ( S_frame_ly             ),
+        .O_FRAME   ( S_frame_prefix_bit     ),
+        .I_DIGIT   ( S_frame_digit          ),
+        .I_DIGIT_X ( S_frame_digit_x        ),
+        .I_DIGIT_Y ( S_frame_ly             ),
+        .O_DIGIT   ( S_frame_digit_bit      )
+    );
+
+    always @(*) begin
+        case (S_frame_digit_idx)
+            4'd0: S_frame_digit = S_cnt_d5;
+            4'd1: S_frame_digit = S_cnt_d4;
+            4'd2: S_frame_digit = S_cnt_d3;
+            4'd3: S_frame_digit = S_cnt_d2;
+            4'd4: S_frame_digit = S_cnt_d1;
+            4'd5: S_frame_digit = S_cnt_d0;
+            default: S_frame_digit = 4'd0;
+        endcase
+    end
 
     osd_char_lib u_osd_char_lib(
         .I_char     ( S_pf_char     ),
@@ -561,13 +671,37 @@ module hdmi_mixer #(
         end
     end
 
+    // Logo 2 级流水：地址 -> ROM -> 寄存像素，与 I_data 的 2 拍延迟对齐
+    always @(posedge I_clk or negedge I_rst_n) begin
+        if(!I_rst_n) begin
+            S_logo_addr_1d <= 15'd0;
+            S_logo_in_1d   <= 1'b0;
+            S_logo_pix_2d  <= 25'd0;
+            S_logo_hit_2d  <= 1'b0;
+        end
+        else begin
+            if(I_video_de &&
+               (S_x >= LOGO_X) && (S_x < (LOGO_X + LOGO_W)) &&
+               (S_y >= LOGO_Y) && (S_y < (LOGO_Y + LOGO_H))) begin
+                S_logo_addr_1d <= (S_y - LOGO_Y) * LOGO_W + (S_x - LOGO_X);
+                S_logo_in_1d   <= 1'b1;
+            end
+            else begin
+                S_logo_addr_1d <= 15'd0;
+                S_logo_in_1d   <= 1'b0;
+            end
+
+            S_logo_pix_2d <= S_logo_in_1d ? S_logo_pixel : 25'd0;
+            S_logo_hit_2d <= S_logo_in_1d && S_logo_pixel[24];
+        end
+    end
+
     always @(*) begin
         S_osd_hit   = 1'b0;
         S_osd_color = 24'd0;
-        S_logo_addr = 15'd0;
+        S_ui_text_hit   = 1'b0;
+        S_ui_text_color = 24'd0;
 
-        S_logo_x = 12'd0;
-        S_logo_y = 12'd0;
         S_char_idx = 4'd0;
         S_char_row = 3'd0;
         S_char_col = 3'd0;
@@ -613,15 +747,9 @@ module hdmi_mixer #(
         S_pf_scale_y = 10'd0;
 
         if(S_video_de_2d) begin
-            if((S_x_2d >= LOGO_X) && (S_x_2d < (LOGO_X + LOGO_W)) &&
-               (S_y_2d >= LOGO_Y) && (S_y_2d < (LOGO_Y + LOGO_H))) begin
-                S_logo_x = S_x_2d - LOGO_X;
-                S_logo_y = S_y_2d - LOGO_Y;
-                S_logo_addr = S_logo_y * LOGO_W + S_logo_x;
-                if(S_logo_pixel[24]) begin
-                    S_osd_hit   = 1'b1;
-                    S_osd_color = S_logo_pixel[23:0];
-                end
+            if(S_logo_hit_2d) begin
+                S_osd_hit   = 1'b1;
+                S_osd_color = S_logo_pix_2d[23:0];
             end
 
             if((!S_osd_hit) &&
@@ -814,6 +942,54 @@ module hdmi_mixer #(
                     S_osd_color = COLOR_DYN_TEXT;
                 end
             end
+
+            // 识别态静态文字 / 帧计数（MiSans 1-bit）
+            if((S_x_2d >= UI_LABEL_X) && (S_x_2d < (UI_LABEL_X + UI_LABEL_W)) &&
+               (S_y_2d >= UI_LABEL_Y) && (S_y_2d < (UI_LABEL_Y + UI_LABEL_H)) &&
+               S_label_bit) begin
+                S_ui_text_hit   = 1'b1;
+                S_ui_text_color = UI_COLOR_LABEL;
+            end
+
+            if((S_x_2d >= UI_TEXT_X) && (S_x_2d < (UI_TEXT_X + UI_TEXT_W)) &&
+               (S_y_2d >= UI_TEXT_Y) && (S_y_2d < (UI_TEXT_Y + UI_TEXT_H)) &&
+               S_text_bit) begin
+                S_ui_text_hit   = 1'b1;
+                S_ui_text_color = UI_COLOR_TEXT;
+            end
+
+            if((S_x_2d >= UI_FRAME_X) && (S_x_2d < (UI_FRAME_X + UI_FRAME_W)) &&
+               (S_y_2d >= UI_FRAME_Y) && (S_y_2d < (UI_FRAME_Y + UI_FRAME_H))) begin
+                if(S_frame_lx < UI_FRAME_PREFIX_W) begin
+                    if(S_frame_prefix_bit) begin
+                        S_ui_text_hit   = 1'b1;
+                        S_ui_text_color = UI_COLOR_FRAME;
+                    end
+                end
+                else if(S_frame_lx < (UI_FRAME_PREFIX_W + UI_FRAME_DIGITS_W)) begin
+                    if(S_frame_digit_bit) begin
+                        S_ui_text_hit   = 1'b1;
+                        S_ui_text_color = UI_COLOR_FRAME;
+                    end
+                end
+            end
+
+            // 识别态 "DETECTED N"（当前实际框住的球数，MiSans 1-bit）
+            if((S_x_2d >= DETECTED_X) && (S_x_2d < (DETECTED_X + DETECTED_W)) &&
+               (S_y_2d >= DETECTED_Y) && (S_y_2d < (DETECTED_Y + DETECTED_H))) begin
+                if(S_det_lx < DET_PREFIX_W) begin
+                    if(S_det_prefix_bit) begin
+                        S_ui_text_hit   = 1'b1;
+                        S_ui_text_color = UI_COLOR_DETECTED;
+                    end
+                end
+                else if(S_det_lx < (DET_PREFIX_W + DET_DIGIT_W)) begin
+                    if(S_det_digit_bit) begin
+                        S_ui_text_hit   = 1'b1;
+                        S_ui_text_color = UI_COLOR_DETECTED;
+                    end
+                end
+            end
         end
     end
 
@@ -899,7 +1075,11 @@ module hdmi_mixer #(
                 end
             end
             else begin
-                if(I_osd_on && S_osd_hit)
+                if(I_ui_on && S_logo_hit_2d)
+                    O_hdmi_data <= S_logo_pix_2d[23:0];
+                else if(I_ui_on && S_ui_text_hit)
+                    O_hdmi_data <= S_ui_text_color;
+                else if(I_osd_on && S_osd_hit)
                     O_hdmi_data <= S_osd_color;
                 else
                     O_hdmi_data <= S_video_data_2d;

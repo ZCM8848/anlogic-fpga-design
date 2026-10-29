@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FPGA UI Layout Studio</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark"></span>
+      <div>
+        <div class="brand-title">FPGA UI Layout Studio</div>
+        <div class="brand-sub">1280 × 720 · camera_hdmi_720p</div>
+      </div>
+    </div>
+
+    <div class="topbar-center">
+      <label class="select-wrap">
+        <span>预设</span>
+        <select id="presetSelect">
+          <option value="current">当前 RTL 布局</option>
+          <option value="competition">比赛 OSD（Logo + 计数）</option>
+          <option value="debug">调试叠加</option>
+          <option value="blank">空白画布</option>
+          <option value="custom" disabled>自定义布局</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="topbar-actions">
+      <button id="btnImport" class="btn">导入 JSON</button>
+      <button id="btnExportJson" class="btn">导出 JSON</button>
+      <button id="btnPng" class="btn">导出 PNG</button>
+      <button id="btnCode" class="btn btn-primary">生成代码</button>
+      <button id="btnHelp" class="btn btn-ghost">帮助</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside class="panel panel-left">
+      <section class="panel-section">
+        <div class="section-head">
+          <h2>添加元素</h2>
+          <span class="hint">点击添加</span>
+        </div>
+        <div class="palette" id="palette">
+          <button class="palette-btn" data-add="logo"><span class="pi">▣</span><span>安路 Logo</span></button>
+          <button class="palette-btn" data-add="count"><span class="pi">#</span><span>钢珠计数</span></button>
+          <button class="palette-btn" data-add="detected"><span class="pi">◉</span><span>当前球数</span></button>
+          <button class="palette-btn" data-add="osd_text"><span class="pi">A</span><span>OSD 文本</span></button>
+          <button class="palette-btn" data-add="frame"><span class="pi">F</span><span>帧计数</span></button>
+          <button class="palette-btn" data-add="label"><span class="pi">T</span><span>标签</span></button>
+          <button class="palette-btn" data-add="debug"><span class="pi">D</span><span>调试统计</span></button>
+          <button class="palette-btn" data-add="box"><span class="pi">□</span><span>球框样例</span></button>
+          <button class="palette-btn" data-add="gate"><span class="pi">│</span><span>门线</span></button>
+          <button class="palette-btn" data-add="roi"><span class="pi">▭</span><span>检测 ROI</span></button>
+          <button class="palette-btn" data-add="crosshair"><span class="pi">+</span><span>十字准线</span></button>
+          <button class="palette-btn" data-add="colorbar"><span class="pi">▥</span><span>彩条参考</span></button>
+        </div>
+      </section>
+
+      <section class="panel-section layers-section">
+        <div class="section-head">
+          <h2>图层</h2>
+          <span class="badge" id="layerCount">0</span>
+        </div>
+        <div class="layer-list" id="layerList"></div>
+      </section>
+    </aside>
+
+    <section class="stage-panel">
+      <div class="stage-toolbar">
+        <div class="tool-group">
+          <span class="tool-label">缩放</span>
+          <button class="icon-btn" id="zoomOut" title="缩小">−</button>
+          <span class="zoom-label" id="zoomLabel">75%</span>
+          <button class="icon-btn" id="zoomIn" title="放大">+</button>
+          <button class="btn btn-small" id="zoomFit">适应</button>
+        </div>
+        <div class="tool-group">
+          <label class="check"><input type="checkbox" id="chkGrid" checked> 网格</label>
+          <label class="check"><input type="checkbox" id="chkSnap" checked> 吸附</label>
+          <label class="check"><input type="checkbox" id="chkSafe" checked> 安全框</label>
+          <label class="select-wrap compact">
+            <span>格</span>
+            <select id="gridSize">
+              <option value="4">4</option>
+              <option value="8" selected>8</option>
+              <option value="16">16</option>
+            </select>
+          </label>
+        </div>
+        <div class="tool-group">
+          <button class="btn btn-small" id="bgUploadBtn">背景图</button>
+          <button class="btn btn-small btn-ghost" id="bgResetBtn">重置</button>
+          <label class="range-wrap">
+            <span>不透明</span>
+            <input type="range" id="bgOpacity" min="0" max="100" value="100">
+          </label>
+        </div>
+        <div class="cursor-readout" id="cursorReadout">x = —, y = —</div>
+      </div>
+
+      <div class="stage-scroll" id="stageScroll">
+        <div class="canvas-shell" id="canvasShell">
+          <canvas id="stage" width="1280" height="720"></canvas>
+          <div class="canvas-corner top-left">1280 × 720</div>
+          <div class="canvas-corner bottom-right" id="canvasScaleLabel">75%</div>
+        </div>
+      </div>
+
+      <div class="stage-footer">
+        <span>拖拽移动 · Shift 锁定轴 · 方向键微调 · Ctrl+D 复制 · Del 删除 · Ctrl+Z/Y 撤销/重做</span>
+        <span id="selectionHint">未选择元素</span>
+      </div>
+    </section>
+
+    <aside class="panel panel-right">
+      <div class="section-head">
+        <h2>属性</h2>
+        <span class="badge" id="selectionType">—</span>
+      </div>
+      <div class="empty-state" id="inspectorEmpty">
+        <div class="empty-icon">⌖</div>
+        <p>在画布上选择一个元素，<br>或从左侧添加。</p>
+      </div>
+      <div class="inspector hidden" id="inspectorBody"></div>
+    </aside>
+  </main>
+
+  <div class="toast hidden" id="toast"></div>
+
+  <div class="modal hidden" id="modal">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="modalTitle">生成代码</h2>
+        <button class="icon-btn" id="modalClose" title="关闭">×</button>
+      </div>
+      <div class="modal-tabs" id="modalTabs">
+        <button class="modal-tab active" data-tab="json">JSON</button>
+        <button class="modal-tab" data-tab="verilog">Verilog .vh</button>
+        <button class="modal-tab" data-tab="c">C .h</button>
+      </div>
+      <pre class="code-block" id="modalCode"></pre>
+      <div class="modal-actions" id="modalActions">
+        <button class="btn" id="btnCopyCode">复制</button>
+        <button class="btn btn-primary" id="btnDownloadCode">下载</button>
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="fileImport" accept=".json,application/json" hidden>
+  <input type="file" id="bgUpload" accept="image/*" hidden>
+  <input type="file" id="logoUpload" accept="image/*" hidden>
+
+  <script src="app.js"></script>
+</body>
+</html>

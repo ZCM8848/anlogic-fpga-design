@@ -5,6 +5,8 @@
 
 # ---- Anlogic TD 编译 / 综合 / 布局布线 / 烧录产物 ----
 *_Runs/
+# TD IP Catalog GUI 生成时自动落进 td_project/al_ip/ 的 IP 缓存（我们统一放 ip/，别让 al_ip 进 git）
+**/al_ip/
 **/log/
 **/impl/
 *.log
@@ -71,3 +73,19 @@ Desktop.ini
 # ---- Python 工具（tools/ 下的验证脚本）----
 __pycache__/
 *.pyc
+
+# ---- iverilog 仿真产物 ----
+*.vvp
+*.vcd
+*.lxt
+*.lxt2
+*.fst
+*.fst.hier
+*.vzt
+
+# ---- 摄像头录制素材 / 调试产物（大文件与图片，仅本地保留）----
+*.pcapng
+*.pcap
+work/camera_eth_720p/captures/
+work/camera_eth_720p/host/*.png
+work/camera_eth_720p/host/console.json

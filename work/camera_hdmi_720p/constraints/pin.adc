@@ -28,7 +28,8 @@ set_pin_assignment { IO_cam_sda }    { LOCATION = J3; IOSTANDARD = LVCMOS33; DRI
 set_pin_assignment { I_button[0] }   { LOCATION = N2;  IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
 set_pin_assignment { I_button[1] }   { LOCATION = J14; IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
 
-# ---- KEY2 板载按键（CV 叠加开关；手册 KEY2=A9）----
+# ---- 板载按键（KEY1=D5 新增：调试显示循环；KEY2=A9 CV 开关；KEY3=B9/KEY4=C7 保留）----
+set_pin_assignment { I_key1 }        { LOCATION = D5;  IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
 set_pin_assignment { I_key2 }        { LOCATION = A9;  IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
 # ---- KEY3/KEY4 板载按键（CV 开时阈值 -/+；手册 KEY3=B9 / KEY4=C7）----
 set_pin_assignment { I_key3 }        { LOCATION = B9;  IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
@@ -38,6 +39,28 @@ set_pin_assignment { I_key4 }        { LOCATION = C7;  IOSTANDARD = LVCMOS33; PU
 set_pin_assignment { O_uart_tx }     { LOCATION = H1; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
 
 # ---- 模式切换拨码开关（板手册 2-22：拨上=1 拨下=0）----
-# SW4 主选：0=彩条测试图案，1=摄像头；SW3 子选：0=edge，1=OSD彩色
+# SW1: 0=识别/正常，1=调试
+# SW2: 调试子选（仅 SW1=1）：0=静态测试图案（带文字），1=动态调试（KEY1 循环 RGB/score/mask）
+# SW3: 识别态 OSD 开关（BALL 关闭时有效）
+# SW4: 保留/留空
+set_pin_assignment { I_sw1 }         { LOCATION = A4;  IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
+set_pin_assignment { I_sw2 }         { LOCATION = B4;  IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
 set_pin_assignment { I_sw4 }         { LOCATION = D11; IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
 set_pin_assignment { I_sw3 }         { LOCATION = E11; IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
+# ---- 8 λ����ܣ���˫ɫ LED ���ã�SW6 ���벦��=����ܣ�----
+set_pin_assignment { O_seg[0] } { LOCATION = C9;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }  # a
+set_pin_assignment { O_seg[1] } { LOCATION = C11; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }  # b
+set_pin_assignment { O_seg[2] } { LOCATION = B11; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }  # c
+set_pin_assignment { O_seg[3] } { LOCATION = E7;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }  # d
+set_pin_assignment { O_seg[4] } { LOCATION = E6;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }  # e
+set_pin_assignment { O_seg[5] } { LOCATION = B6;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }  # f
+set_pin_assignment { O_seg[6] } { LOCATION = B7;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }  # g
+set_pin_assignment { O_seg[7] } { LOCATION = E5;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }  # DP
+set_pin_assignment { O_sel[0] } { LOCATION = A14; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment { O_sel[1] } { LOCATION = B15; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment { O_sel[2] } { LOCATION = A15; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment { O_sel[3] } { LOCATION = B16; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment { O_sel[4] } { LOCATION = A18; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment { O_sel[5] } { LOCATION = A17; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment { O_sel[6] } { LOCATION = G14; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment { O_sel[7] } { LOCATION = G15; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }

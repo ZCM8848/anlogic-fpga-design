@@ -19,6 +19,22 @@
                     <Attr Name="CompileOrder" Val="2"/>
                 </FileInfo>
             </File>
+            <File Path="../rtl/mcu/ahb_status_slave.v">
+                <FileInfo>
+                    <Attr Name="UsedInSyn" Val="true"/>
+                    <Attr Name="UsedInP&R" Val="true"/>
+                    <Attr Name="BelongTo" Val="design_1"/>
+                    <Attr Name="CompileOrder" Val="60"/>
+                </FileInfo>
+            </File>
+            <File Path="../rtl/mcu/ps_wrapper.v">
+                <FileInfo>
+                    <Attr Name="UsedInSyn" Val="true"/>
+                    <Attr Name="UsedInP&R" Val="true"/>
+                    <Attr Name="BelongTo" Val="design_1"/>
+                    <Attr Name="CompileOrder" Val="61"/>
+                </FileInfo>
+            </File>
             <File Path="../rtl/common/reset_ctrl.v">
                 <FileInfo>
                     <Attr Name="UsedInSyn" Val="true"/>
@@ -51,22 +67,47 @@
                     <Attr Name="CompileOrder" Val="16"/>
                 </FileInfo>
             </File>
-            <File Path="../rtl/common/uart_tx.v">
+            <File Path="../rtl/video/seg_count_display.v">
                 <FileInfo>
                     <Attr Name="UsedInSyn" Val="true"/>
                     <Attr Name="UsedInP&R" Val="true"/>
                     <Attr Name="BelongTo" Val="design_1"/>
-                    <Attr Name="CompileOrder" Val="17"/>
+                    <Attr Name="CompileOrder" Val="63"/>
                 </FileInfo>
             </File>
-            <File Path="../rtl/camera/status_report.v">
+            <File Path="../rtl/video/ui_text_rom.v">
                 <FileInfo>
                     <Attr Name="UsedInSyn" Val="true"/>
                     <Attr Name="UsedInP&R" Val="true"/>
                     <Attr Name="BelongTo" Val="design_1"/>
-                    <Attr Name="CompileOrder" Val="18"/>
+                    <Attr Name="CompileOrder" Val="64"/>
                 </FileInfo>
             </File>
+            <File Path="../rtl/video/mi_digit_rom.v">
+                <FileInfo>
+                    <Attr Name="UsedInSyn" Val="true"/>
+                    <Attr Name="UsedInP&R" Val="true"/>
+                    <Attr Name="BelongTo" Val="design_1"/>
+                    <Attr Name="CompileOrder" Val="65"/>
+                </FileInfo>
+            </File>
+            <File Path="../rtl/video/detected_text_rom.v">
+                <FileInfo>
+                    <Attr Name="UsedInSyn" Val="true"/>
+                    <Attr Name="UsedInP&R" Val="true"/>
+                    <Attr Name="BelongTo" Val="design_1"/>
+                    <Attr Name="CompileOrder" Val="66"/>
+                </FileInfo>
+            </File>
+            <File Path="../rtl/video/tp_text_rom.v">
+                <FileInfo>
+                    <Attr Name="UsedInSyn" Val="true"/>
+                    <Attr Name="UsedInP&R" Val="true"/>
+                    <Attr Name="BelongTo" Val="design_1"/>
+                    <Attr Name="CompileOrder" Val="67"/>
+                </FileInfo>
+            </File>
+
             <File Path="../ip/hdmi/hdmi_tx.v">
                 <FileInfo>
                     <Attr Name="UsedInSyn" Val="true"/>
@@ -497,6 +538,22 @@
                     <Attr Name="UsedInP&R" Val="true"/>
                     <Attr Name="BelongTo" Val="design_1"/>
                     <Attr Name="CompileOrder" Val="15"/>
+                </FileInfo>
+            </File>
+            <File Path="../ip/pll_mcu/pll_mcu.xml">
+                <FileInfo>
+                    <Attr Name="UsedInSyn" Val="true"/>
+                    <Attr Name="UsedInP&R" Val="true"/>
+                    <Attr Name="BelongTo" Val="design_1"/>
+                    <Attr Name="CompileOrder" Val="59"/>
+                </FileInfo>
+            </File>
+            <File Path="../ip/mcu/MCU.xml">
+                <FileInfo>
+                    <Attr Name="UsedInSyn" Val="true"/>
+                    <Attr Name="UsedInP&R" Val="true"/>
+                    <Attr Name="BelongTo" Val="design_1"/>
+                    <Attr Name="CompileOrder" Val="62"/>
                 </FileInfo>
             </File>
         </IP_FILE>

@@ -7,14 +7,17 @@
 ## 一、项目概述
 
 ### 目标
-在 PH1P35MDG324（HX1P35A 开发板）上实现 SC520CS MIPI 摄像头 → HDMI 1280×720@60fps 三模式显示工程，通过板载拨码开关 SW4（主选）/SW3（子选）在以下三种 HDMI 输出间切换：
+在 PH1P35MDG324（HX1P35A 开发板）上实现 SC520CS MIPI 摄像头 → HDMI 1280×720@60fps 显示工程，通过板载拨码开关 SW1（最高优先级）/SW4（主选）/SW3（子选）在以下 HDMI 输出间切换（M6 三模式 + M10 原图直通）：
 
-| SW4 | SW3 | KEY2 | 画面 | 数据通路 |
-|-----|-----|------|------|----------|
-| 0 | × | × | 彩条测试图案 | test_pattern → video_mux → hdmi_tx |
-| 1 | 0 | 关 | 边缘提取（Sobel 二值图） | camera → ISP(edge_on=1) → DDR → hdmi_mixer → video_mux → hdmi_tx |
-| 1 | 1 | 关 | 彩色摄像头 + OSD | camera → ISP(edge_on=0) → DDR → hdmi_mixer(osd_on=1) → video_mux → hdmi_tx |
-| 1 | × | **按一下→开** | 摄像头 + 钢珠白框（M7） | camera → ISP(edge/osd 关) → DDR → hdmi_mixer → **cv_top(叠加)** → video_mux → hdmi_tx |
+| SW1 | SW4 | SW3 | KEY2 | 画面 | 数据通路 |
+|-----|-----|-----|------|------|----------|
+| **1** | × | × | × | **RGB888 原图直通（M10，视觉算法开发）** | camera → ISP(edge_on=0) → DDR → hdmi_mixer(osd_on=0) → **cv_top(I_cv_on=0 直通 I_data)** → video_mux(强制摄像头) → hdmi_tx |
+| 0 | 0 | × | × | 彩条测试图案 | test_pattern → video_mux → hdmi_tx |
+| 0 | 1 | 0 | 关 | 边缘提取（Sobel 二值图） | camera → ISP(edge_on=1) → DDR → hdmi_mixer → video_mux → hdmi_tx |
+| 0 | 1 | 1 | 关 | 彩色摄像头 + OSD | camera → ISP(edge_on=0) → DDR → hdmi_mixer(osd_on=1) → video_mux → hdmi_tx |
+| 0 | 1 | × | **按一下→开** | 摄像头 + 钢珠绿框（M9） | camera → ISP(edge/osd 关) → DDR → hdmi_mixer → **cv_top(叠加：读 MCU 算的 overlay 画绿框/ID/Count)** → video_mux → hdmi_tx |
+
+> M10 模式的关键：它输出的是 `cv_top` 二值化之前的 `I_data`（ISP 后 RGB888），不是 RAW Bayer；`SW1=1` 时 CV 暂停（`cv_top.I_cv_on=0`），串口有效 `CV=0`，`D`/`CNT` 冻结。
 
 ### 设计决策
 - **整棵搬入厂商 ISP**（demosaic/AWB/edge_detect_96/video_in/video_out/mc_to_user_interface/hdmi_mixer/osd_char_lib/anlogic_logo_rom/uicfgcs520 等），来自两个已验证参考工程 `lab_ex2_edge_SC520`（边缘提取）和 `lab_ex3_osd_SC520`（彩色+OSD）。
@@ -29,7 +32,7 @@
 ### FPGA 芯片
 - **型号**：Anlogic PH1P35MDG324（PH1P 系列，速度等级 -3）
 - **资源**：LUT ~20800 / EBR 108 / DSP 40 / PLL 6 / GCLK 32
-- **当前占用**：LUT 9756(47%) / EBR 39(36%) / DSP 9(22.5%) / PLL 3(50%) / GCLK 9(28%)
+- **当前占用（M10，2026-10-27）**：LUT6 16273（76.70%）/ EBR 41（37.96%）/ DSP 9 / slice 17941（84.56%）/ PLL 4 / MCU 1；bit `E09E20F8`，Setup WNS -1.454ns / Hold +20ps / 8 FEP（最差仍为 M6 遗留 ISP awb→edge；SW1 RGB 通路无显著新增违例）。M9 基线：LUT 16377 / EBR 41 / DSP 9 / slice 18072(85%)，bit `B4C7AF9C`。
 
 ### 外设
 | 外设 | 接口 | 引脚 |
@@ -38,7 +41,7 @@
 | HDMI-A 接口 | TMDS 4 对 | G16/F17/H14/C17 |
 | SC520CS 摄像头模组 | MIPI CSI-2 2-lane + I²C + XCLK + PWDNB | MIPI: V16/U16/V14/U14/V15/U15；I²C: K3/J3；XCLK: L3；PWDNB: L2 |
 | USB-JTAG Cable | UART + JTAG | TX: H1 |
-| 拨码开关 SW4/SW3 | 模式选择 | D11/E11 |
+| 拨码开关 SW1/SW4/SW3 | 模式选择 | A4/D11/E11 |
 | AE 按键 ×2 | 自动曝光调整 | N2/J14 |
 | LED ×4 | 状态指示 | D10/E10/C6/D6 |
 | DDR2 | 帧缓存 | PHY 硬核 pad（IP 内部约束） |
@@ -54,17 +57,19 @@
 ### 数据流总图
 
 ```
-                         SW4(async)──┐  SW3(async)──┐
-                          │           │   │           │
-            ┌──3FF─pixel─→│ video_mux select         │
-            │              │ (彩条/摄像头)            │
-            │             3FF─byte──→ isp_top edge_on │
-            │             3FF─pixel─→ hdmi_mixer osd_on
+                         SW4(async)──┐  SW3(async)──┐  SW1(async)──┐
+                          │           │   │           │   │           │
+            ┌──3FF─pixel─→│ video_mux select（SW1=1 强制摄像头）      │
+            │              │ (彩条/摄像头)            │               │
+            │             3FF─byte──→ isp_top edge_on │               │
+            │             3FF─pixel─→ hdmi_mixer osd_on              │
+            │             3FF─pixel─→ cv_top.I_cv_on（SW1=1 暂停）     │
             │
 像素域 75MHz:
   hdmi_timing ──vs/hs/de/user/last/x/y──┬→ test_pattern(彩条) ──────────┐
                                          │                              │
   video_out(24bit RGB) ─→ hdmi_mixer ────┤ (OSD 叠加, osd_on 门控) ─────┤
+                                         │→ cv_top(CV 叠加；SW1=1 直通) ┤
                                          └──────────────────────────────┴→ video_mux(2:1) → hdmi_tx → TMDS
 
 字节域 ~103.5MHz (camera side):
@@ -72,8 +77,24 @@
     → isp_top[ demosaic → data128_96 → awb → edge_detect_96(edge_on 门控 bypass) → data_96bit_to_128bit ]
     → video_in(async FIFO,4帧乒乓) → mc_to_user_interface → DDR2 IP → video_out(async FIFO)
 
-100MHz 域: uicfgcs520(I²C 配置) + ae_set(自动曝光) + uart_tx/status_report(调试) + LED 心跳
+100MHz 域: uicfgcs520(I²C 配置) + ae_set(自动曝光) + LED 心跳（M8 起 status_report/uart_tx 退役，串口由 MCU 驱动）
+ahb_clk ~150MHz 域（M8 起）: MCU core_clk/2 → ahb_status_slave + ps_wrapper
 ```
+
+### M9 CV 后处理通路（cv_top ↔ ahb_status_slave ↔ MCU）
+
+```mermaid
+graph LR
+  HDMI["hdmi_mixer<br/>S_hdmi_out_data"] --> CV["cv_top (pixel 75MHz)<br/>Sobel+阈值→mask<br/>run 写 run_mem(A口)"]
+  CV -->|叠加读 overlay/count| VMUX["video_mux → hdmi_tx"]
+  CV -->|"run_mem 双口BRAM<br/>B口 ahb读"| SLAVE["ahb_status_slave (ahb_clk)<br/>RUN_IDX/RUN_DAT 间接读<br/>overlay 寄存器组×8<br/>META/OV_COUNT"]
+  SLAVE <-->|AHB 0x8000_0000| MCU["MCU 固件 main.c (RISC-V 300MHz)<br/>每帧 vblank: CCL(union-find)→筛选<br/>→a-b跟踪→exit/death计数<br/>→写overlay+count"]
+  MCU -->|overlay/count 回写| SLAVE
+```
+
+cv_top 只留像素级前端（Sobel+阈值+run 写+叠加），CCL/形状筛选/a-b 跟踪/exit 计数全在 MCU 固件。run_mem 双口 BRAM：A 口 pixel 域写、B 口 ahb_clk 域读（MCU 经 RUN_IDX/RUN_DAT 间接寻址）。overlay 8 项 ×64bit 寄存器组在 ahb_slave，MCU 写、cv_top 读叠加。详见 `docs/plan.md`「M9 实施记录」。
+
+**M9 调试流（观测用）**：固件在 `CV=1` 时以 ≈30Hz 输出 `D F=.. RUN=.. NC=.. DET=.. B=<lt100,100_500,gt500> | [.*]area,x0,y0,x1,y1 ..`（run 数 / 连通域数 / 通过筛选数 / 面积分桶 + top 连通域 bbox），解析见 `tools/serial_dbg.py`。**已知瓶颈**：`run_mem` 上限 1024 条 run/帧——环每行约 2 条 run，满屏多球会溢出，导致处理被截断（实测止于 y≈330、钢珠大半没进 CCL）。详见 `README.md`「M9 观测记录」。
 
 ### 时钟域划分（4 个异步时钟组）
 
@@ -242,15 +263,18 @@
 
 ## 七、模式切换机制
 
-### SW4/SW3 同步链
-- SW4/SW3 各自 3FF 同步到 **pixel/byte/100M 三域**（共 6 条同步链）。
-- **video_mux select** = pixel 域 SW4（帧边界门控）。
-- **edge_on** = byte 域 `SW4 & ~SW3`（喂 isp_top）。
-- **osd_on** = pixel 域 `SW4 & SW3`（喂 hdmi_mixer）。
-- 复位默认 SW4=0 → 彩条（安全上电画面）。
+### SW1/SW4/SW3 同步链
+- SW1/SW4/SW3 各自 3FF 同步到 **pixel/byte/100M 三域**（SW1 另同步有效 CV 到 100M）。
+- **video_mux select** = pixel 域 `SW4 | SW1`（SW1=1 最高优先级，帧边界门控）。
+- **edge_on** = byte 域 `SW4 & ~SW3 & ~CV & ~SW1`（喂 isp_top）。
+- **osd_on** = pixel 域 `SW4 & SW3 & ~CV & ~SW1`（喂 hdmi_mixer）。
+- **cv_top.I_cv_on** = pixel 域 `CV & ~SW1`（SW1=1 暂停 CV；`O_data` 自动直通 `I_data`）。
+- **有效 CV** = `CV & ~SW1` 同步到 100M，供串口 `CV=` 与 MCU 判断；SW1=1 时 `CV=0`、`D` 流停止。
+- SW1=1 时 `S_run_cnt_hold` 保持上一帧 `run_cnt`，MCU 继续处理同一帧 `run_mem`，避免跟踪老化/`CNT` 误增。
+- 复位默认 SW1=0、SW4=0 → 彩条（安全上电画面）。
 
 ### 帧边界切换原理
-video_mux 的 sel 仅在 vsync 上升沿（帧边界，消隐期 de=0）采纳 SW4 → 整帧来自同一源（无半帧撕裂）+ 扰动落在 de=0 区不可见。
+video_mux 的 sel 仅在 vsync 上升沿（帧边界，消隐期 de=0）采纳 `SW4 | force_cam` → 整帧来自同一源（无半帧撕裂）+ 扰动落在 de=0 区不可见。SW1=1 时 `force_cam=1`，即使 SW4=0 也强制摄像头原图。
 
 ---
 
@@ -267,6 +291,7 @@ video_mux 的 sel 仅在 vsync 上升沿（帧边界，消隐期 de=0）采纳 S
 | IO_cam_sda | J3 | LVCMOS33 DS=8 PULLUP | I²C SDA |
 | I_button[0/1] | N2/J14 | LVCMOS33 PULLUP | AE 按键 |
 | O_uart_tx | H1 | LVCMOS33 DS=8 | UART TX 115200 8N1 |
+| I_sw1 | A4 | LVCMOS33 PULLUP | 最高优先级（1=RGB888 原图直通，CV 暂停） |
 | I_sw4 | D11 | LVCMOS33 PULLUP | 模式主选（0=彩条,1=摄像头） |
 | I_sw3 | E11 | LVCMOS33 PULLUP | 模式子选（0=edge,1=OSD） |
 
@@ -406,3 +431,4 @@ video_mux 的 sel 仅在 vsync 上升沿（帧边界，消隐期 de=0）采纳 S
 | M1-M5 | 自研 MIPI/DDR/灰度（半净室） | (历史) |
 | `6429287` | M6 三模式重构 + status_report 握手修复 | A1CF247 |
 | `6b262c1` | test_pattern 2 级 + video_mux vsync 门控（修变量回绕）+ hdmi_timing 复刻 uivtc（修静态偏移）+ 回滚探针 + 本技术文档 | B96CCE65 |
+| M10 | SW1 RGB888 原图直通（CV 暂停/OSD/edge 关闭；`run_cnt` 保持避免跟踪老化）+ `tb_video_mux` | E09E20F8 |
