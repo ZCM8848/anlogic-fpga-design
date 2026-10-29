@@ -51,7 +51,7 @@ module eth_udp_tx #(
     // ------------------------------------------------------------------
     localparam [10:0] IDX_ETH  = 11'd8;
     localparam [10:0] IDX_DATA = 11'd58;
-    localparam [10:0] IDX_FCS  = 11'd58 + DATA_BYTES[10:0];
+    localparam [10:0] IDX_FCS  = 11'd58 + DATA_BYTES;
     localparam [10:0] IDX_END  = IDX_FCS + 11'd4;
 
     // ------------------------------------------------------------------

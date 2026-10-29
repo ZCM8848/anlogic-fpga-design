@@ -78,7 +78,7 @@ module eth_rx_mac #(
                     if (!gmii_rx_dv) begin
                         st <= S_IDLE;           // 只有前导码没有数据，忽略
                     end else if (gmii_rxd == 8'h55) begin
-                        ;                        // 继续跳
+                        st <= st;                // 继续跳过前导码
                     end else if (gmii_rxd == 8'hD5) begin
                         st  <= S_DATA;           // 下一拍是 DA
                         idx <= 11'd0;
