@@ -138,3 +138,14 @@ saved: 2026-10-28 19:41
    params: exposure=768, gain=64, max_area=2000, gate_x=100, gate_y0=0, gate_y1=180
    note: gate_x=100 -> full-res x=400; bit unchanged
    timing: bit unchanged (Setup WNS +0.140ns, Hold WNS +0.020ns)
+
+18) Buzzer beep on ball crossing (current)
+   bit: camera_hdmi_720p_buzzer_981A0C97.bit
+   bit MD5: 981A0C9761D1F4F3766567A544C146BC
+   elf: ph1p35_status_buzzer_1EE84369.elf
+   elf MD5: 1EE84369F98AC3F452CAF838FDB0034A
+   regs: 0x68 BUZZ_CTRL, 0x6C BUZZ_CFG
+   buzzer: 1 kHz, 50 ms, low-active, C12, SW5 hardware enable
+   trigger: MCU flips BUZZ_CTRL[0] on gate count
+   timing: Setup WNS +0.183ns, Hold WNS +0.020ns, 17278 slices (81.44%),
+           RAM 69/108, DSP 10/40, 0 violations
