@@ -38,6 +38,28 @@
 - [`docs/hardware/`](docs/hardware/) — 芯片 / 开发板 / 摄像头 / 引脚总表 / 时钟复位（含 SC520CS 165 条寄存器表）
 - 摄像头参数以 `work/camera_hdmi_720p` 中**已验证的代码**为准（见该目录 `README.md`）。
 
+## 当前主项目
+
+`work/camera_hdmi_720p` 是钢珠检测与 HDMI 720p60 显示工程：
+
+- SC520CS 摄像头，1280×720@60，2-lane MIPI RAW10
+- FPGA 完成 4×4 平均、背景差分、run 提取、门线显示和 OSD
+- MCU 完成 CCL、筛选、跟踪、门线计数、背景重采和曝光/增益控制
+- 识别态 UI 包含 Logo、`STEEL BALL`、Count、`DETECTED N`、`Anlogic HX1P35A`、FRAME 和门线
+- 所有可见文字使用 MiSans Medium 1-bit ROM
+
+发布产物：
+
+```text
+work/camera_hdmi_720p/artifacts/camera_hdmi_720p_ae_mcu_E93577E7.bit
+MD5 E93577E71A445D475698BA80A714343B
+
+work/camera_hdmi_720p/artifacts/ph1p35_status_tune_gate100_E6DFDDC8.elf
+MD5 E6DFDDC8E784C607C1192C3459FC97DF
+```
+
+最终时序：Setup WNS +0.140 ns，Hold WNS +0.020 ns，0 违例，Slices 16,940 / 21,216（79.85%）。
+
 ## 快速开始
 
 1. 安装安路 TD 6.2.1 并导入 License，安装下载器驱动。

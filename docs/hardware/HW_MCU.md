@@ -50,7 +50,39 @@ MCU IP 有 **AHB master** 和 **APB master** 两个面向 fabric 的主端口（
 
 - 来源：FD 自带 `data/embeddedsw/master_sdk/solutions/demo/baremetal/ahb_demo_n/ahb_demo.c` 里 `#define AHB_BaseAddr 0x80000000`，演示 MCU→fabric AHB 读写。
 - 固件 `*(volatile uint32_t*)0x80000000` → MCU AHB master → 外部 AHB 从口。
-- 本项目 `ahb_status_slave` 挂在 AHB master 上，地址 `0x80000000 + 偏移`。M8 状态寄存器：CAM/CV/FRAME/VER/HEARTBEAT/SCRATCH @ 0x00/0x04/0x08/0x0C/0x10/0x14。**M9 扩展 CV 数据通路**：RUN_IDX/RUN_DAT（run_mem 间接读）@ 0x18/0x1C、OV_IDX/OV_W0/OV_W1（overlay 写）@ 0x20/0x24/0x28、META_REG @ 0x2C、OV_COUNT @ 0x30；VER 升 MCV2(`0x4D435602`)。详见 `work/camera_hdmi_720p/docs/plan.md`「M9 实施记录」。
+- 本项目 `ahb_status_slave` 挂在 AHB master 上，地址 `0x80000000 + 偏移`，版本寄存器 `VER=0x4D435602`。
+
+| 偏移 | 名称 | 方向 | 用途 |
+|---:|---|---|---|
+| `0x00` | `CAM_REG` | R | 摄像头与板级状态 |
+| `0x04` | `CV_REG` | R | `bin_thr`、run_cnt、帧计数 |
+| `0x08` | `FRAME_REG` | R | vsync 帧计数 |
+| `0x0C` | `VER_REG` | R | `0x4D435602` |
+| `0x10` | `HEARTBEAT` | W | MCU 心跳 |
+| `0x14` | `SCRATCH` | R/W | 调试暂存 |
+| `0x18` | `RUN_IDX` | W | run_mem 读索引 |
+| `0x1C` | `RUN_DAT` | R | run_mem 数据 |
+| `0x20` | `OV_IDX` | W | overlay 索引 |
+| `0x24` | `OV_W0` | W | overlay 高 32 位 |
+| `0x28` | `OV_W1` | W | overlay 低 32 位，写入提交 |
+| `0x2C` | `META_REG` | R | run_cnt、min_y、max_y |
+| `0x30` | `OV_COUNT` | W | 计数值 |
+| `0x34` | `BALL_CTRL` | W | `[0]=enable [1]=capture` |
+| `0x38` | `BALL_THR` | W | `[7:0]=bg_thr [15:8]=min_run` |
+| `0x3C` | `BALL_STATUS` | R | bg_ready / capturing / run_overflow |
+| `0x40` | `SW_STAT` | R | SW1..SW4 |
+| `0x44` | `BCD_COUNT` | W | 5 位 BCD |
+| `0x48` | `BALL_RUN_CFG` | W | roi_y1 / max_run_len |
+| `0x4C` | `SKIP_CNT` | R | ROI 与超长 run 丢弃计数 |
+| `0x50` | `KEY_EVT` | R/W | `[0]=K1 长按 [1]=K2 长按`，写 1 清零 |
+| `0x54` | `BALL_NOW` | W | 当前绿框数 |
+| `0x58` | `SEG_CTRL` | W | `[0]=1` 数码管全部显示 `-` |
+| `0x5C` | `BALL_GATE` | W | gate_x / gate_y0 / gate_y1 |
+| `0x60` | `CAM_AE` | W | 曝光目标，2..1991 半行 |
+| `0x64` | `CAM_AG` | W | 增益目标，16..176 |
+
+- 相机曝光和增益由 MCU 写入 `CAM_AE` / `CAM_AG`，`ae_set` 在 24 MHz 域同步后写 SC520CS。当前默认 `exposure=768`、`gain=64`。
+- 门线位置由 `BALL_GATE` 下发，`cv_top` 按 `gate_x × 4` 绘制到 1280×720 画面。
 
 ### 4.2 APB master 窗口 = **文档无记载**（实测结论）
 
@@ -146,11 +178,11 @@ FD Platform 的 `platform/PH1P35.bit` 是**导 HPF 那一刻**的 bit。若后�
 
 OpenOCD 连的是**已配置好 bit 的 FPGA**。没烧 bit → FPGA 没配置 → JTAG 链上没 MCU TAP → 扫描全 1 → 失败。
 
-指南 §13.3 稳妥顺序：**① 上电 → ② TD 下载最新 bit → ③ 开串口 → ④ FD Debug**。第 2 步不可省。
+指南 §13.3 推荐顺序：**① 上电 → ② TD 下载最新 bit → ③ 开串口 → ④ FD Debug**。第 2 步不可省。
 
 ### 8.2 `libusb_open() failed with LIBUSB_ERROR_ACCESS` —— 驱动问题
 
-OpenOCD 用 libusb（要 WinUSB 驱动）。板载 USB-JTAG 默认是 D2xx（FTDI 私有）→ libusb 访问被拒，OpenOCD 回退 D2xx（能连但 "(null)" 设备名）。当下 D2xx 回退能扫，**不是首要阻塞**；要彻底干净用 Zadig 把下载线驱动换成 WinUSB（libusbK）。
+OpenOCD 用 libusb（要 WinUSB 驱动）。板载 USB-JTAG 默认是 D2xx（FTDI 私有）→ libusb 访问被拒，OpenOCD 回退 D2xx（能连但 "(null)" 设备名）。当下 D2xx 回退能扫描，驱动问题仍然存在；要彻底解决，用 Zadig 把下载线驱动换成 WinUSB（libusbK）。
 
 ### 8.3 典型报错对照（指南 §14）
 
