@@ -1,0 +1,21 @@
+# buzzer_music — 引脚约束
+# 依据：docs/hardware/HW_HX1P35A_BOARD.md §12（蜂鸣器）、§9（LED）、§10（按键）、
+#       §2（时钟），以及 work/seg_led_test/constraints/pin.adc（已上板验证的同类约束）。
+#
+# 注意：
+#   1. 蜂鸣器 BUZZER 在 C12，低电平响（经三极管驱动）；板上 SW5 串在蜂鸣器回路中，
+#      SW5 拨下=接通、拨上=断开。播放前务必把 SW5 拨到接通一侧。
+#   2. LED1（D10）高电平点亮，作“正在播放”指示。
+#   3. KEY1（D5）按下为低电平，作播放/暂停切换；RTL 内做 2FF 同步 + 20ms 消抖。
+
+# ---- 系统时钟（板载 50MHz 有源晶振）----
+set_pin_assignment { I_sys_clk }  { LOCATION = C4; IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
+
+# ---- KEY1：播放/暂停（按下=0，松开=1）----
+set_pin_assignment { I_key1 }     { LOCATION = D5; IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
+
+# ---- 蜂鸣器：低电平响 ----
+set_pin_assignment { O_buzzer }   { LOCATION = C12; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+
+# ---- LED1：播放指示（高电平点亮）----
+set_pin_assignment { O_led_play } { LOCATION = D10; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }

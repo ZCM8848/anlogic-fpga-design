@@ -1,0 +1,41 @@
+# seg_led_test — 引脚约束
+# 依据：板手册《新HX1P35A开发板手册-HDL版2604》§11/§18、
+#      厂商例程 ref/HX1P35A_Contest_202606/2_Example/7_seg_led/seg_led.adc
+#
+# 注意：
+#   1. 板手册表格里的网络名 SEL0 指“左起第 1 位”，对应 FPGA 引脚 G15；
+#      而厂商例程的 RTL 端口 SEL[0]（即本工程 O_sel[0]）对应引脚 A14（最右位）。
+#      本工程沿用厂商 RTL 端口顺序：O_sel[0]=A14（右）… O_sel[7]=G15（左）。
+#   2. 数码管段选为低电平点亮；位选经 PNP9012 驱动，低电平选中。
+#   3. 数码管与 8 组双色 LED 复用这 16 根引脚，板上 SW6 必须拨到数码管一侧。
+
+# ---- 系统时钟（板载 50MHz 有源晶振）----
+set_pin_assignment { I_sys_clk }  { LOCATION = C4; IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
+
+# ---- 模式开关 / 按键 ----
+# SW1：拨上=1（自动计数模式），拨下=0（静态 01234567）
+set_pin_assignment { I_sw1 }      { LOCATION = A4; IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
+# KEY1：按下=0，松开=1
+set_pin_assignment { I_key1 }     { LOCATION = D5; IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
+
+# ---- 段选 O_seg[7:0] = {DP,g,f,e,d,c,b,a}，低电平点亮 ----
+set_pin_assignment { O_seg[0] }   { LOCATION = C9;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }  # a
+set_pin_assignment { O_seg[1] }   { LOCATION = C11; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }  # b
+set_pin_assignment { O_seg[2] }   { LOCATION = B11; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }  # c
+set_pin_assignment { O_seg[3] }   { LOCATION = E7;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }  # d
+set_pin_assignment { O_seg[4] }   { LOCATION = E6;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }  # e
+set_pin_assignment { O_seg[5] }   { LOCATION = B6;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }  # f
+set_pin_assignment { O_seg[6] }   { LOCATION = B7;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }  # g
+set_pin_assignment { O_seg[7] }   { LOCATION = E5;  IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }  # DP
+
+# ---- 位选 O_sel[7:0]，低电平选中 ----
+# O_sel[0] = 最右位（厂商例程 SEL[0]）
+# O_sel[7] = 最左位（厂商例程 SEL[7]）
+set_pin_assignment { O_sel[0] }   { LOCATION = A14; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment { O_sel[1] }   { LOCATION = B15; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment { O_sel[2] }   { LOCATION = A15; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment { O_sel[3] }   { LOCATION = B16; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment { O_sel[4] }   { LOCATION = A18; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment { O_sel[5] }   { LOCATION = A17; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment { O_sel[6] }   { LOCATION = G14; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment { O_sel[7] }   { LOCATION = G15; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }

@@ -5,6 +5,8 @@
 当前主项目：
 
 - `camera_hdmi_720p/`：SC520CS 摄像头钢珠检测与 HDMI 720p60 显示，包含 FPGA RTL、MCU 固件、OSD 编辑器、参数演示和发布产物。说明见 `camera_hdmi_720p/README.md`。
+- `buzzer_music/`：PWM 蜂鸣器音乐播放工程，含音符表、歌曲数据生成脚本和仿真。
+- `seg_led_test/`：数码管与 LED 测试工程。
 
 约定：
 
