@@ -108,8 +108,8 @@ typedef struct {
 
 static const vision_params_t VISION_PARAMS = {
     .enable              = 1,
-    .exposure            = 700,   /* 降低运动拖影；画面变暗时加光或调 gain */
-    .gain                = 0,
+    .exposure            = 1991,  /* 等效于加入曝光控制前的固定默认值 */
+    .gain                = 144,
     .bg_thr              = 80,
     .min_run             = 2,
     .bg_capture_delay    = 120,   /* ≈2s @60fps，等相机/补光稳定 */
