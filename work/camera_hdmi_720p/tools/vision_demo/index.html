@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vision Parameter Lab — steel ball</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark"></span>
+      <div>
+        <div class="brand-title">Vision Parameter Lab</div>
+        <div class="brand-sub">camera_hdmi_720p · 320×180 binned · 参数交互实验</div>
+      </div>
+    </div>
+
+    <div class="playback">
+      <button id="btnPlay" class="btn btn-primary">暂停</button>
+      <button id="btnStep" class="btn">单步</button>
+      <button id="btnReset" class="btn">重置</button>
+      <button id="btnRandom" class="btn">换场景</button>
+      <label class="inline">
+        <span>速度</span>
+        <select id="fps">
+          <option value="6">6 fps</option>
+          <option value="10">10 fps</option>
+          <option value="15" selected>15 fps</option>
+          <option value="30">30 fps</option>
+          <option value="60">60 fps</option>
+        </select>
+      </label>
+      <label class="inline">
+        <span>场景</span>
+        <select id="scenePreset">
+          <option value="standard" selected>标准 7 球 + 底堆</option>
+          <option value="clean">干净 3 球</option>
+          <option value="noisy">噪声/碎片</option>
+          <option value="reverse">反向滚动</option>
+          <option value="static">静止球</option>
+          <option value="longbar">长条干扰</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="top-stats" id="topStats">
+      <span>F <b id="statFrame">0</b></span>
+      <span>COUNT <b id="statCount">0</b></span>
+      <span>RUN <b id="statRuns">0</b></span>
+      <span>BLOB <b id="statBlobs">0</b></span>
+      <span>TRK <b id="statTracks">0</b></span>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside class="panel panel-left">
+      <div class="panel-head">
+        <h2>参数</h2>
+        <div class="panel-actions">
+          <button id="btnDefaults" class="btn btn-small">恢复默认</button>
+        </div>
+      </div>
+      <div class="panel-scroll" id="controls"></div>
+      <div class="panel-foot">
+        <label class="check"><input type="checkbox" id="chkLive" checked> 参数即时预览</label>
+        <span class="hint">筛选/几何参数即时；跟踪参数下一帧生效</span>
+      </div>
+    </aside>
+
+    <section class="stage">
+      <div class="stage-toolbar">
+        <div class="view-toggles">
+          <label class="check"><input type="checkbox" id="vCamera" checked> 相机</label>
+          <label class="check"><input type="checkbox" id="vMask"> Mask</label>
+          <label class="check"><input type="checkbox" id="vScore"> Diff</label>
+          <label class="check"><input type="checkbox" id="vRuns" checked> Runs</label>
+          <label class="check"><input type="checkbox" id="vBlobs" checked> Blobs</label>
+          <label class="check"><input type="checkbox" id="vRejected" checked> 拒绝项</label>
+          <label class="check"><input type="checkbox" id="vTracks" checked> Tracks</label>
+          <label class="check"><input type="checkbox" id="vGate" checked> Gate/ROI</label>
+        </div>
+        <div class="stage-readout" id="stageReadout">frame 0</div>
+      </div>
+
+      <div class="canvas-wrap">
+        <canvas id="view" width="960" height="540"></canvas>
+        <div class="canvas-badge" id="canvasBadge">320 × 180 binned</div>
+      </div>
+
+      <div class="stage-footer">
+        <span>点击 Blob 查看筛选原因 · 鼠标悬停参数看说明</span>
+        <span id="footerHint">—</span>
+      </div>
+    </section>
+
+    <aside class="panel panel-right">
+      <div class="panel-head">
+        <h2>解释 / 结果</h2>
+        <span class="badge" id="paramValue">—</span>
+      </div>
+      <div class="panel-scroll">
+        <section class="info-card" id="paramInfo">
+          <h3>参数说明</h3>
+          <p class="muted">把鼠标移到左侧参数上，或点击参数名。</p>
+        </section>
+
+        <section class="info-card">
+          <div class="card-head">
+            <h3>连通域 / 检测</h3>
+            <span class="mini" id="blobSummary">—</span>
+          </div>
+          <div id="blobList" class="list"></div>
+        </section>
+
+        <section class="info-card">
+          <div class="card-head">
+            <h3>轨迹</h3>
+            <span class="mini" id="trackSummary">—</span>
+          </div>
+          <div id="trackList" class="list"></div>
+        </section>
+
+        <section class="info-card legend-card">
+          <h3>图例</h3>
+          <div class="legend-row"><i class="sw sw-run"></i> 保留的 run</div>
+          <div class="legend-row"><i class="sw sw-run-bad"></i> 被 ROI/长度/min_run 丢弃</div>
+          <div class="legend-row"><i class="sw sw-blob"></i> 通过筛选的 Blob</div>
+          <div class="legend-row"><i class="sw sw-blob-bad"></i> 被筛选拒绝的 Blob</div>
+          <div class="legend-row"><i class="sw sw-track"></i> 可见轨迹（会计数）</div>
+          <div class="legend-row"><i class="sw sw-track-dim"></i> 未确认 / 丢失轨迹</div>
+          <div class="legend-row"><i class="sw sw-gate"></i> 门线 gate_x / gate_y</div>
+          <div class="legend-row"><i class="sw sw-roi"></i> ROI y ≤ roi_y1</div>
+        </section>
+      </div>
+    </aside>
+  </main>
+
+  <div class="toast" id="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>
