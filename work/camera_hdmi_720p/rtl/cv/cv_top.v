@@ -45,6 +45,8 @@ module cv_top #(
     input  wire        I_ball_en,
     input  wire [7:0]  I_ball_bg_thr,
     input  wire [7:0]  I_ball_min_run,
+    input  wire [8:0]  I_ball_roi_y1,
+    input  wire [9:0]  I_ball_max_run_len,
     input  wire        I_ball_capture,
     input  wire [1:0]  I_disp_mode,   // 调试：3=RGB, 1=score, 2=mask
     input  wire        I_debug_view,  // 1=调试动态画面
@@ -65,6 +67,8 @@ module cv_top #(
     output wire [10:0] O_run_cnt,
     output wire [7:0]  O_min_y,
     output wire [7:0]  O_max_y,
+    output wire [15:0] O_skip_roi_cnt,
+    output wire [15:0] O_skip_len_cnt,
 
     // 视频输出
     output wire        O_de,
@@ -113,12 +117,18 @@ module cv_top #(
     reg [2:0] r_ball_en_s, r_cap_s;
     reg [7:0] r_bg_thr_a, r_bg_thr;
     reg [7:0] r_min_run_a, r_min_run;
+    reg [8:0] r_roi_y1_a, r_roi_y1;
+    reg [9:0] r_max_run_a, r_max_run;
+    reg [15:0] r_skip_roi_cnt, r_skip_len_cnt;
+    reg [15:0] r_skip_roi_lat, r_skip_len_lat;
     reg       r_cap_d;
     always @(posedge I_clk or negedge I_rst_n) begin
         if (!I_rst_n) begin
             r_ball_en_s <= 3'd0; r_cap_s <= 3'd0;
             r_bg_thr_a  <= 8'd0; r_bg_thr <= 8'd0; r_cap_d <= 1'b0;
             r_min_run_a <= 8'd0; r_min_run <= 8'd0;
+            r_roi_y1_a  <= 9'd166; r_roi_y1 <= 9'd166;
+            r_max_run_a <= 10'd200; r_max_run <= 10'd200;
         end else begin
             r_ball_en_s <= {r_ball_en_s[1:0], I_ball_en};
             r_cap_s     <= {r_cap_s[1:0], I_ball_capture};
@@ -126,6 +136,10 @@ module cv_top #(
             r_bg_thr    <= r_bg_thr_a;
             r_min_run_a <= I_ball_min_run;
             r_min_run   <= r_min_run_a;
+            r_roi_y1_a  <= I_ball_roi_y1;
+            r_roi_y1    <= r_roi_y1_a;
+            r_max_run_a <= I_ball_max_run_len;
+            r_max_run   <= r_max_run_a;
             r_cap_d     <= r_cap_s[2];
         end
     end
@@ -226,18 +240,25 @@ module cv_top #(
             r_disp_mask  <= w_ball_mask;
         end
     end
-    // MCU-tunable minimum run length: drop isolated 1..N-1 pixel noise
+    // MCU-tunable run filters: min length, ROI bottom row, max run length
     wire [8:0] w_run_xs_now = r_run_act ? r_run_xs : r_sx_d;
     wire [8:0] w_run_len     = r_run_xe - r_run_xs + 9'd1;
     wire [8:0] w_run_len_end = r_sx_d - w_run_xs_now + 9'd1;
-    wire w_run_keep     = (r_min_run == 8'd0) || (w_run_len     >= {1'b0, r_min_run});
-    wire w_run_keep_end = (r_min_run == 8'd0) || (w_run_len_end >= {1'b0, r_min_run});
+    wire w_run_min_ok     = (r_min_run == 8'd0) || (w_run_len     >= {1'b0, r_min_run});
+    wire w_run_min_ok_end = (r_min_run == 8'd0) || (w_run_len_end >= {1'b0, r_min_run});
+    wire w_run_roi_ok     = ({1'b0, r_sy_d} <= r_roi_y1);
+    wire w_run_len_ok     = (r_max_run == 10'd0) || ({1'b0, w_run_len}     <= r_max_run);
+    wire w_run_len_end_ok = (r_max_run == 10'd0) || ({1'b0, w_run_len_end} <= r_max_run);
+    wire w_run_keep     = w_run_roi_ok && w_run_len_ok     && w_run_min_ok;
+    wire w_run_keep_end = w_run_roi_ok && w_run_len_end_ok && w_run_min_ok_end;
 
     always @(posedge I_clk or negedge I_rst_n) begin
         if (!I_rst_n) begin
             r_run_act <= 1'b0; r_run_xs <= 9'd0; r_run_xe <= 9'd0;
             r_run_wr <= 11'd0; r_run_cnt <= 11'd0;
             r_run_ovf <= 1'b0; r_run_ovf_frame <= 1'b0;
+            r_skip_roi_cnt <= 16'd0; r_skip_len_cnt <= 16'd0;
+            r_skip_roi_lat <= 16'd0; r_skip_len_lat <= 16'd0;
         end else if (vs_rise) begin
             if (r_run_act) begin
                 if (w_run_keep) begin
@@ -253,6 +274,12 @@ module cv_top #(
             end else begin
                 r_run_cnt <= r_run_wr;
             end
+            r_skip_roi_lat <= r_skip_roi_cnt +
+                ((r_run_act && !w_run_roi_ok) ? 16'd1 : 16'd0);
+            r_skip_len_lat <= r_skip_len_cnt +
+                ((r_run_act && w_run_roi_ok && !w_run_len_ok) ? 16'd1 : 16'd0);
+            r_skip_roi_cnt <= 16'd0;
+            r_skip_len_cnt <= 16'd0;
             r_run_wr  <= 11'd0;
             r_run_act <= 1'b0;
             r_run_ovf_frame <= r_run_ovf | (r_run_act && w_run_keep && (r_run_wr >= MAX_RUNS));
@@ -271,6 +298,9 @@ module cv_top #(
                                                        2'b0, r_sx_d};
                             r_run_wr <= r_run_wr + 1'b1;
                         end else r_run_ovf <= 1'b1;
+                    end else begin
+                        if (!w_run_roi_ok) r_skip_roi_cnt <= r_skip_roi_cnt + 16'd1;
+                        else if (!w_run_len_end_ok) r_skip_len_cnt <= r_skip_len_cnt + 16'd1;
                     end
                     r_run_act <= 1'b0;
                 end
@@ -281,6 +311,9 @@ module cv_top #(
                                                    2'b0, r_run_xe};
                         r_run_wr <= r_run_wr + 1'b1;
                     end else r_run_ovf <= 1'b1;
+                end else begin
+                    if (!w_run_roi_ok) r_skip_roi_cnt <= r_skip_roi_cnt + 16'd1;
+                    else if (!w_run_len_ok) r_skip_len_cnt <= r_skip_len_cnt + 16'd1;
                 end
                 r_run_act <= 1'b0;
             end
@@ -295,6 +328,8 @@ module cv_top #(
     end
 
     assign O_run_cnt      = r_run_cnt;
+    assign O_skip_roi_cnt = r_skip_roi_lat;
+    assign O_skip_len_cnt = r_skip_len_lat;
     assign O_min_y        = 8'h00;
     assign O_max_y        = 8'h00;
     assign O_run_overflow = r_run_ovf_frame;

@@ -120,6 +120,9 @@ module design_top_wrapper (
     // MCU 钢珠前端参数（ahb_status_slave 驱动；先声明供 cv_top 使用）
     wire        S_ball_en, S_ball_capture;
     wire [7:0]  S_ball_bg_thr, S_ball_min_run;
+    wire [8:0]  S_ball_roi_y1;
+    wire [9:0]  S_ball_max_run_len;
+    wire [15:0] S_skip_roi_cnt, S_skip_len_cnt;
     wire        S_ball_bg_ready, S_ball_capturing;
 
     // ============================================================ 摄像头上电时序 + I2C 配置（参考件）
@@ -688,6 +691,8 @@ module design_top_wrapper (
         .I_ball_en      ( S_ball_mode      ),
         .I_ball_bg_thr  ( S_ball_bg_thr    ),
         .I_ball_min_run ( S_ball_min_run   ),
+        .I_ball_roi_y1  ( S_ball_roi_y1    ),
+        .I_ball_max_run_len ( S_ball_max_run_len ),
         .I_ball_capture ( S_ball_capture   ),
         .I_disp_mode    ( S_disp_mode      ),
         .I_debug_view   ( S_debug_dynamic  ),
@@ -705,6 +710,8 @@ module design_top_wrapper (
         .O_run_cnt      ( S_cv_run_cnt     ),
         .O_min_y        ( S_cv_min_y       ),
         .O_max_y        ( S_cv_max_y       ),
+        .O_skip_roi_cnt ( S_skip_roi_cnt   ),
+        .O_skip_len_cnt ( S_skip_len_cnt   ),
         .O_run_overflow ( S_cv_run_overflow),
         .O_bin_thr      ( S_cv_bin_thr     )
     );
@@ -879,10 +886,14 @@ module design_top_wrapper (
         .I_min_y       ( S_cv_min_y         ),
         .I_max_y       ( S_cv_max_y         ),
         .I_vsync       ( S_hdmi_vsync       ),
+        .I_skip_roi_cnt( S_skip_roi_cnt     ),
+        .I_skip_len_cnt( S_skip_len_cnt     ),
         // 钢珠前端参数（C 固件唯一定义）
         .O_ball_en       ( S_ball_en         ),
         .O_ball_bg_thr   ( S_ball_bg_thr     ),
         .O_ball_min_run  ( S_ball_min_run    ),
+        .O_ball_roi_y1   ( S_ball_roi_y1     ),
+        .O_ball_max_run_len ( S_ball_max_run_len ),
         .O_ball_capture  ( S_ball_capture    ),
         .I_ball_bg_ready ( S_ball_bg_ready   ),
         .I_ball_capturing( S_ball_capturing  ),

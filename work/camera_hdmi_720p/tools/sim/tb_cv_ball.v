@@ -29,6 +29,9 @@ module tb_cv_ball;
     wire [7:0] O_min_y, O_max_y;
     wire O_run_overflow;
     wire [7:0] O_bin_thr;
+    wire [15:0] O_skip_roi_cnt, O_skip_len_cnt;
+    reg [8:0] roi_y1 = 9'd180;
+    reg [9:0] max_run_len = 10'd1023;
 
     cv_top #(
         .IMG_W(IMG_W), .IMG_H(IMG_H),
@@ -40,6 +43,7 @@ module tb_cv_ball;
         .I_de(I_de), .I_vs(I_vs), .I_data(I_data),
         .I_ball_en(I_ball_en), .I_ball_bg_thr(I_ball_bg_thr),
         .I_ball_min_run(I_ball_min_run),
+        .I_ball_roi_y1(roi_y1), .I_ball_max_run_len(max_run_len),
         .I_ball_capture(I_ball_capture),
         .I_disp_mode(2'd0),
         .I_debug_view(1'b0),
@@ -50,6 +54,7 @@ module tb_cv_ball;
         .I_count_bcd(20'd0),
         .O_de(O_de), .O_vs(O_vs), .O_data(O_data),
         .O_run_cnt(O_run_cnt), .O_min_y(O_min_y), .O_max_y(O_max_y),
+        .O_skip_roi_cnt(O_skip_roi_cnt), .O_skip_len_cnt(O_skip_len_cnt),
         .O_run_overflow(O_run_overflow), .O_bin_thr(O_bin_thr)
     );
 
@@ -67,6 +72,27 @@ module tb_cv_ball;
                     I_data = {8'h00,
                               ((obj != 0 && x >= ox && x < ox+4 &&
                                 y >= oy && y < oy+4) ? 8'd200 : g[7:0]),
+                              8'h00};
+                    @(negedge clk);
+                end
+                I_de = 0;
+                for (x = 0; x < 8; x = x + 1) @(negedge clk);
+            end
+        end
+    endtask
+
+    // 水平长条：4 行高，len_small*4 列宽，用于 max_run_len 测试
+    task frame_bar(input integer g, input integer len_small, input integer oy_small);
+        integer x, y;
+        begin
+            @(negedge clk); I_vs = 1;
+            @(negedge clk); I_vs = 0;
+            for (y = 0; y < IMG_H; y = y + 1) begin
+                for (x = 0; x < IMG_W; x = x + 1) begin
+                    I_de = 1;
+                    I_data = {8'h00,
+                              ((y >= oy_small*4 && y < oy_small*4+4 &&
+                                x < len_small*4) ? 8'd200 : g[7:0]),
                               8'h00};
                     @(negedge clk);
                 end
@@ -108,6 +134,29 @@ module tb_cv_ball;
         if (((rdat>>22)&10'h3ff) !== 10'd3) begin $display("FAIL run y"); errors=errors+1; end
         if (((rdat>>11)&11'h7ff) !== 11'd4) begin $display("FAIL run xs"); errors=errors+1; end
         if ((rdat&11'h7ff) !== 11'd4) begin $display("FAIL run xe"); errors=errors+1; end
+
+        // ROI 过滤：roi_y1=2，物体在 y=3，应丢弃并计数
+        roi_y1 = 9'd2;
+        frame(100, 1, 16, 12);
+        repeat (2) @(negedge clk);
+        frame(100, 0, 0, 0);
+        repeat (10) @(negedge clk);
+        $display("roi_filter run_cnt=%0d skip_roi=%0d", O_run_cnt, O_skip_roi_cnt);
+        if (O_run_cnt !== 11'd0) begin $display("FAIL roi run_cnt"); errors=errors+1; end
+        if (O_skip_roi_cnt == 16'd0) begin $display("FAIL roi skip cnt"); errors=errors+1; end
+        roi_y1 = 9'd180;
+
+        // max_run_len 过滤：长条 4 个 small 像素，max=2 应丢弃
+        max_run_len = 10'd2;
+        frame_bar(100, 4, 5);
+        repeat (2) @(negedge clk);
+        frame(100, 0, 0, 0);
+        repeat (10) @(negedge clk);
+        $display("len_filter run_cnt=%0d skip_roi=%0d skip_len=%0d roi_r=%0d max_r=%0d",
+                 O_run_cnt, O_skip_roi_cnt, O_skip_len_cnt, dut.r_roi_y1, dut.r_max_run);
+        if (O_run_cnt !== 11'd0) begin $display("FAIL len run_cnt"); errors=errors+1; end
+        if (O_skip_len_cnt == 16'd0) begin $display("FAIL len skip cnt"); errors=errors+1; end
+        max_run_len = 10'd1023;
 
         if (errors == 0) $display("TB_CV_BALL PASS");
         else             $display("TB_CV_BALL FAIL errors=%0d", errors);

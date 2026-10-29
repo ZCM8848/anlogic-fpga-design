@@ -213,13 +213,19 @@ MCU 通过 AHB-Lite 访问 `0x8000_0000`：
 | 0x24 | OV_W0 | W | overlay 高 32 位 |
 | 0x28 | OV_W1 | W | overlay 低 32 位，写入提交 |
 | 0x2C | META_REG | R | `{run_cnt[10:0], min_y, max_y, ...}` |
-| 0x30 | OV_COUNT | W | 计数值（cv_top 显示 4 位 hex） |
+| 0x30 | OV_COUNT | W | 钢珠计数值（HDMI 显示 5 位 BCD） |
 | 0x34 | BALL_CTRL | W | `[0]=enable [1]=capture` |
 | 0x38 | BALL_THR | W | `[7:0]=bg_thr`，`[15:8]=min_run` |
 | 0x3C | BALL_STATUS | R | `[0]=bg_ready [1]=capturing [2]=run_overflow` |
+| 0x40 | SW_STAT | R | `[0]=SW1 [1]=SW2 [2]=SW3 [3]=SW4` |
+| 0x44 | BCD_COUNT | W | 5 位 BCD 计数（给数码管/HDMI） |
+| 0x48 | BALL_RUN_CFG | W | `[8:0]=roi_y1`，`[19:10]=max_run_len` |
+| 0x4C | SKIP_CNT | R | `[15:0]=ROI 丢弃 run 数`，`[31:16]=超长 run 丢弃数` |
 
-`run_mem` 项格式：`{row_y[9:0], xs[10:0], xe[10:0]}`（32 bit，320×180 坐标）。
+`run_mem` 项格式：`{2'b0, y[7:0], 2'b0, xs[8:0], 2'b0, xe[8:0]}`（32 bit，320×180 坐标）。
 `overlay` 项格式：`{valid, id[3:0], x0[11:0], y0[11:0], x1[11:0], y1[11:0]}`（64 bit，1280×720 坐标）。
+
+> `roi_y1` / `max_run_len` 已在前端 run 提取阶段由 RTL 应用；C 里的 `skip_roi_cnt`/`skip_len_cnt` 仅作为兼容变量，串口 `SR/SL` 现在读 `SKIP_CNT`（FPGA 计数）。
 
 ## 6. 当前实现与 Python 参考的差异
 

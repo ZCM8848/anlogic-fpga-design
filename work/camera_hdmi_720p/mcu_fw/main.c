@@ -37,6 +37,8 @@ extern void al_simp_putchar(char c);
 #define BALL_STATUS (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x3C))
 #define SW_STAT     (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x40))
 #define BCD_COUNT   (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x44))
+#define BALL_RUN_CFG (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x48))
+#define SKIP_CNT    (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x4C))
 
 #define VER_MAGIC   0x4D435602U
 
@@ -710,9 +712,12 @@ static void write_count_bcd(void)
 static void report_debug(uint32_t frame, int run_cnt, int ovf)
 {
     int i;
+    uint32_t sk = SKIP_CNT;
+    int sr = (int)(sk & 0xFFFFu);
+    int sl = (int)((sk >> 16) & 0xFFFFu);
     al_simp_printf("D F=%d RUN=%d NC=%d DET=%d OVF=%d LBL=%d SR=%d SL=%d B=%d,%d,%d | ",
                    (int)(frame & 0xFFFFFFu), run_cnt, next_label, n_det, ovf,
-                   ccl_overflow, skip_roi_cnt, skip_len_cnt,
+                   ccl_overflow, sr, sl,
                    bkt_a, bkt_b, bkt_c);
     for (i = 0; i < n_dbg; i++) {
         al_simp_putchar(dbg[i].pass ? '*' : '.');
@@ -755,9 +760,11 @@ int main(void)
 
     report_params();
 
-    /* MCU 是调参唯一入口：写 RTL 背景阈值/最短 run/使能/采背景命令 */
+    /* MCU 是调参唯一入口：写 RTL 背景阈值/最短 run/ROI/max run/使能/采背景命令 */
     BALL_THR = (uint32_t)((VISION_PARAMS.bg_thr & 0xFF) |
                           ((VISION_PARAMS.min_run & 0xFF) << 8));
+    BALL_RUN_CFG = (uint32_t)((VISION_PARAMS.roi_y1 & 0x1FF) |
+                              ((VISION_PARAMS.max_run_len & 0x3FF) << 10));
     BALL_CTRL = 0u;
 
     if (VISION_PARAMS.enable) {
