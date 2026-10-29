@@ -88,7 +88,7 @@ typedef struct {
 
     /* ---- 几何 ---- */
     int box_w_small;            /* 固定框边长（320 尺度，约 D/4 = 43） */
-    int gate_x;                 /* 门线 x（320 尺度，0.30*320=96） */
+    int gate_x;                 /* 门线 x（320 尺度，0.10*320=32） */
     int gate_y0, gate_y1;       /* 门线 y 范围（320 尺度） */
     int roi_y1;                 /* CCL 只处理 y<=roi_y1；<0 或 >=180 表示不过滤 */
 
@@ -129,7 +129,7 @@ static const vision_params_t VISION_PARAMS = {
     .max_run_len         = 200,   /* 大于 4 个球宽的横向 run 丢弃 */
 
     .box_w_small         = 43,
-    .gate_x              = 96,
+    .gate_x              = 32,
     .gate_y0             = 0,
     .gate_y1             = 180,
     .roi_y1              = 180,   /* 现场调优：180=不启用 ROI 底边过滤，底部球堆进入 CCL */
