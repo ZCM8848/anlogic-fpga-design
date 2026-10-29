@@ -100,7 +100,7 @@ typedef struct {
 
 static const vision_params_t VISION_PARAMS = {
     .enable              = 1,
-    .bg_thr              = 30,
+    .bg_thr              = 80,
     .min_run             = 2,
     .bg_capture_delay    = 120,   /* ≈2s @60fps，等相机/补光稳定 */
     .bg_settle_frames    = 10,    /* 关 edge/OSD 后清 4 帧 DDR 流水线 */
@@ -114,14 +114,14 @@ static const vision_params_t VISION_PARAMS = {
     .min_fill            = 0,     /* 参考实现不做填充率筛选 */
     .min_ratio           = 0,     /* 参考实现不做长短比筛选 */
     .edge_margin         = 0,
-    .merge_dist          = 34,    /* 0.8 * 43 ≈ 34 */
+    .merge_dist          = 20,    /* 现场调优：20（原 0.8*43≈34） */
     .max_run_len         = 200,   /* 大于 4 个球宽的横向 run 丢弃 */
 
     .box_w_small         = 43,
     .gate_x              = 96,
     .gate_y0             = 14,
     .gate_y1             = 166,
-    .roi_y1              = 166,   /* 与门线底部一致；底部球堆不参与 CCL */
+    .roi_y1              = 180,   /* 现场调优：180=不启用 ROI 底边过滤，底部球堆进入 CCL */
 
     .track_gate          = 55,    /* 220 / 4 */
     .max_miss            = 5,
