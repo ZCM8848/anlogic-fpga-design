@@ -88,7 +88,7 @@ typedef struct {
 
     /* ---- 几何 ---- */
     int box_w_small;            /* 固定框边长（320 尺度，约 D/4 = 43） */
-    int gate_x;                 /* 门线 x（320 尺度，0.10*320=32） */
+    int gate_x;                 /* 门线 x（320 尺度，现场调优 100） */
     int gate_y0, gate_y1;       /* 门线 y 范围（320 尺度） */
     int roi_y1;                 /* CCL 只处理 y<=roi_y1；<0 或 >=180 表示不过滤 */
 
@@ -108,8 +108,8 @@ typedef struct {
 
 static const vision_params_t VISION_PARAMS = {
     .enable              = 1,
-    .exposure            = 1991,  /* 等效于加入曝光控制前的固定默认值 */
-    .gain                = 144,
+    .exposure            = 768,   /* 现场调优：约 6.4 ms，降低拖影 */
+    .gain                = 64,
     .bg_thr              = 80,
     .min_run             = 2,
     .bg_capture_delay    = 120,   /* ≈2s @60fps，等相机/补光稳定 */
@@ -117,7 +117,7 @@ static const vision_params_t VISION_PARAMS = {
     .bg_recalc_settle_frames = 30,/* K2 重采前 0.5s 稳定窗口（横线可见） */
 
     .min_area            = 100,
-    .max_area            = 1500,
+    .max_area            = 2000,
     .min_w               = 18,
     .max_w               = 100,
     .min_h               = 5,
@@ -129,7 +129,7 @@ static const vision_params_t VISION_PARAMS = {
     .max_run_len         = 200,   /* 大于 4 个球宽的横向 run 丢弃 */
 
     .box_w_small         = 43,
-    .gate_x              = 32,
+    .gate_x              = 100,
     .gate_y0             = 0,
     .gate_y1             = 180,
     .roi_y1              = 180,   /* 现场调优：180=不启用 ROI 底边过滤，底部球堆进入 CCL */
