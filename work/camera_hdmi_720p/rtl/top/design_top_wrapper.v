@@ -36,7 +36,7 @@ module design_top_wrapper (
     inout  wire        IO_cam_sda,       // J3
     output wire        O_cam_24m,        // L3 XCLK 23.81MHz
     output wire        O_cam_rst,        // L2 PWDNB（高=工作）
-    input  wire [1:0]  I_button,         // N2/J14 AE 按键
+    input  wire [1:0]  I_button,         // N2/J14（保留引脚；曝光/增益改由 MCU 控制）
 
     // USB-UART
     output wire        O_uart_tx,        // H1
@@ -149,9 +149,20 @@ module design_top_wrapper (
 
     wire [15:0] S_ae;
     wire [15:0] S_ag;
+    wire [15:0] S_cam_ae_ahb, S_cam_ag_ahb;
+    reg  [15:0] S_cam_ae_24m_a, S_cam_ae_24m;
+    reg  [15:0] S_cam_ag_24m_a, S_cam_ag_24m;
     wire        S_cam_cfg_done;
     wire        S_ae_cfg_done;
     wire        S_ae_req;
+
+    // AHB(150M) -> camera config clock(24M), values are static after boot.
+    always @(posedge S_24m_clk) begin
+        S_cam_ae_24m_a <= S_cam_ae_ahb;
+        S_cam_ae_24m   <= S_cam_ae_24m_a;
+        S_cam_ag_24m_a <= S_cam_ag_ahb;
+        S_cam_ag_24m   <= S_cam_ag_24m_a;
+    end
     wire [15:0] S_cam_sensor_id;
     wire        S_cam_sensor_id_ok;
     wire        S_cam_i2c_error;
@@ -159,7 +170,8 @@ module design_top_wrapper (
     ae_set u_ae_set (
         .I_clk        ( S_24m_clk         ),
         .I_rst        ( ~S_pll_lock       ),
-        .I_btn        ( {I_button, 2'b11} ),
+        .I_ae_set     ( S_cam_ae_24m      ),
+        .I_ag_set     ( S_cam_ag_24m      ),
         .I_cam_cfg_done( S_cam_cfg_done   ),
         .I_ae_cfg_done( S_ae_cfg_done     ),
         .O_ae_req     ( S_ae_req          ),
@@ -941,6 +953,8 @@ module design_top_wrapper (
         .O_gate_x      ( S_gate_x           ),
         .O_gate_y0     ( S_gate_y0          ),
         .O_gate_y1     ( S_gate_y1          ),
+        .O_cam_ae      ( S_cam_ae_ahb       ),
+        .O_cam_ag      ( S_cam_ag_ahb       ),
         .O_heartbeat   ( S_mcu_heartbeat    ),
         .O_scratch     ( S_mcu_scratch      ),
         .O_frame_cnt   ( S_mcu_frame_cnt    )

@@ -56,6 +56,7 @@ module tb_ahb_status_slave;
         .O_run_rd_addr(),
         .O_overlay(), .O_count(), .O_count_bcd(), .O_ball_now(), .O_seg_dash(),
         .O_gate_x(), .O_gate_y0(), .O_gate_y1(),
+        .O_cam_ae(), .O_cam_ag(),
         .O_ball_en(), .O_ball_bg_thr(), .O_ball_min_run(),
         .O_ball_roi_y1(), .O_ball_max_run_len(), .O_ball_capture(),
         .O_heartbeat(heartbeat), .O_scratch(scratch), .O_frame_cnt(frame_cnt)
@@ -194,6 +195,15 @@ module tb_ahb_status_slave;
         repeat (2) @(negedge hclk);
         ahb_read(32'h5C, rd);
         chk("BALL_GATE readback", rd, 32'h014C1C60);
+
+        ahb_write(32'h60, 32'd700, 3'b010);
+        repeat (2) @(negedge hclk);
+        ahb_read(32'h60, rd);
+        chk("CAM_AE readback", rd, 32'd700);
+        ahb_write(32'h64, 32'd144, 3'b010);
+        repeat (2) @(negedge hclk);
+        ahb_read(32'h64, rd);
+        chk("CAM_AG readback", rd, 32'd144);
 
         // === 9. 未映射地址读 = 0 ===
         ahb_read(32'h3C, rd);

@@ -43,6 +43,8 @@ extern void al_simp_putchar(char c);
 #define KEY_EVT     (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x50))
 #define BALL_NOW    (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x54))
 #define SEG_CTRL    (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x58))
+#define CAM_AE      (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x60))
+#define CAM_AG      (*(volatile uint32_t *)(AHB_STATUS_BASE + 0x64))
 
 #define VER_MAGIC   0x4D435602U
 
@@ -68,6 +70,8 @@ typedef struct {
     int bg_capture_delay;       /* 相机配置/DDR 就绪后再等多少帧采背景 */
     int bg_settle_frames;       /* 采背景前先让 edge/OSD 关闭并清空流水线的帧数 */
     int bg_recalc_settle_frames;/* K2 重采背景前稳定帧数（横线显示期间） */
+    int exposure;               /* 曝光目标（半行，2..1991） */
+    int gain;                   /* 增益目标（16..176） */
 
     /* ---- 连通域筛选（320x180）---- */
     int min_area;               /* 面积下限 */
@@ -104,6 +108,8 @@ typedef struct {
 
 static const vision_params_t VISION_PARAMS = {
     .enable              = 1,
+    .exposure            = 700,   /* 降低运动拖影；画面变暗时加光或调 gain */
+    .gain                = 0,
     .bg_thr              = 80,
     .min_run             = 2,
     .bg_capture_delay    = 120,   /* ≈2s @60fps，等相机/补光稳定 */
@@ -654,6 +660,8 @@ static void report_params(void)
                    VISION_PARAMS.enable, VISION_PARAMS.bg_thr,
                    VISION_PARAMS.min_run, VISION_PARAMS.bg_capture_delay,
                    VISION_PARAMS.bg_settle_frames);
+    al_simp_printf("VP camera ae=%d ag=%d\r\n",
+                   VISION_PARAMS.exposure, VISION_PARAMS.gain);
     al_simp_printf("VP area=%d..%d wh=%d..%d,%d..%d fill=%d ratio=%d edge=%d merge=%d roi=%d runmax=%d\r\n",
                    VISION_PARAMS.min_area, VISION_PARAMS.max_area,
                    VISION_PARAMS.min_w, VISION_PARAMS.max_w,
@@ -834,6 +842,8 @@ int main(void)
     BALL_GATE = (uint32_t)((VISION_PARAMS.gate_x & 0x1FF) |
                            ((VISION_PARAMS.gate_y0 & 0xFF) << 9) |
                            ((VISION_PARAMS.gate_y1 & 0xFF) << 17));
+    CAM_AE = (uint32_t)(VISION_PARAMS.exposure & 0xFFFF);
+    CAM_AG = (uint32_t)(VISION_PARAMS.gain & 0xFFFF);
     BALL_CTRL = 0u;
 
     if (VISION_PARAMS.enable) {
