@@ -35,3 +35,6 @@ set_clock_groups -asynchronous \
     -group [get_clocks {sys_clk_50m pll_clk_100m pll_clk_24m HDMI_PIXEL_CLK HDMI_SERIAL_CLK}] \
     -group [get_clocks {u_ph1p35_324_ddr_wrapper/u_ddr2/ddr_clk u_ph1p35_324_ddr_wrapper/u_ddr2/usr_clk}] \
     -group [get_clocks {pll_clk_300m u_ps/u_MCU/MCU_954571a4a1d3_Inst/PH1P_PHY_MCU_Inst.core_clk}]
+
+# 蜂鸣器/歌曲控制从像素域 2FF 同步到 50MHz，按异步处理
+set_false_path -from [get_clocks {HDMI_PIXEL_CLK}] -to [get_clocks {sys_clk_50m}]
