@@ -149,3 +149,16 @@ saved: 2026-10-28 19:41
    trigger: MCU flips BUZZ_CTRL[0] on gate count
    timing: Setup WNS +0.183ns, Hold WNS +0.020ns, 17278 slices (81.44%),
            RAM 69/108, DSP 10/40, 0 violations
+
+19) Buzzer test song + MiSans attribution + key event gating (current)
+   bit: camera_hdmi_720p_buzzer_song_0A5A29B6.bit
+   bit MD5: 0A5A29B62F7A80CD48AB30E497145C92
+   elf: ph1p35_status_buzzer_song_7CB7577E.elf
+   elf MD5: 7CB7577E94F0E78DD9F85C72A4B4E541
+   features:
+     - static test mode: K1 short toggles buzzer song play/pause (default paused)
+     - test pattern adds "MiSans by Xiaomi" attribution below HDMI TEST text
+     - K1/K2 long press only active in recognition mode (SW1=0)
+     - buzzer output mux: recognition beep vs test song
+   timing: Setup WNS +0.132ns, Hold WNS +0.020ns, 17403 slices (82.03%),
+           RAM 71/108, DSP 10/40, 0 violations
