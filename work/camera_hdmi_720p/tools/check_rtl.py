@@ -286,6 +286,13 @@ def check_multi_driver(files, errs):
         blocks = []
         for m in re.finditer(r"\balways\b", txt):
             i = m.start()
+            semi = txt.find(";", i)
+            begin = re.search(r"\bbegin\b", txt[i:])
+            begin_pos = i + begin.start() if begin else -1
+            if begin_pos < 0 or (0 <= semi < begin_pos):
+                # 单条语句 always（无 begin/end）：块到第一个分号为止
+                blocks.append((i, semi + 1, txt[i:semi + 1]))
+                continue
             depth = 0
             started = False
             j = i
@@ -351,7 +358,9 @@ def main():
         os.sep + "blk_mem_gen_zhenghe" + os.sep,
     }
     generated = {p for p in ondisk
-                 if os.sep + "ip" + os.sep + "pll" + os.sep in p or any(k in p for k in ip_managed)}
+                 if os.sep + "ip" + os.sep + "pll" + os.sep in p or any(k in p for k in ip_managed)
+                 or os.sep + "ip" + os.sep + "mcu" + os.sep in p
+                 or os.sep + "ip" + os.sep + "pll_mcu" + os.sep in p}
     # M6 起整棵搬入的厂商 ISP/视频通路/OSD/摄像头配置 RTL：参与解析（供顶层例化端口校验）
     #   与 .al 一致性检查，但不参与多驱动/声明顺序/字面量位宽等"自研代码质量"检查
     #   （厂商件风格不受本项目规则约束；其在 TD 已验证可编译；check_rtl 对单行 always

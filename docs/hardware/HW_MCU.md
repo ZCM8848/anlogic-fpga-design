@@ -80,9 +80,12 @@ MCU IP 有 **AHB master** 和 **APB master** 两个面向 fabric 的主端口（
 | `0x5C` | `BALL_GATE` | W | gate_x / gate_y0 / gate_y1 |
 | `0x60` | `CAM_AE` | W | 曝光目标，2..1991 半行 |
 | `0x64` | `CAM_AG` | W | 增益目标，16..176 |
+| `0x68` | `BUZZ_CTRL` | W | 翻转 `[0]` 触发一次短鸣 |
+| `0x6C` | `BUZZ_CFG` | W | `[15:0]=beep_ms`，`[31:16]=半周期时钟数` |
 
 - 相机曝光和增益由 MCU 写入 `CAM_AE` / `CAM_AG`，`ae_set` 在 24 MHz 域同步后写 SC520CS。当前默认 `exposure=768`、`gain=64`。
 - 门线位置由 `BALL_GATE` 下发，`cv_top` 按 `gate_x × 4` 绘制到 1280×720 画面。
+- 蜂鸣器由 `BUZZ_CTRL` / `BUZZ_CFG` 控制：识别态与动态调试态过门短鸣，静态测试图案输出 RTL 测试曲，C12 低电平响，SW5 为硬件供电开关。
 
 ### 4.2 APB master 窗口 = **文档无记载**（实测结论）
 

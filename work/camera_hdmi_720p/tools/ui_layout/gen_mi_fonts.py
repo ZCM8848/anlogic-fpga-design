@@ -5,6 +5,7 @@
     rtl/video/mi_digit_rom.v       count 30x34, ball-ID 8x12, small 16x20
     rtl/video/detected_text_rom.v  "DETECTED " 96x20
     rtl/video/tp_text_rom.v        "HDMI TEST 1280X720" 288x20
+    rtl/video/tp_attr_text_rom.v   "MiSans by Xiaomi" 160x20
     tools/ui_layout/misans_more_preview.png
 """
 

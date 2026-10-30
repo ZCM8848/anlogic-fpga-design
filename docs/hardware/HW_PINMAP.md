@@ -21,15 +21,18 @@
 | **L2** | `O_cam_rst` | MIPI_CSI_FPWDNB（PWDNB，低有效） | LVCMOS33 | DS=8, PULLUP |
 | **K3** | `O_cam_scl` | MIPI_CSI_I2C_FSCL | LVCMOS33 | DS=8, PULLUP |
 | **J3** | `IO_cam_sda` | MIPI_CSI_I2C_FSDA（inout） | LVCMOS33 | DS=8, PULLUP |
-| **N2** | `I_button[0]` | AE 按键 1（J2 扩展口） | LVCMOS33 | PULLUP |
-| **J14** | `I_button[1]` | AE 按键 2（J2 扩展口） | LVCMOS33 | PULLUP |
-| **A9** | `I_key2` | KEY2（CV 开关） | LVCMOS33 | PULLUP |
-| **B9** | `I_key3` | KEY3（CV 阈值 −） | LVCMOS33 | PULLUP |
-| **C7** | `I_key4` | KEY4（CV 阈值 +） | LVCMOS33 | PULLUP |
+| **N2** | `I_button[0]` | AE 按键 1（J2 扩展口，当前未使用） | LVCMOS33 | PULLUP |
+| **J14** | `I_button[1]` | AE 按键 2（J2 扩展口，当前未使用） | LVCMOS33 | PULLUP |
+| **D5** | `I_key1` | KEY1（短按切显示源/测试曲，长按清零） | LVCMOS33 | PULLUP |
+| **A9** | `I_key2` | KEY2（长按重采背景，仅识别态） | LVCMOS33 | PULLUP |
+| **B9** | `I_key3` | KEY3（遗留阈值脉冲，未使用） | LVCMOS33 | PULLUP |
+| **C7** | `I_key4` | KEY4（遗留阈值脉冲，未使用） | LVCMOS33 | PULLUP |
 | **H1** | `O_uart_tx` | USB-UART TXD（115200 8N1） | LVCMOS33 | DS=8 |
-| **A4** | `I_sw1` | SW1（最高优先级：1=RGB888 原图直通，CV 暂停） | LVCMOS33 | PULLUP |
-| **D11** | `I_sw4` | SW4（模式主选：0=彩条,1=摄像头） | LVCMOS33 | PULLUP |
-| **E11** | `I_sw3` | SW3（模式子选：0=edge,1=OSD） | LVCMOS33 | PULLUP |
+| **A4** | `I_sw1` | SW1（0=识别态，1=测试/调试态） | LVCMOS33 | PULLUP |
+| **B4** | `I_sw2` | SW2（测试态子模式：0=静态图案，1=动态调试） | LVCMOS33 | PULLUP |
+| **D11** | `I_sw4` | SW4（仅上报 `SW_STAT[3]`） | LVCMOS33 | PULLUP |
+| **E11** | `I_sw3` | SW3（仅上报 `SW_STAT[2]`） | LVCMOS33 | PULLUP |
+| **C12** | `O_buzzer` | 蜂鸣器 BUZZER（低电平响，SW5 硬件开关） | LVCMOS33 | DS=8 |
 
 > UART 方向已定案：**FPGA 的 `O_uart_tx` → H1**；J1 为 FPGA 侧 RXD（本设计未用）。
 > 原理图 sheet3 里 `FPGA_TXD/RXD` 是桥侧视角命名，勿按字面判方向。
@@ -88,8 +91,8 @@
 | LED1~LED4 | D10 / E10 / C6 / D6（高电平点亮） |
 | 电源指示 LED14 | （板上电源灯，非用户 IO） |
 | KEY1 / KEY2 / KEY3 / KEY4 | D5 / A9 / B9 / C7（按下低电平） |
-| SW1 / SW2 / SW3 / SW4 | A4 / B4 / E11 / D11（拨上=1；SW1/SW3/SW4 已用于本项目，SW2 保留） |
-| 蜂鸣器 BUZZER | C12（低电平响） |
+| SW1 / SW2 / SW3 / SW4 | A4 / B4 / E11 / D11（拨上=1；SW1/SW2 选择工作模式，SW3/SW4 只上报 `SW_STAT`） |
+| 蜂鸣器 BUZZER | C12（低电平响，SW5 硬件开关） |
 
 ### 数码管 / 双色 LED（复用，SW6 选择）
 

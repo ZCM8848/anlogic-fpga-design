@@ -89,12 +89,15 @@ module test_pattern (
                             S_grad   ? {x[7:0], x[7:0], x[7:0]} :
                                        S_bar_color;
 
-    // ---------------- MiSans 文字：HDMI TEST 1280X720 ----------------
-    // 288x20 1-bit ROM（MiSans Medium 20px），左上角黑底白字
+    // ---------------- MiSans 文字：HDMI TEST 1280X720 + 来源标注 ----------------
     localparam [11:0] TX0 = 12'd40;
     localparam [11:0] TY0 = 12'd40;
     localparam [11:0] TBOX_W = 12'd288;
     localparam [11:0] TBOX_H = 12'd20;
+    localparam [11:0] TA_X = 12'd40;
+    localparam [11:0] TA_Y = 12'd64;
+    localparam [11:0] TA_W = 12'd160;
+    localparam [11:0] TA_H = 12'd20;
 
     wire [8:0] S_tp_x = x - TX0;
     wire [4:0] S_tp_y = y - TY0;
@@ -106,10 +109,23 @@ module test_pattern (
         .O_BIT ( S_tp_bit )
     );
 
+    wire [7:0] S_tpa_x = x - TA_X;
+    wire [4:0] S_tpa_y = y - TA_Y;
+    wire       S_tpa_bit;
+
+    tp_attr_text_rom u_tp_attr_text_rom (
+        .I_X   ( S_tpa_x   ),
+        .I_Y   ( S_tpa_y   ),
+        .O_BIT ( S_tpa_bit )
+    );
+
     wire S_text_area = (x >= TX0) && (x < TX0 + TBOX_W) &&
                        (y >= TY0) && (y < TY0 + TBOX_H);
-    wire [23:0] S_pix = S_text_area ? (S_tp_bit ? 24'hFFFFFF : 24'h000000) :
-                                       S_pattern;
+    wire S_attr_area = (x >= TA_X) && (x < TA_X + TA_W) &&
+                       (y >= TA_Y) && (y < TA_Y + TA_H);
+    wire [23:0] S_pix = S_text_area ? (S_tp_bit  ? 24'hFFFFFF : 24'h000000) :
+                       S_attr_area ? (S_tpa_bit ? 24'hC0C0C0 : 24'h000000) :
+                                        S_pattern;
 
 
     // ---------------- 输出寄存器（2 级流水） ----------------

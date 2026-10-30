@@ -139,7 +139,7 @@ saved: 2026-10-28 19:41
    note: gate_x=100 -> full-res x=400; bit unchanged
    timing: bit unchanged (Setup WNS +0.140ns, Hold WNS +0.020ns)
 
-18) Buzzer beep on ball crossing (current)
+18) Buzzer beep on ball crossing
    bit: camera_hdmi_720p_buzzer_981A0C97.bit
    bit MD5: 981A0C9761D1F4F3766567A544C146BC
    elf: ph1p35_status_buzzer_1EE84369.elf

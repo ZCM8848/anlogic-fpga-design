@@ -47,18 +47,19 @@
 - MCU 完成 CCL、筛选、跟踪、门线计数、背景重采和曝光/增益控制
 - 识别态 UI 包含 Logo、`STEEL BALL`、Count、`DETECTED N`、`Anlogic HX1P35A`、FRAME 和门线
 - 所有可见文字使用 MiSans Medium 1-bit ROM
+- 蜂鸣器过门短鸣；静态测试图案下 K1 短按播放/暂停测试曲，画面显示 `MiSans by Xiaomi` 来源标注
 
 发布产物：
 
 ```text
-work/camera_hdmi_720p/artifacts/camera_hdmi_720p_ae_mcu_E93577E7.bit
-MD5 E93577E71A445D475698BA80A714343B
+work/camera_hdmi_720p/artifacts/camera_hdmi_720p_buzzer_song_0A5A29B6.bit
+MD5 0A5A29B62F7A80CD48AB30E497145C92
 
-work/camera_hdmi_720p/artifacts/ph1p35_status_tune_gate100_E6DFDDC8.elf
-MD5 E6DFDDC8E784C607C1192C3459FC97DF
+work/camera_hdmi_720p/artifacts/ph1p35_status_buzzer_song_7CB7577E.elf
+MD5 7CB7577E94F0E78DD9F85C72A4B4E541
 ```
 
-最终时序：Setup WNS +0.140 ns，Hold WNS +0.020 ns，0 违例，Slices 16,940 / 21,216（79.85%）。
+最终时序：Setup WNS +0.132 ns，Hold WNS +0.020 ns，0 违例，Slices 17,403 / 21,216（82.03%）。
 
 ## 快速开始
 

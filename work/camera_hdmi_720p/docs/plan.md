@@ -42,8 +42,11 @@ FPGA 负责像素前端、run 提取、门线绘制和 overlay；MCU 负责 CCL�
 | MiSans OSD（Logo / 标题 / 赛事文本 / FRAME） | 完成 |
 | `DETECTED N` 当前框数 | 完成 |
 | 门线视频叠加 | 完成 |
-| K1 长按清零 Count 和轨迹 | 完成 |
-| K2 长按重采背景 + 数码管横线 | 完成 |
+| K1 长按清零 Count 和轨迹（仅识别态） | 完成 |
+| K2 长按重采背景 + 数码管横线（仅识别态） | 完成 |
+| 蜂鸣器过门短鸣 | 完成 |
+| 静态测试态 K1 短按播放/暂停测试曲 | 完成 |
+| 测试图案 MiSans 来源标注 | 完成 |
 | MCU 控制曝光/增益 | 完成 |
 | UI 布局编辑器 | 完成 |
 | 参数交互演示 | 完成 |
@@ -83,6 +86,9 @@ static_max_age=30
 
 debug=1
 debug_div=30
+
+beep_ms=50
+beep_freq_hz=1000
 ```
 
 当前门线位置：
@@ -122,25 +128,27 @@ y = 0 … 720
 | `0x5C` | `BALL_GATE` | gate_x / gate_y0 / gate_y1 |
 | `0x60` | `CAM_AE` | 曝光目标 |
 | `0x64` | `CAM_AG` | 增益目标 |
+| `0x68` | `BUZZ_CTRL` | 翻转 `[0]` 触发短鸣 |
+| `0x6C` | `BUZZ_CFG` | `[15:0]=beep_ms [31:16]=半周期时钟数` |
 
 ## 6. 发布产物
 
 ```text
-bit: camera_hdmi_720p_ae_mcu_E93577E7.bit
-MD5: E93577E71A445D475698BA80A714343B
+bit: camera_hdmi_720p_buzzer_song_0A5A29B6.bit
+MD5: 0A5A29B62F7A80CD48AB30E497145C92
 
-elf: ph1p35_status_tune_gate100_E6DFDDC8.elf
-MD5: E6DFDDC8E784C607C1192C3459FC97DF
+elf: ph1p35_status_buzzer_song_7CB7577E.elf
+MD5: 7CB7577E94F0E78DD9F85C72A4B4E541
 ```
 
 时序与资源：
 
 ```text
-Setup WNS +0.140 ns
+Setup WNS +0.132 ns
 Hold  WNS +0.020 ns
 0 violations
-Slices 16,940 / 21,216 (79.85%)
-RAM    69 / 108
+Slices 17,403 / 21,216 (82.03%)
+RAM    71 / 108
 DSP    10 / 40
 ```
 

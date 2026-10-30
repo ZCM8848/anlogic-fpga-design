@@ -1024,9 +1024,11 @@ module design_top_wrapper (
 
     wire S_buzz_beep;
     wire S_buzz_song;
+    wire S_beep_en_50m = ~S_static_50m;   // 静态测试态强制蜂鸣短鸣静音，避免切回时残响
     buzzer_beep u_buzzer_beep (
         .I_clk        ( I_sys_clk          ),
         .I_rst_n      ( S_rst_n_50m        ),
+        .I_en         ( S_beep_en_50m      ),
         .I_trig_toggle( S_buzz_toggle_ahb  ),
         .I_half_clks  ( S_buzz_cfg_ahb[31:16] ),
         .I_beep_ms    ( S_buzz_cfg_ahb[15:0]  ),

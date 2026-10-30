@@ -199,7 +199,9 @@ static int            count;
 static int            ccl_overflow;
 static int            skip_roi_cnt, skip_len_cnt;
 static int            beep_toggle;
-static int            beep_req;
+static int            frame_beeps;     /* 本帧过门数，由 track_update 累加 */
+static int            beep_pending;    /* 待发出的短鸣数 */
+static int            beep_cooldown;   /* 距下次允许触发还有多少帧 */
 
 struct DbgComp { int area, x0, y0, x1, y1, pass; };
 static struct DbgComp dbg[DBG_TOPK];
@@ -564,7 +566,7 @@ static void track_update(void)
             trk[ti].cy <= VISION_PARAMS.gate_y1) {
             trk[ti].counted = 1;
             count++;
-            beep_req = 1;
+            frame_beeps++;
         }
     }
 
@@ -895,6 +897,7 @@ int main(void)
         if (evt) KEY_EVT = evt;           /* write back 1s to clear */
         uint32_t sw = SW_STAT;
         int recognition = ((sw & 0x1u) == 0u);  /* SW1=0 识别态 */
+        int static_mode = (((sw & 0x1u) != 0u) && (((sw >> 1) & 0x1u) == 0u));  /* SW1=1,SW2=0 静态测试态 */
         if (recognition) {
             if (evt & 1u) {
                 reset_count_and_tracks();
@@ -927,11 +930,20 @@ int main(void)
                 for (i = 0; i < run_cnt; i++) ccl_step(read_run(i));
                 ccl_finalize();
             }
+            if (beep_cooldown > 0) beep_cooldown--;
             track_update();
-            if (beep_req) {
+            if (frame_beeps > 0) {
+                /* 静态测试态蜂鸣输出切到测试曲，不排短鸣，避免切回时积压爆发 */
+                if (!static_mode) beep_pending += frame_beeps;
+                frame_beeps = 0;
+            }
+            if (beep_pending > 0 && beep_cooldown == 0) {
                 beep_toggle ^= 1;
                 BUZZ_CTRL = (uint32_t)(beep_toggle & 1u);
-                beep_req = 0;
+                beep_pending--;
+                /* 帧间隔约 16 ms；按 beep_ms 向上取整为帧数，保证两声不重叠 */
+                beep_cooldown = (VISION_PARAMS.beep_ms + 15) / 16;
+                if (beep_cooldown < 1) beep_cooldown = 1;
             }
             write_overlay();
             OV_COUNT = (uint32_t)count;

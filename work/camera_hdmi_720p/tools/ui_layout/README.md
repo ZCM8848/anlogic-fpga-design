@@ -105,7 +105,7 @@ python tools/ui_layout/apply_layout.py path/to/ui_layout.json
 生成脚本：
 
 - `gen_ui_text_rom.py`：`STEEL BALL`、`Anlogic HX1P35A`、`FRAME` 前缀、帧数字
-- `gen_mi_fonts.py`：Count 30×34、球框 ID 8×12、`DETECTED ` 前缀、`DETECTED` 数字、测试图案文字
+- `gen_mi_fonts.py`：Count 30×34、球框 ID 8×12、`DETECTED ` 前缀、`DETECTED` 数字、测试图案文字、测试图案来源标注
 
 RTL ROM：
 
@@ -113,6 +113,7 @@ RTL ROM：
 - `rtl/video/mi_digit_rom.v`
 - `rtl/video/detected_text_rom.v`
 - `rtl/video/tp_text_rom.v`
+- `rtl/video/tp_attr_text_rom.v`
 
 预览图：
 
@@ -126,7 +127,7 @@ RTL ROM：
 - `app.js`：编辑、渲染、导出
 - `apply_layout.py`：JSON 写回 RTL
 - `gen_ui_text_rom.py`：静态文字 ROM 生成
-- `gen_mi_fonts.py`：Count、ID、DETECTED、测试图案 ROM 生成
+- `gen_mi_fonts.py`：Count、ID、DETECTED、测试图案、来源标注 ROM 生成
 - `examples/ball_counter.json`：当前实机布局
 - `examples/competition.json`：比赛布局
 - `examples/debug.json`：调试布局

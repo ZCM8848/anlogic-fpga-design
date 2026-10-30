@@ -16,6 +16,7 @@ module tb_buzzer_beep;
     buzzer_beep dut (
         .I_clk         ( clk         ),
         .I_rst_n       ( rst_n       ),
+        .I_en          ( 1'b1        ),
         .I_trig_toggle ( trig_toggle ),
         .I_half_clks   ( half_clks   ),
         .I_beep_ms     ( beep_ms     ),

@@ -10,6 +10,7 @@ module buzzer_beep #(
 ) (
     input  wire        I_clk,
     input  wire        I_rst_n,
+    input  wire        I_en,            // 0=强制静音并复位鸣叫状态（模式切换用）
     input  wire        I_trig_toggle,   // 翻转触发，AHB 写 0/1
     input  wire [23:0] I_half_clks,     // 方波半周期时钟数
     input  wire [15:0] I_beep_ms,       // 鸣叫时长 ms
@@ -54,7 +55,7 @@ module buzzer_beep #(
     reg        beeping;
     reg [15:0] ms_left;
     always @(posedge I_clk) begin
-        if (!I_rst_n) begin
+        if (!I_rst_n || !I_en) begin
             beeping <= 1'b0;
             ms_left <= 16'd0;
         end else if (trig_event) begin
@@ -76,7 +77,7 @@ module buzzer_beep #(
         if (!I_rst_n) begin
             O_buzzer  <= 1'b1;       // 静音
             half_cnt  <= 24'd0;
-        end else if (!beeping || (half_s2 == 24'd0)) begin
+        end else if (!I_en || !beeping || (half_s2 == 24'd0)) begin
             O_buzzer <= 1'b1;
             half_cnt <= half_s2;
         end else begin

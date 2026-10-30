@@ -29,6 +29,7 @@ module tb_test_pattern;
     integer ix, iy;
     integer text_pixels = 0;
     integer bg_pixels = 0;
+    integer attr_pixels = 0;
     integer first_x = -1;
     integer first_y = -1;
 
@@ -46,6 +47,10 @@ module tb_test_pattern;
                 bg_pixels = bg_pixels + 1;
             end
         end
+        if (de_o && (y >= 12'd64) && (y < 12'd84) &&
+            (x >= 12'd40) && (x < 12'd200)) begin
+            if (data == 24'hC0C0C0) attr_pixels = attr_pixels + 1;
+        end
     end
 
     initial begin
@@ -53,7 +58,7 @@ module tb_test_pattern;
         rst_n = 1'b1;
         de = 1'b1;
 
-        for (iy = 40; iy < 60; iy = iy + 1) begin
+        for (iy = 40; iy < 84; iy = iy + 1) begin
             for (ix = 40; ix < 330; ix = ix + 1) begin
                 x = ix[11:0];
                 y = iy[11:0];
@@ -61,9 +66,9 @@ module tb_test_pattern;
             end
         end
 
-        $display("TP text_pixels=%0d bg_pixels=%0d first=(%0d,%0d)",
-                 text_pixels, bg_pixels, first_x, first_y);
-        if ((text_pixels > 100) && (bg_pixels > 1000) &&
+        $display("TP text_pixels=%0d bg_pixels=%0d attr_pixels=%0d first=(%0d,%0d)",
+                 text_pixels, bg_pixels, attr_pixels, first_x, first_y);
+        if ((text_pixels > 100) && (bg_pixels > 1000) && (attr_pixels > 100) &&
             (first_x >= 40) && (first_x < 330) &&
             (first_y >= 40) && (first_y < 60))
             $display("TB_TEST_PATTERN PASS");

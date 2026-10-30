@@ -69,7 +69,7 @@ SC520CS 输出 2-lane RAW10。D-PHY 恢复字节时钟后，CSI 解包提取行�
 
 ### 3.4 显示
 
-`hdmi_mixer` 读取 `video_out` 数据，叠加 Logo、MiSans 文字、Count、`DETECTED N` 和 FRAME 计数。`video_mux` 在测试图案和摄像头之间按帧边界切换，`hdmi_tx` 输出 720p60 TMDS。
+`hdmi_mixer` 读取 `video_out` 数据，叠加 Logo、MiSans 文字、Count、`DETECTED N` 和 FRAME 计数。`video_mux` 在测试图案和摄像头之间按帧边界切换，`hdmi_tx` 输出 720p60 TMDS。静态测试图案在 `HDMI TEST 1280X720` 下方显示 `MiSans by Xiaomi` 来源标注。
 
 ### 3.5 检测前端 `cv_top`
 
@@ -95,22 +95,34 @@ MCU 在每帧 vsync 后读取 `run_mem`，执行：
 - 右向左门线计数
 - overlay 写回和串口调试输出
 
+### 3.7 蜂鸣器输出
+
+`buzzer_beep` 在 50 MHz 域工作，MCU 翻转 `BUZZ_CTRL[0]`，模块取边沿后输出一次 1 kHz、50 ms 的方波。`BUZZ_CFG` 提供 `beep_ms` 和半周期时钟数。`I_en` 由 `~S_static_50m` 驱动，静态测试态下强制静音并复位鸣叫状态，避免切回识别态时听到未发完的残响。
+
+`buzzer_song` 复用 `work/buzzer_music` 的音符表与曲目 ROM，在静态测试图案下由 K1 短按控制播放与暂停。暂停时回到曲首，输出保持高电平；离开静态测试图案自动暂停。
+
+`O_buzzer` 在静态测试图案下选择歌曲输出，其余模式选择过门短鸣。蜂鸣器低电平响，SW5 是硬件供电开关。
+
+固件把过门事件排成短鸣队列：`track_update` 每次计数累加 `frame_beeps`，主循环按 `beep_ms` 折算的帧间隔逐声翻转 `BUZZ_CTRL`，相邻两声不重叠；静态测试态的事件不入队。
+
 ## 四、模式与按键
 
 | SW1 | SW2 | 模式 |
 |---|---|---|
 | 0 | × | 识别画面：摄像头 + 绿框 + 完整 UI + 门线 |
-| 1 | 0 | 静态测试图案 |
+| 1 | 0 | 静态测试图案：K1 短按播放/暂停测试曲 |
 | 1 | 1 | 动态调试：K1 短按循环 RGB / score / mask |
 
-SW3、SW4 仅通过 `SW_STAT` 上报，不参与模式选择。
+SW3、SW4 仅通过 `SW_STAT` 上报，不参与模式选择。测试态只切换显示源和按键行为，检测、计数与背景保持运行。
 
 | 按键 | 功能 |
 |---|---|
-| K1 短按 | 动态调试态循环 RGB / score / mask |
-| K1 长按 ≥1 s | 清零 Count、BCD、绿框、轨迹 |
-| K2 长按 ≥1 s | 重采背景，数码管显示 `--------`，新背景就绪后恢复 |
+| K1 短按 | 识别态不响应；静态测试图案下切换测试曲播放/暂停；动态调试态循环 RGB / score / mask |
+| K1 长按 ≥1 s | 仅识别态清零 Count、BCD、绿框、轨迹；测试态与动态调试态忽略 |
+| K2 长按 ≥1 s | 仅识别态重采背景，数码管显示 `--------`，新背景就绪后恢复；测试态与动态调试态忽略 |
 | K3 / K4 | 遗留阈值脉冲，当前 `cv_top` 不消费 |
+
+`KEY_EVT` 由 RTL 在所有模式产生，MCU 读取 `SW_STAT[0]`，只在 `SW1=0` 时处理，其余模式只清除事件。
 
 ## 五、识别 UI
 
@@ -124,7 +136,7 @@ SW3、SW4 仅通过 `SW_STAT` 上报，不参与模式选择。
 | `FRAME 000123` | `(24,680)` | 240×20 |
 | 门线 | `x=400` | 2 像素宽，`y=0..720` |
 
-所有可见文字使用 MiSans Medium 1-bit ROM。Count 为 30×34 数字，5 位总宽 150。门线颜色 `#FF3366`。识别态与动态调试态显示门线，静态测试图案不经过 `cv_top`。
+所有可见文字使用 MiSans Medium 1-bit ROM。Count 为 30×34 数字，5 位总宽 150。门线颜色 `#FF3366`。识别态与动态调试态显示门线，静态测试图案不经过 `cv_top`。静态测试图案的文字为 `HDMI TEST 1280X720`，下方 `MiSans by Xiaomi` 为 MiSans 来源标注。
 
 ## 六、AHB 寄存器
 
@@ -156,6 +168,8 @@ SW3、SW4 仅通过 `SW_STAT` 上报，不参与模式选择。
 | `0x5C` | `BALL_GATE` | W | gate_x / gate_y0 / gate_y1 |
 | `0x60` | `CAM_AE` | W | 曝光目标，2..1991 半行 |
 | `0x64` | `CAM_AG` | W | 增益目标，16..176 |
+| `0x68` | `BUZZ_CTRL` | W | 翻转 `[0]` 触发一次短鸣 |
+| `0x6C` | `BUZZ_CFG` | W | `[15:0]=beep_ms`，`[31:16]=半周期时钟数` |
 
 `run_mem` 项格式：`{2'b0, y[7:0], 2'b0, xs[8:0], 2'b0, xe[8:0]}`。`overlay` 项格式：`{valid, id[3:0], x0[11:0], y0[11:0], x1[11:0], y1[11:0]}`。
 
@@ -214,6 +228,8 @@ powershell -ExecutionPolicy Bypass -File tools\sim\run_iverilog.ps1 -Tb tb_count
 powershell -ExecutionPolicy Bypass -File tools\sim\run_iverilog.ps1 -Tb tb_ui_overlay
 powershell -ExecutionPolicy Bypass -File tools\sim\run_iverilog.ps1 -Tb tb_seg_count_display
 powershell -ExecutionPolicy Bypass -File tools\sim\run_iverilog.ps1 -Tb tb_test_pattern
+powershell -ExecutionPolicy Bypass -File tools\sim\run_iverilog.ps1 -Tb tb_buzzer_beep
+powershell -ExecutionPolicy Bypass -File tools\sim\run_iverilog.ps1 -Tb tb_buzzer_song
 powershell -ExecutionPolicy Bypass -File tools\sim\run_iverilog.ps1 -Tb tb_cv_ball
 powershell -ExecutionPolicy Bypass -File tools\sim\run_iverilog.ps1 -Tb tb_hdmi_logo
 ```
@@ -226,12 +242,14 @@ python tools\check_rtl.py .
 
 当前测试覆盖：
 
-- `tb_ahb_status_slave`：21 项通过，覆盖 `BALL_NOW`、`KEY_EVT[1]`、`SEG_CTRL`、`BALL_GATE`、`CAM_AE`、`CAM_AG`
+- `tb_ahb_status_slave`：23 项通过，覆盖 `BALL_NOW`、`KEY_EVT[1]`、`SEG_CTRL`、`BALL_GATE`、`CAM_AE`、`CAM_AG`、`BUZZ_CTRL`、`BUZZ_CFG`
 - `tb_ae_set`：曝光/增益写入和限幅
 - `tb_count_order`：Count 数字顺序和门线像素
 - `tb_ui_overlay`：Logo、静态文字、FRAME、`DETECTED N`
 - `tb_seg_count_display`：5 位 BCD 和 8 位全横线
-- `tb_test_pattern`：MiSans 测试文字
+- `tb_test_pattern`：MiSans 测试文字和来源标注
+- `tb_buzzer_beep`：翻转触发、短鸣时长、静音电平
+- `tb_buzzer_song`：播放输出、暂停静音、复位
 - `tb_cv_ball`：4×4 平均、背景采集、run 过滤
 - `tb_hdmi_logo`：Logo 叠加
 
@@ -240,11 +258,11 @@ python tools\check_rtl.py .
 当前发布 bit：
 
 ```text
-Setup WNS +0.140 ns
+Setup WNS +0.132 ns
 Hold  WNS +0.020 ns
 0 violations
-Slices 16,940 / 21,216 (79.85%)
-RAM    69 / 108
+Slices 17,403 / 21,216 (82.03%)
+RAM    71 / 108
 DSP    10 / 40
 ```
 

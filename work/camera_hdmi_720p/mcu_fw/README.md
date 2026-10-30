@@ -81,6 +81,15 @@ hits >= min_hits
 | `debug` | 1 | 1=输出 `D` 调试行 |
 | `debug_div` | 30 | 每 30 帧输出一次 |
 
+### 1.6 蜂鸣器
+
+| 字段 | 当前值 | 说明 |
+|---|---:|---|
+| `beep_ms` | 50 | 过门短鸣时长，单位 ms |
+| `beep_freq_hz` | 1000 | 过门短鸣频率，单位 Hz |
+
+`beep_ms` 与 `beep_freq_hz` 在启动时写入 `BUZZ_CFG`。固件把每次过门计入短鸣队列，主循环按 `beep_ms` 折算的帧间隔逐声翻转 `BUZZ_CTRL[0]`，FPGA 取边沿产生一次短鸣，相邻两声不重叠。测试曲由 RTL 产生，与这两个字段无关。静态测试态的事件不入短鸣队列，`buzzer_beep` 在该态被 `I_en` 强制静音。
+
 ## 2. 背景采集
 
 上电流程：
@@ -104,6 +113,8 @@ K2 长按重采背景：
 7. `SEG_CTRL=0`，恢复数码管
 
 重采背景时滑道必须为空。Count、BCD、HDMI Count 保持原值。
+
+`KEY_EVT` 由 RTL 在所有模式产生。固件每轮读 `SW_STAT[0]`，只在识别态（`SW1=0`）处理 K1 长按清零与 K2 长按重采；静态测试图案和动态调试态只清除事件。K1 短按不产生 `KEY_EVT`，由 RTL 根据模式处理：静态测试图案切换测试曲播放/暂停，动态调试态循环显示源。
 
 ## 3. 串口输出
 
@@ -217,6 +228,8 @@ MCU 通过 `0x8000_0000 + offset` 访问。
 | `0x5C` | `BALL_GATE` | W | gate_x / gate_y0 / gate_y1 |
 | `0x60` | `CAM_AE` | W | 曝光目标 |
 | `0x64` | `CAM_AG` | W | 增益目标 |
+| `0x68` | `BUZZ_CTRL` | W | 翻转 `[0]` 触发一次短鸣 |
+| `0x6C` | `BUZZ_CFG` | W | `[15:0]=beep_ms [31:16]=半周期时钟数` |
 
 `run_mem` 项格式：`{2'b0, y[7:0], 2'b0, xs[8:0], 2'b0, xe[8:0]}`。
 
@@ -239,11 +252,11 @@ MAX_TRK    = 8
 ## 7. 当前发布产物
 
 ```text
-bit: camera_hdmi_720p_ae_mcu_E93577E7.bit
-MD5: E93577E71A445D475698BA80A714343B
+bit: camera_hdmi_720p_buzzer_song_0A5A29B6.bit
+MD5: 0A5A29B62F7A80CD48AB30E497145C92
 
-elf: ph1p35_status_tune_gate100_E6DFDDC8.elf
-MD5: E6DFDDC8E784C607C1192C3459FC97DF
+elf: ph1p35_status_buzzer_song_7CB7577E.elf
+MD5: 7CB7577E94F0E78DD9F85C72A4B4E541
 ```
 
 烧录顺序：bit → ELF → Resume。串口应出现 `VP` 参数行和 `BALL BG ready=1`。

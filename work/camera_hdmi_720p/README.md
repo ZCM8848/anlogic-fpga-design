@@ -6,17 +6,17 @@ PH1P35MDG324（HX1P35A 开发板）上的 SC520CS 摄像头钢珠检测工程。
 
 | 项目 | 文件 | MD5 |
 |---|---|---|
-| bit | `artifacts/camera_hdmi_720p_ae_mcu_E93577E7.bit` | `E93577E71A445D475698BA80A714343B` |
-| ELF | `artifacts/ph1p35_status_tune_gate100_E6DFDDC8.elf` | `E6DFDDC8E784C607C1192C3459FC97DF` |
+| bit | `artifacts/camera_hdmi_720p_buzzer_song_0A5A29B6.bit` | `0A5A29B62F7A80CD48AB30E497145C92` |
+| ELF | `artifacts/ph1p35_status_buzzer_song_7CB7577E.elf` | `7CB7577E94F0E78DD9F85C72A4B4E541` |
 
 最终时序与资源：
 
 ```text
-Setup WNS +0.140 ns
+Setup WNS +0.132 ns
 Hold  WNS +0.020 ns
 0 violations
-Slices 16,940 / 21,216 (79.85%)
-RAM    69 / 108
+Slices 17,403 / 21,216 (82.03%)
+RAM    71 / 108
 DSP    10 / 40
 ```
 
@@ -49,16 +49,18 @@ flowchart LR
 | SW1 | SW2 | 画面 | 说明 |
 |---|---|---|---|
 | 0 | × | 识别画面 | 摄像头 + 绿框 + 完整 UI + 门线 |
-| 1 | 0 | 静态测试图案 | 彩条、灰度渐变、移动方块、MiSans 文字 |
+| 1 | 0 | 静态测试图案 | 彩条、灰度渐变、移动方块、MiSans 文字；K1 短按播放/暂停测试曲 |
 | 1 | 1 | 动态调试 | K1 短按循环 RGB / score / mask |
+
+测试态只切换显示源和按键行为，检测、计数与背景保持运行。
 
 按键：
 
 | 按键 | 功能 |
 |---|---|
-| K1 短按 | 仅在 `SW1=1, SW2=1` 时循环 RGB / score / mask |
-| K1 长按 ≥1 s | 清零 Count、BCD、绿框和全部轨迹 |
-| K2 长按 ≥1 s | 重新采集背景；数码管显示 `--------`，直到新背景就绪 |
+| K1 短按 | 识别态不响应；`SW1=1, SW2=0` 切换蜂鸣器测试曲播放/暂停；`SW1=1, SW2=1` 循环 RGB / score / mask |
+| K1 长按 ≥1 s | 仅在识别态清零 Count、BCD、绿框和全部轨迹；测试态与动态调试态忽略 |
+| K2 长按 ≥1 s | 仅在识别态重新采集背景；数码管显示 `--------`，直到新背景就绪；测试态与动态调试态忽略 |
 | K3 / K4 | 遗留阈值脉冲，当前 RTL 不消费，无实际作用 |
 
 ## 识别画面 UI
@@ -85,6 +87,7 @@ Count             30x34
 DETECTED 前缀      96x20
 DETECTED 数字      16x20
 测试图案文字       288x20
+测试图案来源标注   160x20
 ```
 
 7 段数码管显示右侧 5 位 Count，左侧 3 位熄灭。K2 重采背景期间 8 位全部显示 `-`。
@@ -139,6 +142,17 @@ CAM_AG = 64
 
 修改 `main.c` 中的 `VISION_PARAMS.exposure` 或 `VISION_PARAMS.gain` 后重新编译 ELF 即可。
 
+## 蜂鸣器
+
+蜂鸣器接 C12，低电平响，SW5 串在供电回路中，只有 SW5 接通才会发声。
+
+| 场景 | 输出 | 说明 |
+|---|---|---|
+| 识别态 / 动态调试态 | 过门短鸣 | 每次计数排队触发 1 kHz、50 ms，相邻两声间隔约 `beep_ms` |
+| 静态测试图案 | 测试曲 | K1 短按播放/暂停，默认暂停；离开该模式自动暂停，再次播放从曲首开始 |
+
+短鸣参数在 MCU `VISION_PARAMS.beep_ms` / `beep_freq_hz`，MCU 翻转 `BUZZ_CTRL[0]`，FPGA 取边沿产生一次脉冲。静态测试态下 `buzzer_beep` 被强制静音，避免切回识别态时听到残响；该态的过门事件不计入短鸣队列。测试曲在 RTL `song_data.vh`，更换曲子需要重新综合。
+
 ## AHB 寄存器
 
 MCU 通过 AHB 窗口 `0x8000_0000 + offset` 访问。
@@ -171,6 +185,8 @@ MCU 通过 AHB 窗口 `0x8000_0000 + offset` 访问。
 | `0x5C` | `BALL_GATE` | W | `[8:0]=gate_x [16:9]=gate_y0 [24:17]=gate_y1` |
 | `0x60` | `CAM_AE` | W | 曝光目标 |
 | `0x64` | `CAM_AG` | W | 增益目标 |
+| `0x68` | `BUZZ_CTRL` | W | 翻转 `[0]` 触发一次短鸣 |
+| `0x6C` | `BUZZ_CFG` | W | `[15:0]=beep_ms [31:16]=半周期时钟数` |
 
 ## 构建
 
@@ -214,6 +230,8 @@ powershell -ExecutionPolicy Bypass -File tools\sim\run_iverilog.ps1 -Tb tb_count
 powershell -ExecutionPolicy Bypass -File tools\sim\run_iverilog.ps1 -Tb tb_ui_overlay
 powershell -ExecutionPolicy Bypass -File tools\sim\run_iverilog.ps1 -Tb tb_seg_count_display
 powershell -ExecutionPolicy Bypass -File tools\sim\run_iverilog.ps1 -Tb tb_test_pattern
+powershell -ExecutionPolicy Bypass -File tools\sim\run_iverilog.ps1 -Tb tb_buzzer_beep
+powershell -ExecutionPolicy Bypass -File tools\sim\run_iverilog.ps1 -Tb tb_buzzer_song
 powershell -ExecutionPolicy Bypass -File tools\sim\run_iverilog.ps1 -Tb tb_cv_ball
 powershell -ExecutionPolicy Bypass -File tools\sim\run_iverilog.ps1 -Tb tb_hdmi_logo
 ```
