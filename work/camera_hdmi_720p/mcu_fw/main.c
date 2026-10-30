@@ -893,13 +893,17 @@ int main(void)
     while (1) {
         uint32_t evt = KEY_EVT;
         if (evt) KEY_EVT = evt;           /* write back 1s to clear */
-        if (evt & 1u) {
-            reset_count_and_tracks();
-            al_simp_printf("KEY1 RESET count/tracks\r\n");
-        }
-        if (evt & 2u) {
-            recapture_background(&hb);
-            last_frame = FRAME_REG;
+        uint32_t sw = SW_STAT;
+        int recognition = ((sw & 0x1u) == 0u);  /* SW1=0 识别态 */
+        if (recognition) {
+            if (evt & 1u) {
+                reset_count_and_tracks();
+                al_simp_printf("KEY1 RESET count/tracks\r\n");
+            }
+            if (evt & 2u) {
+                recapture_background(&hb);
+                last_frame = FRAME_REG;
+            }
         }
         uint32_t fr = FRAME_REG;
         if (fr != last_frame) {
