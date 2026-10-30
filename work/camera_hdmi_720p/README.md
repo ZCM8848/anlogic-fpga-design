@@ -6,16 +6,16 @@ PH1P35MDG324（HX1P35A 开发板）上的 SC520CS 摄像头钢珠检测工程。
 
 | 项目 | 文件 | MD5 |
 |---|---|---|
-| bit | `artifacts/camera_hdmi_720p_buzzer_song_0A5A29B6.bit` | `0A5A29B62F7A80CD48AB30E497145C92` |
-| ELF | `artifacts/ph1p35_status_buzzer_song_7CB7577E.elf` | `7CB7577E94F0E78DD9F85C72A4B4E541` |
+| bit | `artifacts/camera_hdmi_720p_buzzer_queue_AD9BB563.bit` | `AD9BB56382EF350F0CD714EF752EFCC1` |
+| ELF | `artifacts/ph1p35_status_buzzer_queue_C2226280.elf` | `C2226280E474EF5B847EB2673F95D91C` |
 
 最终时序与资源：
 
 ```text
-Setup WNS +0.132 ns
+Setup WNS +0.158 ns
 Hold  WNS +0.020 ns
 0 violations
-Slices 17,403 / 21,216 (82.03%)
+Slices 17,359 / 21,216 (81.82%)
 RAM    71 / 108
 DSP    10 / 40
 ```

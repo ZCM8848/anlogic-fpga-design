@@ -52,14 +52,14 @@
 发布产物：
 
 ```text
-work/camera_hdmi_720p/artifacts/camera_hdmi_720p_buzzer_song_0A5A29B6.bit
-MD5 0A5A29B62F7A80CD48AB30E497145C92
+work/camera_hdmi_720p/artifacts/camera_hdmi_720p_buzzer_queue_AD9BB563.bit
+MD5 AD9BB56382EF350F0CD714EF752EFCC1
 
-work/camera_hdmi_720p/artifacts/ph1p35_status_buzzer_song_7CB7577E.elf
-MD5 7CB7577E94F0E78DD9F85C72A4B4E541
+work/camera_hdmi_720p/artifacts/ph1p35_status_buzzer_queue_C2226280.elf
+MD5 C2226280E474EF5B847EB2673F95D91C
 ```
 
-最终时序：Setup WNS +0.132 ns，Hold WNS +0.020 ns，0 违例，Slices 17,403 / 21,216（82.03%）。
+最终时序：Setup WNS +0.158 ns，Hold WNS +0.020 ns，0 违例，Slices 17,359 / 21,216（81.82%）。
 
 ## 快速开始
 

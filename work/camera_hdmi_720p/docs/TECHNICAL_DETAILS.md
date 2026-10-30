@@ -258,10 +258,10 @@ python tools\check_rtl.py .
 当前发布 bit：
 
 ```text
-Setup WNS +0.132 ns
+Setup WNS +0.158 ns
 Hold  WNS +0.020 ns
 0 violations
-Slices 17,403 / 21,216 (82.03%)
+Slices 17,359 / 21,216 (81.82%)
 RAM    71 / 108
 DSP    10 / 40
 ```
