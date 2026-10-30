@@ -93,7 +93,7 @@ hits >= min_hits
 
 ### 1.7 串口热调参
 
-USART0 使用 115200 8N1，TX 接 H1，RX 接 J1。接收中断写入 64 字节环形缓冲，主循环帧间解析 ASCII 行：
+USART0 使用 115200 8N1，TX 接 H1，RX 接 J1。主循环轮询 RX FIFO，把字节写入 64 字节环形缓冲，帧间解析 ASCII 行：
 
 ```text
 GET

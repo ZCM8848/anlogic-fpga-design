@@ -107,7 +107,7 @@ MCU 在每帧 vsync 后读取 `run_mem`，执行：
 
 ### 3.8 串口热调参
 
-USART0 使用 115200 8N1，`uart0_tx` 接 H1，`uart0_rx` 接 J1。接收中断把字节写入 64 字节环形缓冲，主循环帧间解析 `GET`、`SET`、`APPLY`、`DEFAULT`、`RECAPTURE`、`VER` 命令。
+USART0 使用 115200 8N1，`uart0_tx` 接 H1，`uart0_rx` 接 J1。主循环轮询 RX FIFO，把字节写入 64 字节环形缓冲，帧间解析 `GET`、`SET`、`APPLY`、`DEFAULT`、`RECAPTURE`、`VER` 命令。
 
 默认参数保存在 Flash 的 `VISION_PARAMS_DEFAULT`，上电复制到 DLM 中的 `vp`。`SET` 修改 `vp`，`APPLY` 写 FPGA 寄存器并清空轨迹，掉电后恢复默认值。完整协议见 `mcu_fw/README.md`，上位机见 `tools/param_tuner/`。
 

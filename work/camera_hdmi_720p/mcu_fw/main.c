@@ -227,44 +227,12 @@ static int               g_dbg_step = 30;
 static void clear_tracks_only(void);
 static void recapture_background(uint32_t *hb);
 
-static void uart_rx_isr(void *param)
-{
-    uint32_t st;
-    (void)param;
-    st = AlUsart_ll_GetStatus(USART0_BASE_ADDR);
-    while (!(st & (1u << AL_USART_STATUS_EMPTY))) {
-        uint8_t  c = (uint8_t)AlUsart_ll_RecvData(USART0_BASE_ADDR);
-        uint16_t next = (uint16_t)((uart_rx_head + 1u) & (UART_RX_BUF - 1u));
-        if (next != uart_rx_tail) {
-            uart_rx_buf[uart_rx_head] = c;
-            uart_rx_head = next;
-        } else {
-            uart_rx_drops++;
-        }
-        st = AlUsart_ll_GetStatus(USART0_BASE_ADDR);
-    }
-    if (st & (1u << AL_USART_STATUS_RXIP))
-        AlUsart_ll_ClrStatus(USART0_BASE_ADDR, AL_USART_STATUS_RXIP);
-    if (st & (1u << AL_USART_STATUS_RX_IDLE_TOUT_STATUS))
-        AlUsart_ll_ClrStatus(USART0_BASE_ADDR, AL_USART_STATUS_RX_IDLE_TOUT_STATUS);
-    if (st & (1u << AL_USART_STATUS_RX_WM_TOUT_STATUS))
-        AlUsart_ll_ClrStatus(USART0_BASE_ADDR, AL_USART_STATUS_RX_WM_TOUT_STATUS);
-}
-
 static void uart_rx_init(void)
 {
     uart_rx_head = 0;
     uart_rx_tail = 0;
     uart_rx_drops = 0;
     uart_line_len = 0;
-
-    AlIntr_RegHandler(SOC_USART0_IRQn, AL_NULL, uart_rx_isr, AL_NULL);
-    AlIntr_SetInterrupt(SOC_USART0_IRQn, AL_TRUE);
-
-    AlUsart_ll_SetRxFifoWm(USART0_BASE_ADDR, 8);
-    AlUsart_ll_EnableIntr(USART0_BASE_ADDR, AL_USART_RXIE, AL_TRUE);
-    AlUsart_ll_EnableIntr(USART0_BASE_ADDR, AL_USART_RX_IDLE_TOUT_IRQ_EN, AL_TRUE);
-    AlUsart_ll_EnableIntr(USART0_BASE_ADDR, AL_USART_RX_WM_TOUT_IRQ_EN, AL_TRUE);
 }
 
 static int uart_getc(void)
@@ -481,9 +449,26 @@ static void uart_handle_line(char *line, uint32_t *hb)
     al_simp_printf("ERR cmd %s\r\n", cmd);
 }
 
+static void uart_poll_rx(void)
+{
+    uint32_t st = AlUsart_ll_GetStatus(USART0_BASE_ADDR);
+    while (!(st & (1u << AL_USART_STATUS_EMPTY))) {
+        uint8_t  c = (uint8_t)AlUsart_ll_RecvData(USART0_BASE_ADDR);
+        uint16_t next = (uint16_t)((uart_rx_head + 1u) & (UART_RX_BUF - 1u));
+        if (next != uart_rx_tail) {
+            uart_rx_buf[uart_rx_head] = c;
+            uart_rx_head = next;
+        } else {
+            uart_rx_drops++;
+        }
+        st = AlUsart_ll_GetStatus(USART0_BASE_ADDR);
+    }
+}
+
 static void uart_task(uint32_t *hb)
 {
     int c;
+    uart_poll_rx();
     while ((c = uart_getc()) >= 0) {
         if (c == '\r' || c == '\n') {
             if (uart_line_len > 0) {
