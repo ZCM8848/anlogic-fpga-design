@@ -130,7 +130,7 @@ saved: 2026-10-28 19:41
    note: gate_x stays 32; only camera exposure/gain restored
    timing: bit unchanged (Setup WNS +0.140ns, Hold WNS +0.020ns)
 
-17) field tuning: exposure=768, gain=64, max_area=2000, gate_x=100 (current)
+17) field tuning: exposure=768, gain=64, max_area=2000, gate_x=100
    bit: camera_hdmi_720p_ae_mcu_E93577E7.bit (unchanged)
    bit MD5: E93577E71A445D475698BA80A714343B
    elf: ph1p35_status_tune_gate100_E6DFDDC8.elf
@@ -163,7 +163,7 @@ saved: 2026-10-28 19:41
    timing: Setup WNS +0.132ns, Hold WNS +0.020ns, 17403 slices (82.03%),
            RAM 71/108, DSP 10/40, 0 violations
 
-20) Buzzer per-crossing queue + static-mode beep silencing (current)
+20) Buzzer per-crossing queue + static-mode beep silencing
    release: camera_hdmi_720p-v1.0.0
    bit: camera_hdmi_720p_buzzer_queue_AD9BB563.bit
    bit MD5: AD9BB56382EF350F0CD714EF752EFCC1
@@ -175,3 +175,21 @@ saved: 2026-10-28 19:41
      - test pattern includes "MiSans by Xiaomi" attribution
    timing: Setup WNS +0.158ns, Hold WNS +0.020ns, 17359 slices (81.82%),
            RAM 71/108, DSP 10/40, 0 violations
+
+21) UART hot tuning + host tool (current, pending on-board validation)
+   bit: camera_hdmi_720p_hot_tune_51B960EB.bit
+   bit MD5: 51B960EBD6592266102ACA03E70672E7
+   elf: ph1p35_status_hot_tune_32DA83DF.elf
+   elf MD5: 32DA83DF06A8DE9BE64DBF32AF64742D
+   bin: ph1p35_status_hot_tune_32DA83DF.bin
+   bin MD5: 4AAF6F5B2724DBBE1899EE2F45AF77D2
+   bin offset: 0x00E00000 (MCU XIP 0x20E00000)
+   features:
+     - MCU runtime params in DLM, defaults in VISION_PARAMS_DEFAULT
+     - USART0 RX on J1, 115200, GET/SET/APPLY/DEFAULT/RECAPTURE/VER
+     - host tool: tools/param_tuner/param_tuner.py, packaged exe in dist/
+     - exe: camera_param_tuner.exe, MD5 7FC7F12EA87757E7A56BF67EF7FEF3BE
+     - MAX_LABELS reduced 96 -> 80 to free DLM for runtime params
+   timing: Setup WNS +0.671ns, Hold WNS +0.020ns, 17389 slices (81.96%),
+           RAM 71/108, DSP 10/40, 0 violations
+
