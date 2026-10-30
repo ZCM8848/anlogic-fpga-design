@@ -164,6 +164,7 @@ saved: 2026-10-28 19:41
            RAM 71/108, DSP 10/40, 0 violations
 
 20) Buzzer per-crossing queue + static-mode beep silencing (current)
+   release: camera_hdmi_720p-v1.0.0
    bit: camera_hdmi_720p_buzzer_queue_AD9BB563.bit
    bit MD5: AD9BB56382EF350F0CD714EF752EFCC1
    elf: ph1p35_status_buzzer_queue_C2226280.elf

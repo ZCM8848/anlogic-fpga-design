@@ -22,6 +22,8 @@ DSP    10 / 40
 
 上板时需要同时加载 bit 和 ELF。只更换 ELF 可以调整检测参数，不需要重新综合 FPGA。
 
+正式发布：[`camera_hdmi_720p-v1.0.0`](https://github.com/ZCM8848/anlogic-fpga-design/releases/tag/camera_hdmi_720p-v1.0.0)，附件包含 bit、ELF 和校验文件，说明见 `RELEASE_NOTES_v1.0.0.md`。
+
 ## 系统结构
 
 ```mermaid

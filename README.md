@@ -61,6 +61,8 @@ MD5 C2226280E474EF5B847EB2673F95D91C
 
 最终时序：Setup WNS +0.158 ns，Hold WNS +0.020 ns，0 违例，Slices 17,359 / 21,216（81.82%）。
 
+正式发布：[`camera_hdmi_720p-v1.0.0`](https://github.com/ZCM8848/anlogic-fpga-design/releases/tag/camera_hdmi_720p-v1.0.0)。
+
 ## 快速开始
 
 1. 安装安路 TD 6.2.1 并导入 License，安装下载器驱动。
