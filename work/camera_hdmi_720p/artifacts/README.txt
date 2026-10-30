@@ -179,17 +179,17 @@ saved: 2026-10-28 19:41
 21) UART hot tuning + host tool (current)
    bit: camera_hdmi_720p_hot_tune_51B960EB.bit
    bit MD5: 51B960EBD6592266102ACA03E70672E7
-   elf: ph1p35_status_hot_tune_17CE8BB2.elf
-   elf MD5: 17CE8BB20E080DA00934F412F55B7177
-   bin: ph1p35_status_hot_tune_17CE8BB2.bin
-   bin MD5: E0B78B40C4F416D92CB12A87323E45F2
+   elf: ph1p35_status_hot_tune_3BA844A1.elf
+   elf MD5: 3BA844A1E22DA8D74C9A80DF40ACDCC5
+   bin: ph1p35_status_hot_tune_3BA844A1.bin
+   bin MD5: 9C531A4A24C10F95EBE8926538C26F23
    bin offset: 0x00E00000 (MCU XIP 0x20E00000)
    features:
      - MCU runtime params in DLM, defaults in VISION_PARAMS_DEFAULT
      - USART0 RX on J1, 115200, GET/SET/APPLY/DEFAULT/RECAPTURE/VER
      - RX FIFO polled from main loop; no USART RX interrupt
      - host tool: tools/param_tuner/param_tuner.py, packaged exe in dist/
-     - exe: camera_param_tuner.exe, MD5 7FC7F12EA87757E7A56BF67EF7FEF3BE
+     - exe: camera_param_tuner.exe, MD5 B77223AF28974375E0B51DF9F800FFA5
      - MAX_LABELS reduced 96 -> 80 to free DLM for runtime params
    timing: Setup WNS +0.671ns, Hold WNS +0.020ns, 17389 slices (81.96%),
            RAM 71/108, DSP 10/40, 0 violations

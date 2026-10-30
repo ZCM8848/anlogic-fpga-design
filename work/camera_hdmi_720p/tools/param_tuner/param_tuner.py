@@ -51,7 +51,7 @@ PARAMS = [
     Param("box_w_small", "绿框边长", 1, 320, "几何"),
     Param("gate_x", "门线 X", 0, 319, "几何"),
     Param("gate_y0", "门线 Y0", 0, 179, "几何"),
-    Param("gate_y1", "门线 Y1", 0, 179, "几何"),
+    Param("gate_y1", "门线 Y1", 0, 180, "几何"),
     Param("roi_y1", "ROI 底边", -1, 180, "几何"),
 
     Param("track_gate", "关联半径", 1, 181, "跟踪"),

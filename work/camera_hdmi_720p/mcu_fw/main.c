@@ -275,7 +275,7 @@ static const param_desc_t PARAM_TABLE[] = {
     P(box_w_small,            1,   320),
     P(gate_x,                 0,   319),
     P(gate_y0,                0,   179),
-    P(gate_y1,                0,   179),
+    P(gate_y1,                0,   180),
     P(roi_y1,                -1,   180),
     P(track_gate,             1,   181),
     P(max_miss,               0,   255),
