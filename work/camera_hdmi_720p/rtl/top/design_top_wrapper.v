@@ -41,6 +41,7 @@ module design_top_wrapper (
 
     // USB-UART
     output wire        O_uart_tx,        // H1
+    input  wire        I_uart_rx,        // J1
 
     // 模式切换（拨上=1）
     input  wire        I_sw1,            // A4（0=识别/正常，1=调试）
@@ -995,7 +996,7 @@ module design_top_wrapper (
         .I_hresp      ( S_hresp           ),
         .I_hready     ( S_hready          ),
         .O_uart0_tx   ( S_mcu_uart0_tx    ),
-        .I_uart0_rx   ( 1'b1             )    // UART idle
+        .I_uart0_rx   ( I_uart_rx        )
     );
 
     // ---- 8 位数码管：5 位十进制 BCD 计数（右对齐，左 3 位灭）----

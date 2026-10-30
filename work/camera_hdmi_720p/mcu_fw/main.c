@@ -14,7 +14,10 @@
  */
 #include <stdio.h>
 #include <stdint.h>
+#include <stddef.h>
 #include "al_core.h"
+#include "al_hwcfg.h"
+#include "al_usart_ll.h"
 
 extern int  al_simp_printf(const char *format, ...);
 extern void al_simp_putchar(char c);
@@ -110,7 +113,7 @@ typedef struct {
     int beep_freq_hz;           /* 蜂鸣频率 Hz */
 } vision_params_t;
 
-static const vision_params_t VISION_PARAMS = {
+static const vision_params_t VISION_PARAMS_DEFAULT = {
     .enable              = 1,
     .exposure            = 768,   /* 现场调优：约 6.4 ms，降低拖影 */
     .gain                = 64,
@@ -153,13 +156,17 @@ static const vision_params_t VISION_PARAMS = {
 };
 /* ============================ 调参区结束 ============================ */
 
+/* 运行期参数副本：上电从 Flash 默认值加载，串口 SET/APPLY 修改，掉电恢复默认 */
+static vision_params_t vp;
+#define VISION_PARAMS vp
+
 #define IMG_W       320
 #define IMG_H       180
 #define OUT_W       1280
 #define OUT_H       720
 #define OUT_SCALE   4
 #define MAX_RUNS    1024
-#define MAX_LABELS  96
+#define MAX_LABELS  80
 #define MAX_PREV    160
 #define MAX_DET     8
 #define MAX_TRK     8
@@ -207,6 +214,292 @@ struct DbgComp { int area, x0, y0, x1, y1, pass; };
 static struct DbgComp dbg[DBG_TOPK];
 static int            n_dbg;
 static int            bkt_a, bkt_b, bkt_c;
+
+/* ============================ 串口热调参 ============================ */
+#define UART_RX_BUF 64
+static volatile uint8_t  uart_rx_buf[UART_RX_BUF];
+static volatile uint16_t uart_rx_head, uart_rx_tail;
+static volatile uint32_t uart_rx_drops;
+static char              uart_line[48];
+static int               uart_line_len;
+static int               g_dbg_step = 30;
+
+static void clear_tracks_only(void);
+static void recapture_background(uint32_t *hb);
+
+static void uart_rx_isr(void *param)
+{
+    uint32_t st;
+    (void)param;
+    st = AlUsart_ll_GetStatus(USART0_BASE_ADDR);
+    while (!(st & (1u << AL_USART_STATUS_EMPTY))) {
+        uint8_t  c = (uint8_t)AlUsart_ll_RecvData(USART0_BASE_ADDR);
+        uint16_t next = (uint16_t)((uart_rx_head + 1u) & (UART_RX_BUF - 1u));
+        if (next != uart_rx_tail) {
+            uart_rx_buf[uart_rx_head] = c;
+            uart_rx_head = next;
+        } else {
+            uart_rx_drops++;
+        }
+        st = AlUsart_ll_GetStatus(USART0_BASE_ADDR);
+    }
+    if (st & (1u << AL_USART_STATUS_RXIP))
+        AlUsart_ll_ClrStatus(USART0_BASE_ADDR, AL_USART_STATUS_RXIP);
+    if (st & (1u << AL_USART_STATUS_RX_IDLE_TOUT_STATUS))
+        AlUsart_ll_ClrStatus(USART0_BASE_ADDR, AL_USART_STATUS_RX_IDLE_TOUT_STATUS);
+    if (st & (1u << AL_USART_STATUS_RX_WM_TOUT_STATUS))
+        AlUsart_ll_ClrStatus(USART0_BASE_ADDR, AL_USART_STATUS_RX_WM_TOUT_STATUS);
+}
+
+static void uart_rx_init(void)
+{
+    uart_rx_head = 0;
+    uart_rx_tail = 0;
+    uart_rx_drops = 0;
+    uart_line_len = 0;
+
+    AlIntr_RegHandler(SOC_USART0_IRQn, AL_NULL, uart_rx_isr, AL_NULL);
+    AlIntr_SetInterrupt(SOC_USART0_IRQn, AL_TRUE);
+
+    AlUsart_ll_SetRxFifoWm(USART0_BASE_ADDR, 8);
+    AlUsart_ll_EnableIntr(USART0_BASE_ADDR, AL_USART_RXIE, AL_TRUE);
+    AlUsart_ll_EnableIntr(USART0_BASE_ADDR, AL_USART_RX_IDLE_TOUT_IRQ_EN, AL_TRUE);
+    AlUsart_ll_EnableIntr(USART0_BASE_ADDR, AL_USART_RX_WM_TOUT_IRQ_EN, AL_TRUE);
+}
+
+static int uart_getc(void)
+{
+    int c;
+    if (uart_rx_head == uart_rx_tail) return -1;
+    c = uart_rx_buf[uart_rx_tail];
+    uart_rx_tail = (uint16_t)((uart_rx_tail + 1u) & (UART_RX_BUF - 1u));
+    return c;
+}
+
+typedef struct {
+    char name[28];
+    int  off;
+    int  lo, hi;
+} param_desc_t;
+
+#define P(n, l, h) { #n, (int)offsetof(vision_params_t, n), l, h }
+
+static const param_desc_t PARAM_TABLE[] = {
+    P(enable,                 0,     1),
+    P(exposure,               2,  1991),
+    P(gain,                  16,   176),
+    P(bg_thr,                 0,   255),
+    P(min_run,                0,    32),
+    P(bg_capture_delay,       0, 60000),
+    P(bg_settle_frames,       0, 60000),
+    P(bg_recalc_settle_frames,0, 60000),
+    P(min_area,               0, 32767),
+    P(max_area,               0, 32767),
+    P(min_w,                  0,   320),
+    P(max_w,                  0,   320),
+    P(min_h,                  0,   180),
+    P(max_h,                  0,   180),
+    P(min_fill,               0,   100),
+    P(min_ratio,              0,   100),
+    P(edge_margin,            0,   320),
+    P(merge_dist,             0,   320),
+    P(max_run_len,            0,  1023),
+    P(box_w_small,            1,   320),
+    P(gate_x,                 0,   319),
+    P(gate_y0,                0,   179),
+    P(gate_y1,                0,   179),
+    P(roi_y1,                -1,   180),
+    P(track_gate,             1,   181),
+    P(max_miss,               0,   255),
+    P(min_hits,               1,   255),
+    P(min_move,               0,   320),
+    P(min_window,             0,   320),
+    P(vx_max,              -320,     0),
+    P(static_max_age,         0, 10000),
+    P(debug,                  0,     1),
+    P(debug_div,              1, 60000),
+    P(beep_ms,                1, 10000),
+    P(beep_freq_hz,         400,  5000),
+};
+#undef P
+#define N_PARAMS (int)(sizeof(PARAM_TABLE) / sizeof(PARAM_TABLE[0]))
+
+static int *param_ptr(int idx)
+{
+    return (int *)((char *)&vp + PARAM_TABLE[idx].off);
+}
+
+
+
+static int streq(const char *a, const char *b)
+{
+    while (*a && *a == *b) { a++; b++; }
+    return *a == *b;
+}
+
+static int parse_int(const char *s, int *out)
+{
+    int sign = 1;
+    int v = 0;
+    int n = 0;
+    if (*s == '-') { sign = -1; s++; }
+    else if (*s == '+') s++;
+    while (*s >= '0' && *s <= '9') {
+        v = v * 10 + (*s - '0');
+        s++;
+        n++;
+    }
+    if (n == 0 || *s != '\0') return 0;
+    *out = sign * v;
+    return 1;
+}
+
+static int find_param(const char *name)
+{
+    int i;
+    for (i = 0; i < N_PARAMS; i++) {
+        if (streq(name, PARAM_TABLE[i].name)) return i;
+    }
+    return -1;
+}
+
+static int params_valid(const vision_params_t *p)
+{
+    if (p->gate_y0 > p->gate_y1) return 0;
+    if (p->min_area > p->max_area) return 0;
+    if (p->min_w > p->max_w) return 0;
+    if (p->min_h > p->max_h) return 0;
+    if (p->beep_freq_hz <= 0) return 0;
+    return 1;
+}
+
+static int apply_params(void)
+{
+    uint32_t half;
+    if (!params_valid(&vp)) return 0;
+
+    BALL_THR = (uint32_t)((vp.bg_thr & 0xFF) | ((vp.min_run & 0xFF) << 8));
+    BALL_RUN_CFG = (uint32_t)((vp.roi_y1 & 0x1FF) | ((vp.max_run_len & 0x3FF) << 10));
+    BALL_GATE = (uint32_t)((vp.gate_x & 0x1FF) |
+                           ((vp.gate_y0 & 0xFF) << 9) |
+                           ((vp.gate_y1 & 0xFF) << 17));
+    CAM_AE = (uint32_t)(vp.exposure & 0xFFFF);
+    CAM_AG = (uint32_t)(vp.gain & 0xFFFF);
+
+    half = 50000000u / (2u * (uint32_t)vp.beep_freq_hz);
+    if (half > 0xFFFFu) half = 0xFFFFu;
+    BUZZ_CFG = (half << 16) | ((uint32_t)vp.beep_ms & 0xFFFFu);
+
+    BALL_CTRL = vp.enable ? 1u : 0u;
+    g_dbg_step = vp.debug_div > 0 ? vp.debug_div : 30;
+    clear_tracks_only();
+    return 1;
+}
+
+static void uart_handle_line(char *line, uint32_t *hb)
+{
+    char *p = line;
+    char *cmd;
+    char *arg;
+    int idx, val;
+
+    while (*p == ' ' || *p == '\t') p++;
+    cmd = p;
+    while (*p && *p != ' ' && *p != '\t') p++;
+    if (*p) *p++ = '\0';
+    while (*p == ' ' || *p == '\t') p++;
+    arg = p;
+
+    if (cmd[0] == '\0') return;
+
+    if (streq(cmd, "GET")) {
+        al_simp_printf("PVER 1\r\n");
+        for (idx = 0; idx < N_PARAMS; idx++) {
+            al_simp_printf("PARAM %s=%d\r\n", PARAM_TABLE[idx].name, *param_ptr(idx));
+        }
+        al_simp_printf("OK GET\r\n");
+        return;
+    }
+
+    if (streq(cmd, "SET")) {
+        char *name = arg;
+        char *vstr;
+        while (*arg && *arg != ' ' && *arg != '\t') arg++;
+        if (*arg) *arg++ = '\0';
+        while (*arg == ' ' || *arg == '\t') arg++;
+        vstr = arg;
+        idx = find_param(name);
+        if (idx < 0) {
+            al_simp_printf("ERR unknown %s\r\n", name);
+            return;
+        }
+        if (!parse_int(vstr, &val)) {
+            al_simp_printf("ERR value %s\r\n", vstr);
+            return;
+        }
+        if (val < PARAM_TABLE[idx].lo || val > PARAM_TABLE[idx].hi) {
+            al_simp_printf("ERR range %s %d..%d\r\n",
+                           name, PARAM_TABLE[idx].lo, PARAM_TABLE[idx].hi);
+            return;
+        }
+        *param_ptr(idx) = val;
+        al_simp_printf("OK SET %s %d\r\n", name, val);
+        return;
+    }
+
+    if (streq(cmd, "APPLY")) {
+        if (!apply_params()) {
+            al_simp_printf("ERR APPLY range\r\n");
+            return;
+        }
+        al_simp_printf("OK APPLY\r\n");
+        return;
+    }
+
+    if (streq(cmd, "DEFAULT")) {
+        vp = VISION_PARAMS_DEFAULT;
+        if (!apply_params()) {
+            al_simp_printf("ERR DEFAULT\r\n");
+            return;
+        }
+        al_simp_printf("OK DEFAULT\r\n");
+        return;
+    }
+
+    if (streq(cmd, "RECAPTURE")) {
+        al_simp_printf("OK RECAPTURE START\r\n");
+        recapture_background(hb);
+        al_simp_printf("OK RECAPTURE\r\n");
+        return;
+    }
+
+    if (streq(cmd, "VER")) {
+        al_simp_printf("PVER 1 DROP=%d\r\n", (int)uart_rx_drops);
+        return;
+    }
+
+    al_simp_printf("ERR cmd %s\r\n", cmd);
+}
+
+static void uart_task(uint32_t *hb)
+{
+    int c;
+    while ((c = uart_getc()) >= 0) {
+        if (c == '\r' || c == '\n') {
+            if (uart_line_len > 0) {
+                uart_line[uart_line_len] = '\0';
+                uart_handle_line(uart_line, hb);
+                uart_line_len = 0;
+            }
+        } else if (uart_line_len < (int)sizeof(uart_line) - 1) {
+            uart_line[uart_line_len++] = (char)c;
+        } else {
+            uart_line_len = 0;
+            al_simp_printf("ERR line too long\r\n");
+        }
+    }
+}
+
 
 static void putx(uint32_t val, int width)
 {
@@ -735,20 +1028,26 @@ static void write_count_bcd(void)
     BCD_COUNT = bcd;
 }
 
-/* KEY1 长按：清零 Count 与全部轨迹，下一帧从干净状态开始 */
-static void reset_count_and_tracks(void)
+/* 只清轨迹和 overlay，保留 Count；热调参 APPLY 与 K2 重采共用 */
+static void clear_tracks_only(void)
 {
     int i;
-    count = 0;
-    OV_COUNT = 0;
-    BCD_COUNT = 0;
-    BALL_NOW = 0;
     n_det = 0;
     next_id = 1;
+    BALL_NOW = 0;
     for (i = 0; i < MAX_TRK; i++) {
         trk[i].valid = 0;
         trk[i].visible = 0;
     }
+}
+
+/* KEY1 长按：清零 Count 与全部轨迹，下一帧从干净状态开始 */
+static void reset_count_and_tracks(void)
+{
+    count = 0;
+    OV_COUNT = 0;
+    BCD_COUNT = 0;
+    clear_tracks_only();
 }
 
 static void report_debug(uint32_t frame, int run_cnt, int ovf)
@@ -829,7 +1128,10 @@ int main(void)
     int i;
     int report_div = 0;
     int dbg_div = 0;
-    int dbg_step = VISION_PARAMS.debug_div > 0 ? VISION_PARAMS.debug_div : 30;
+
+    vp = VISION_PARAMS_DEFAULT;
+    g_dbg_step = vp.debug_div > 0 ? vp.debug_div : 30;
+    uart_rx_init();
 
     if (ver != VER_MAGIC) {
         al_simp_printf("ahb_status_slave NOT found (ver=");
@@ -893,6 +1195,7 @@ int main(void)
     uint32_t last_frame = FRAME_REG;
 
     while (1) {
+        uart_task(&hb);
         uint32_t evt = KEY_EVT;
         if (evt) KEY_EVT = evt;           /* write back 1s to clear */
         uint32_t sw = SW_STAT;
@@ -949,7 +1252,7 @@ int main(void)
             OV_COUNT = (uint32_t)count;
             write_count_bcd();
 
-            if (VISION_PARAMS.debug && (++dbg_div >= dbg_step)) {
+            if (VISION_PARAMS.debug && (++dbg_div >= g_dbg_step)) {
                 dbg_div = 0;
                 report_debug(fr, run_cnt, ovf);
             }

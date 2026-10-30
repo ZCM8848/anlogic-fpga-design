@@ -35,8 +35,9 @@ set_pin_assignment { I_key2 }        { LOCATION = A9;  IOSTANDARD = LVCMOS33; PU
 set_pin_assignment { I_key3 }        { LOCATION = B9;  IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
 set_pin_assignment { I_key4 }        { LOCATION = C7;  IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
 
-# ---- 板载 USB-UART（USB-JTAG Cable Type-C 通道 B；uart_tx=H1）----
+# ---- 板载 USB-UART（USB-JTAG Cable Type-C 通道 B；uart_tx=H1, uart_rx=J1）----
 set_pin_assignment { O_uart_tx }     { LOCATION = H1; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; PULLTYPE = NONE; }
+set_pin_assignment { I_uart_rx }     { LOCATION = J1; IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
 
 # ---- 模式切换拨码开关（板手册 2-22：拨上=1 拨下=0）----
 # SW1: 0=识别/正常，1=调试

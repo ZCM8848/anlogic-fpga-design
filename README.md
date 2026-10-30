@@ -48,6 +48,7 @@
 - 识别态 UI 包含 Logo、`STEEL BALL`、Count、`DETECTED N`、`Anlogic HX1P35A`、FRAME 和门线
 - 所有可见文字使用 MiSans Medium 1-bit ROM
 - 蜂鸣器过门短鸣；静态测试图案下 K1 短按播放/暂停测试曲，画面显示 `MiSans by Xiaomi` 来源标注
+- 串口热调参：115200 8N1，J1 接收，上位机在 `work/camera_hdmi_720p/tools/param_tuner/`
 
 发布产物：
 

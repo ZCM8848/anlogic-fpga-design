@@ -87,7 +87,7 @@ SC520CS 输出 2-lane RAW10。D-PHY 恢复字节时钟后，CSI 解包提取行�
 
 MCU 在每帧 vsync 后读取 `run_mem`，执行：
 
-- union-find 连通域标记，最多 96 个 label
+- union-find 连通域标记，最多 80 个 label
 - 面积、宽高、填充率、长短比、边缘距离筛选
 - 碎块合并 `merge_dist`
 - a-b 跟踪，`track_gate`、`max_miss`、`min_hits`
@@ -104,6 +104,12 @@ MCU 在每帧 vsync 后读取 `run_mem`，执行：
 `O_buzzer` 在静态测试图案下选择歌曲输出，其余模式选择过门短鸣。蜂鸣器低电平响，SW5 是硬件供电开关。
 
 固件把过门事件排成短鸣队列：`track_update` 每次计数累加 `frame_beeps`，主循环按 `beep_ms` 折算的帧间隔逐声翻转 `BUZZ_CTRL`，相邻两声不重叠；静态测试态的事件不入队。
+
+### 3.8 串口热调参
+
+USART0 使用 115200 8N1，`uart0_tx` 接 H1，`uart0_rx` 接 J1。接收中断把字节写入 64 字节环形缓冲，主循环帧间解析 `GET`、`SET`、`APPLY`、`DEFAULT`、`RECAPTURE`、`VER` 命令。
+
+默认参数保存在 Flash 的 `VISION_PARAMS_DEFAULT`，上电复制到 DLM 中的 `vp`。`SET` 修改 `vp`，`APPLY` 写 FPGA 寄存器并清空轨迹，掉电后恢复默认值。完整协议见 `mcu_fw/README.md`，上位机见 `tools/param_tuner/`。
 
 ## 四、模式与按键
 
@@ -271,7 +277,7 @@ DSP    10 / 40
 ## 十一、已知边界
 
 - `run_mem` 深度 1024，整帧 run 数超限时 `run_overflow`，该帧检测丢弃
-- `MAX_LABELS=96`，复杂画面可能触发标签溢出
+- `MAX_LABELS=80`，复杂画面可能触发标签溢出
 - `MAX_DET=8`、`MAX_TRK=8`，最多同时跟踪 8 个球
 - 背景为单帧快照，光照变化后使用 K2 重采
 - 形态学滤波尚未加入，高光分裂依靠 `merge_dist` 和形状筛选

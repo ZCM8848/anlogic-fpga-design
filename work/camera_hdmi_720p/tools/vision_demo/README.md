@@ -17,7 +17,7 @@ flowchart LR
   A["合成 320x180 G"] --> B["|G-BG| >= bg_thr"]
   B --> C["逐行 run"]
   C --> D["min_run / roi_y1 / max_run_len"]
-  D --> E["CCL union-find<br/>96 labels / 160 runs"]
+  D --> E["CCL union-find<br/>80 labels / 160 runs"]
   E --> F["面积 / 宽高 / 填充率 / 长短比 / 边缘"]
   F --> G["merge_dist 碎块合并"]
   G --> H["最多 8 个检测"]
@@ -99,7 +99,7 @@ flowchart LR
 |---|---:|---|
 | `MAX_RUNS` | 1024 | 整帧 run_mem 深度 |
 | `MAX_PREV` | 160 | 单行 CCL 工作区 |
-| `MAX_LABELS` | 96 | 连通域标号上限 |
+| `MAX_LABELS` | 80 | 连通域标号上限 |
 | `MAX_DET` | 8 | 每帧检测数 |
 | `MAX_TRK` | 8 | 同时轨迹数 |
 | `BALL_W × BALL_H` | 320×180 | 4×4 平均后的小图 |

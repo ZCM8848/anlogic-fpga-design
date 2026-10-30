@@ -101,7 +101,7 @@ flowchart LR
   A["1280x720 G"] --> B["4x4 平均<br/>320x180"]
   B --> C["|G - BG| >= bg_thr"]
   C --> D["逐行 run<br/>min_run / ROI / max_run_len"]
-  D --> E["CCL union-find<br/><=96 labels"]
+  D --> E["CCL union-find<br/><=80 labels"]
   E --> F["面积 / 宽高 / 填充率 / 长短比"]
   F --> G["碎块合并 merge_dist"]
   G --> H["a-b 跟踪<br/>track_gate / max_miss"]
@@ -154,6 +154,19 @@ CAM_AG = 64
 | 静态测试图案 | 测试曲 | K1 短按播放/暂停，默认暂停；离开该模式自动暂停，再次播放从曲首开始 |
 
 短鸣参数在 MCU `VISION_PARAMS.beep_ms` / `beep_freq_hz`，MCU 翻转 `BUZZ_CTRL[0]`，FPGA 取边沿产生一次脉冲。静态测试态下 `buzzer_beep` 被强制静音，避免切回识别态时听到残响；该态的过门事件不计入短鸣队列。测试曲在 RTL `song_data.vh`，更换曲子需要重新综合。
+
+## 串口热调参
+
+板载 USB-UART 的 TX 接 H1，RX 接 J1。MCU 通过 USART0 接收上位机命令，运行期间直接修改 DLM 中的参数副本，不需要重新编译或烧录 ELF。
+
+```text
+波特率  115200 8N1
+命令    GET / SET <name> <value> / APPLY / DEFAULT / RECAPTURE / VER
+```
+
+`SET` 修改 MCU 侧运行参数，`APPLY` 写入 `BALL_THR`、`BALL_RUN_CFG`、`BALL_GATE`、`CAM_AE`、`CAM_AG`、`BUZZ_CFG` 并清空轨迹。修改曝光或增益后建议再执行一次 `RECAPTURE` 重采背景。
+
+参数只保存在 RAM，掉电恢复 `VISION_PARAMS_DEFAULT`。上位机源码和打包说明在 `tools/param_tuner/`。
 
 ## AHB 寄存器
 
@@ -273,6 +286,7 @@ camera_hdmi_720p/
 │  ├─ sim/
 │  ├─ ui_layout/
 │  ├─ vision_demo/
+│  ├─ param_tuner/
 │  ├─ frame_viewer.html
 │  ├─ sync_fw.ps1
 │  ├─ check_rtl.py
@@ -288,5 +302,6 @@ camera_hdmi_720p/
 - `mcu_fw/README.md`：固件参数、串口协议、调参流程
 - `tools/ui_layout/README.md`：OSD 布局编辑器
 - `tools/vision_demo/README.md`：参数交互演示
+- `tools/param_tuner/README.md`：串口热调参上位机
 - `docs/hardware/HW_MCU.md`：MCU 平台与 AHB 窗口
 - `docs/hardware/HW_SC520CS.md`：SC520CS 摄像头参数

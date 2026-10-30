@@ -46,6 +46,7 @@ FPGA 负责像素前端、run 提取、门线绘制和 overlay；MCU 负责 CCL�
 | K2 长按重采背景 + 数码管横线（仅识别态） | 完成 |
 | 蜂鸣器过门短鸣 | 完成 |
 | 静态测试态 K1 短按播放/暂停测试曲 | 完成 |
+| 串口热调参 + 上位机 | 完成 |
 | 测试图案 MiSans 来源标注 | 完成 |
 | MCU 控制曝光/增益 | 完成 |
 | UI 布局编辑器 | 完成 |
@@ -178,5 +179,6 @@ DSP    10 / 40
 - `mcu_fw/README.md`：固件参数、串口协议、调参流程
 - `tools/ui_layout/README.md`：OSD 布局编辑器
 - `tools/vision_demo/README.md`：参数交互演示
+- `tools/param_tuner/README.md`：串口热调参上位机
 - `docs/hardware/HW_MCU.md`：MCU 平台和 AHB 窗口
 - `docs/hardware/HW_SC520CS.md`：SC520CS 摄像头参数

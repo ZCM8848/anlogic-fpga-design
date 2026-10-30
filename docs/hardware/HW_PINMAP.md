@@ -28,6 +28,7 @@
 | **B9** | `I_key3` | KEY3（遗留阈值脉冲，未使用） | LVCMOS33 | PULLUP |
 | **C7** | `I_key4` | KEY4（遗留阈值脉冲，未使用） | LVCMOS33 | PULLUP |
 | **H1** | `O_uart_tx` | USB-UART TXD（115200 8N1） | LVCMOS33 | DS=8 |
+| **J1** | `I_uart_rx` | USB-UART RXD（热调参命令输入） | LVCMOS33 | PULLUP |
 | **A4** | `I_sw1` | SW1（0=识别态，1=测试/调试态） | LVCMOS33 | PULLUP |
 | **B4** | `I_sw2` | SW2（测试态子模式：0=静态图案，1=动态调试） | LVCMOS33 | PULLUP |
 | **D11** | `I_sw4` | SW4（仅上报 `SW_STAT[3]`） | LVCMOS33 | PULLUP |

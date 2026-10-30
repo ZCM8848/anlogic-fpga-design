@@ -4,14 +4,15 @@
 
 ## 1. 参数区
 
-所有业务参数集中在 `VISION_PARAMS`：
+默认参数集中在 `VISION_PARAMS_DEFAULT`，上电复制到 DLM 中的运行副本 `vp`：
 
 ```c
 typedef struct { ... } vision_params_t;
-static const vision_params_t VISION_PARAMS = { ... };
+static const vision_params_t VISION_PARAMS_DEFAULT = { ... };
+static vision_params_t vp;
 ```
 
-修改参数后重新编译 ELF，不需要重新综合 FPGA。
+串口 `SET` 修改 `vp`，`APPLY` 写入 FPGA 寄存器并清空轨迹。掉电后 `vp` 丢失，下次上电重新加载默认值。最终参数写回 `VISION_PARAMS_DEFAULT` 后重新编译 ELF，不需要重新综合 FPGA。
 
 ### 1.1 前端与相机
 
@@ -90,6 +91,25 @@ hits >= min_hits
 
 `beep_ms` 与 `beep_freq_hz` 在启动时写入 `BUZZ_CFG`。固件把每次过门计入短鸣队列，主循环按 `beep_ms` 折算的帧间隔逐声翻转 `BUZZ_CTRL[0]`，FPGA 取边沿产生一次短鸣，相邻两声不重叠。测试曲由 RTL 产生，与这两个字段无关。静态测试态的事件不入短鸣队列，`buzzer_beep` 在该态被 `I_en` 强制静音。
 
+### 1.7 串口热调参
+
+USART0 使用 115200 8N1，TX 接 H1，RX 接 J1。接收中断写入 64 字节环形缓冲，主循环帧间解析 ASCII 行：
+
+```text
+GET
+SET <name> <value>
+APPLY
+DEFAULT
+RECAPTURE
+VER
+```
+
+`SET` 只修改 `vp`；`APPLY` 校验跨字段范围，写 `BALL_THR`、`BALL_RUN_CFG`、`BALL_GATE`、`CAM_AE`、`CAM_AG`、`BUZZ_CFG` 和 `BALL_CTRL`，然后清空轨迹。`DEFAULT` 恢复 `VISION_PARAMS_DEFAULT`。`RECAPTURE` 调用与 K2 长按相同的背景重采流程。
+
+`bg_capture_delay` 和 `bg_settle_frames` 只在启动阶段使用，运行时修改不会重跑上电流程。`MAX_RUNS`、`MAX_LABELS`、`MAX_DET`、`MAX_TRK` 是编译期容量，不能通过串口修改。
+
+上位机在 `tools/param_tuner/`。
+
 ## 2. 背景采集
 
 上电流程：
@@ -118,7 +138,7 @@ K2 长按重采背景：
 
 ## 3. 串口输出
 
-串口 115200 8N1，TX=H1。
+串口 115200 8N1，TX=H1，RX=J1。输出调试行的同时接收热调参命令，命令和响应见 1.7 节。
 
 上电参数行：
 
@@ -240,7 +260,7 @@ MCU 通过 `0x8000_0000 + offset` 访问。
 ```text
 MAX_RUNS   = 1024
 MAX_PREV   = 160
-MAX_LABELS = 96
+MAX_LABELS = 80
 MAX_DET    = 8
 MAX_TRK    = 8
 ```
