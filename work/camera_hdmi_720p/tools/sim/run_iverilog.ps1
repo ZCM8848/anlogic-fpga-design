@@ -26,7 +26,8 @@ switch ($Tb) {
     "tb_ui_overlay"        { $rtlFiles += "rtl\video\hdmi_mixer.v"; $rtlFiles += "rtl\video\anlogic_logo_rom.v"; $rtlFiles += "rtl\video\osd_char_lib.v"; $rtlFiles += "rtl\video\ui_text_rom.v"; $rtlFiles += "rtl\video\mi_digit_rom.v"; $rtlFiles += "rtl\video\detected_text_rom.v" }
     "tb_cv_ball"           { $rtlFiles += "rtl\cv\cv_top.v"; $rtlFiles += "rtl\video\mi_digit_rom.v" }
     "tb_count_order"       { $rtlFiles += "rtl\cv\cv_top.v"; $rtlFiles += "rtl\video\mi_digit_rom.v" }
-    "tb_test_pattern"      { $rtlFiles += "rtl\video\test_pattern.v"; $rtlFiles += "rtl\video\tp_text_rom.v" }
+    "tb_test_pattern"      { $rtlFiles += "rtl\video\test_pattern.v"; $rtlFiles += "rtl\video\tp_text_rom.v"; $rtlFiles += "rtl\video\tp_attr_text_rom.v" }
+    "tb_buzzer_song"       { $rtlFiles += "rtl\video\buzzer_song.v" }
     "tb_seg_count_display" { $rtlFiles += "rtl\video\seg_count_display.v" }
     "tb_ae_set"            { $rtlFiles += "rtl\camera\ae_set.v" }
     "tb_buzzer_beep"       { $rtlFiles += "rtl\video\buzzer_beep.v" }
@@ -35,7 +36,7 @@ switch ($Tb) {
 
 $out = "tools\sim\$Tb.vvp"
 Write-Host "==> iverilog -g2005 $rtlFiles tools\sim\$Tb.v"
-iverilog -g2005 -o $out -s $Tb @($rtlFiles + "tools\sim\$Tb.v")
+iverilog -g2005 -I rtl\video -o $out -s $Tb @($rtlFiles + "tools\sim\$Tb.v")
 if ($LASTEXITCODE -ne 0) { Write-Error "compile failed"; exit 1 }
 Write-Host "==> vvp $out"
 vvp $out

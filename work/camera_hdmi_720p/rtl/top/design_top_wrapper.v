@@ -549,12 +549,15 @@ module design_top_wrapper (
     reg        r_key1_long_done;
     reg        S_key1_long;
     reg [1:0]  S_disp_mode;
+    reg        S_song_play;          // 静态测试态蜂鸣曲播放/暂停
     wire       key1_fall = ~r_key1_sync[2] & r_key1_d;
+    wire       key1_rise =  r_key1_sync[2] & ~r_key1_d;
     always @(posedge S_pixel_clk or negedge S_rst_n_pix) begin
         if (!S_rst_n_pix) begin
             r_key1_cnt <= 21'd0; r_key1_sync <= 3'd0; r_key1_d <= 1'b0;
             r_key1_hold <= 8'd0; r_key1_long_done <= 1'b0; S_key1_long <= 1'b0;
             S_disp_mode <= 2'd3;
+            S_song_play <= 1'b0;
         end else begin
             r_key1_sync <= {r_key1_sync[1:0], I_key1};
             if (r_key1_cnt == 21'd1048575) begin   // ~14ms @75MHz
@@ -577,6 +580,12 @@ module design_top_wrapper (
                     if (S_disp_mode == 2'd3)      S_disp_mode <= 2'd1;
                     else if (S_disp_mode == 2'd1) S_disp_mode <= 2'd2;
                     else                          S_disp_mode <= 2'd3;
+                end
+                // 静态测试态：K1 短按切换蜂鸣曲播放/暂停；离开静态态自动暂停
+                if (!S_debug_static) begin
+                    S_song_play <= 1'b0;
+                end else if (key1_rise && !r_key1_long_done) begin
+                    S_song_play <= ~S_song_play;
                 end
             end else begin
                 r_key1_cnt <= r_key1_cnt + 21'd1;
@@ -1000,14 +1009,37 @@ module design_top_wrapper (
         .O_sel   ( O_sel           )
     );
 
-    // ---- 蜂鸣器：钢珠过门线短鸣，SW5 控制硬件回路 ----
+    // ---- 蜂鸣器：识别态短鸣，静态测试态播放测试曲 ----
+    // 像素域 -> 50MHz 同步
+    reg [1:0] S_song_play_50m_a;
+    reg       S_song_play_50m;
+    reg [1:0] S_static_50m_a;
+    reg       S_static_50m;
+    always @(posedge I_sys_clk) begin
+        S_song_play_50m_a <= {S_song_play_50m_a[0], S_song_play};
+        S_song_play_50m   <= S_song_play_50m_a[1];
+        S_static_50m_a    <= {S_static_50m_a[0], S_debug_static};
+        S_static_50m      <= S_static_50m_a[1];
+    end
+
+    wire S_buzz_beep;
+    wire S_buzz_song;
     buzzer_beep u_buzzer_beep (
         .I_clk        ( I_sys_clk          ),
         .I_rst_n      ( S_rst_n_50m        ),
         .I_trig_toggle( S_buzz_toggle_ahb  ),
         .I_half_clks  ( S_buzz_cfg_ahb[31:16] ),
         .I_beep_ms    ( S_buzz_cfg_ahb[15:0]  ),
-        .O_buzzer     ( O_buzzer           )
+        .O_buzzer     ( S_buzz_beep        )
     );
+
+    buzzer_song u_buzzer_song (
+        .I_clk   ( I_sys_clk       ),
+        .I_rst_n ( S_rst_n_50m     ),
+        .I_play  ( S_song_play_50m ),
+        .O_buzzer( S_buzz_song     )
+    );
+
+    assign O_buzzer = S_static_50m ? S_buzz_song : S_buzz_beep;
 
 endmodule
